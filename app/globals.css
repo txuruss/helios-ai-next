@@ -1,0 +1,184 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Helios CSS custom properties ────────────────────────────────── */
+@layer base {
+  :root {
+    --helios-bg:        #070707;
+    --helios-bg-2:      #0c0c0e;
+    --helios-panel:     #0f1012;
+    --helios-panel-2:   #141518;
+    --helios-line:      rgba(255,255,255,0.06);
+    --helios-line-2:    rgba(255,255,255,0.10);
+    --helios-text:      #f3f3f3;
+    --helios-text-dim:  #9a9a9d;
+    --helios-text-mute: #6a6a6e;
+    --helios-orange:    #ff7a18;
+    --helios-orange-2:  #ffae3c;
+    --helios-amber:     #ffb547;
+    --helios-cyan:      #5be3c5;
+    --helios-green:     #22d093;
+    --helios-red:       #ff6a5a;
+  }
+
+  html {
+    scroll-behavior: smooth;
+    scroll-padding-top: 88px;
+  }
+
+  body {
+    @apply text-[#f3f3f3] antialiased;
+    font-family: var(--font-poppins), system-ui, sans-serif;
+    text-rendering: optimizeLegibility;
+    overflow-x: hidden;
+    /* Helios ambient background */
+    background:
+      radial-gradient(1200px 600px at 80% -10%, rgba(255,122,24,0.14) 0%, transparent 60%),
+      radial-gradient(900px 500px at 10% 0%, rgba(255,174,60,0.07) 0%, transparent 60%),
+      #070707;
+  }
+
+  * { box-sizing: border-box; }
+
+  /* Override body background for dashboard (solid, no gradient) */
+  .dash-body {
+    background: #070707 !important;
+  }
+}
+
+/* ── Custom scrollbar ────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.14); }
+
+/* ── Tailwind utilities ──────────────────────────────────────────── */
+@layer utilities {
+  /* Orange gradient text — headlines */
+  .gradient-text {
+    background: linear-gradient(95deg, #fff 0%, #fff 35%, #ffb158 55%, #ff7a18 80%);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
+  /* Glass card */
+  .glass {
+    background: rgba(15,16,18,0.65);
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+  }
+
+  /* Inset border gradient (top-left orange corner) */
+  .border-gradient-orange {
+    border: 1px solid transparent;
+    background-clip: padding-box;
+    position: relative;
+  }
+  .border-gradient-orange::before {
+    content: '';
+    position: absolute;
+    inset: -1px;
+    border-radius: inherit;
+    background: linear-gradient(140deg, rgba(255,122,24,0.5), rgba(255,255,255,0.04) 40%, rgba(255,255,255,0) 70%);
+    -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+    -webkit-mask-composite: xor;
+    mask-composite: exclude;
+    pointer-events: none;
+  }
+
+  /* Eyebrow label */
+  .eyebrow {
+    @apply text-[11px] font-semibold tracking-[0.22em] uppercase text-[#ffae3c];
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+  }
+  .eyebrow::before {
+    content: '';
+    width: 22px;
+    height: 1px;
+    background: linear-gradient(90deg, #ff7a18, transparent);
+  }
+}
+
+/* ── Landing page section styles ─────────────────────────────────── */
+@layer components {
+  .section-base {
+    @apply relative py-28 px-0;
+  }
+
+  /* Reveal animation — triggered by Framer Motion */
+  .reveal-ready {
+    @apply opacity-0 translate-y-5;
+    transition: opacity 0.8s ease, transform 0.8s cubic-bezier(.2,.7,.2,1);
+  }
+  .reveal-ready.in {
+    @apply opacity-100 translate-y-0;
+  }
+
+  /* Chip pill (hero chips) */
+  .chip {
+    @apply inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full
+           text-xs border border-white/10 bg-white/[0.02] text-[#9a9a9d]
+           transition-all duration-300
+           hover:border-[#ff7a18]/40 hover:bg-[#ff7a18]/[0.06] hover:text-white;
+  }
+
+  /* Dashboard stat card */
+  .stat-card {
+    @apply rounded-2xl border border-white/10 bg-[#0f1012]/60 p-5
+           flex flex-col gap-2 transition-all duration-200
+           hover:border-white/[0.14] hover:-translate-y-0.5;
+  }
+
+  /* Table base */
+  .helios-table {
+    @apply w-full border-collapse text-[13.5px];
+  }
+  .helios-table th {
+    @apply px-4 py-3 text-left text-[10.5px] font-semibold uppercase tracking-widest
+           text-[#6a6a6e] bg-white/[0.02] border-b border-white/[0.06] whitespace-nowrap;
+  }
+  .helios-table td {
+    @apply px-4 py-3 border-b border-white/[0.06] align-middle;
+  }
+  .helios-table tr:last-child td { border-bottom: none; }
+  .helios-table tbody tr:hover td { background: rgba(255,255,255,0.015); }
+
+  /* Status pill variants */
+  .pill {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-[10.5px] font-medium
+           border whitespace-nowrap;
+  }
+  .pill-green  { @apply bg-[#22d093]/10 text-[#22d093] border-[#22d093]/25; }
+  .pill-amber  { @apply bg-[#ffb547]/10 text-[#ffb547] border-[#ffb547]/25; }
+  .pill-cyan   { @apply bg-[#5be3c5]/10 text-[#5be3c5] border-[#5be3c5]/25; }
+  .pill-orange { @apply bg-[#ff7a18]/10 text-[#ffae3c] border-[#ff7a18]/25; }
+  .pill-red    { @apply bg-[#ff6a5a]/10 text-[#ff6a5a] border-[#ff6a5a]/25; }
+  .pill-mute   { @apply bg-white/[0.05] text-[#6a6a6e] border-white/[0.06]; }
+
+  /* Primary button */
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2.5 h-12 px-6 rounded-full
+           font-semibold text-[14.5px] text-[#1a0c00]
+           bg-gradient-to-b from-[#ff8a2a] to-[#ee6a0c]
+           shadow-[0_10px_30px_rgba(255,122,24,0.35),inset_0_1px_0_rgba(255,255,255,0.35)]
+           transition-all duration-150
+           hover:-translate-y-px hover:shadow-[0_14px_40px_rgba(255,122,24,0.5),inset_0_1px_0_rgba(255,255,255,0.35)]
+           disabled:opacity-60 disabled:pointer-events-none;
+  }
+
+  /* Ghost button */
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2.5 h-12 px-6 rounded-full
+           font-medium text-[14.5px] text-[#f3f3f3]
+           bg-white/[0.03] border border-white/10
+           transition-all duration-150
+           hover:bg-white/[0.06] hover:border-white/[0.18]
+           disabled:opacity-60 disabled:pointer-events-none;
+  }
+
+  .btn-sm { @apply h-9 px-4 text-[13px]; }
+}
