@@ -1,21 +1,33 @@
 import { createClient } from '@/lib/supabase/server'
 import PageHeader from '@/components/dashboard/PageHeader'
 import BusinessForm from './BusinessForm'
+import FaqsSection from './FaqsSection'
+import type { FAQ } from '@/types'
 
 export default async function BusinessPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
-  const { data: membership } = await supabase
-    .from('business_members')
-    .select('business_id')
-    .eq('user_id', user?.id ?? '')
-    .limit(1)
-    .single()
-
-  const { data: business } = membership
-    ? await supabase.from('businesses').select('*').eq('id', membership.business_id).single()
+  const { data: membership } = user
+    ? await supabase
+        .from('business_members')
+        .select('business_id')
+        .eq('user_id', user.id)
+        .limit(1)
+        .single()
     : { data: null }
+
+  const [bizResult, faqResult] = await Promise.all([
+    membership
+      ? supabase.from('businesses').select('*').eq('id', membership.business_id).single()
+      : Promise.resolve({ data: null }),
+    membership
+      ? supabase.from('faqs').select('*').eq('business_id', membership.business_id).order('sort_order').order('created_at')
+      : Promise.resolve({ data: [] as FAQ[] }),
+  ])
+
+  const business = bizResult.data
+  const faqs = (faqResult.data ?? []) as FAQ[]
 
   return (
     <>
@@ -24,7 +36,10 @@ export default async function BusinessPage() {
         title="Business Profile"
         description="Configure your business details, operating hours, and notification settings."
       />
-      <BusinessForm business={business} />
+      <div className="flex flex-col gap-8">
+        <BusinessForm business={business} />
+        {membership && <FaqsSection initialFaqs={faqs} />}
+      </div>
     </>
   )
 }

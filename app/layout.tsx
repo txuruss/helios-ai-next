@@ -1,4 +1,4 @@
-import type { Metadata } from 'next'
+import type { Metadata, Viewport } from 'next'
 import { Poppins, JetBrains_Mono } from 'next/font/google'
 import './globals.css'
 
@@ -15,6 +15,10 @@ const jetbrainsMono = JetBrains_Mono({
   variable: '--font-mono',
   display: 'swap',
 })
+
+export const viewport: Viewport = {
+  themeColor: '#0a0a0c',
+}
 
 export const metadata: Metadata = {
   title: {
@@ -37,7 +41,6 @@ export const metadata: Metadata = {
     description:
       'AI booking systems, lead capture, WhatsApp automation, and operations dashboards for local service businesses.',
   },
-  themeColor: '#0a0a0c',
   robots: {
     index: true,
     follow: true,
