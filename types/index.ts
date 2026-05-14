@@ -125,6 +125,8 @@ export interface CalcomConnection {
 export interface WidgetSettings {
   id: string
   business_id: string
+  widget_id:   string | null
+  logo_url:    string | null
   primary_color: string
   bot_name: string
   welcome_message: string

@@ -3,6 +3,7 @@ import Anthropic from '@anthropic-ai/sdk'
 import { z } from 'zod'
 import { createServiceRoleClient } from '@/lib/supabase/server'
 import { buildSystemPrompt } from '@/lib/ai/prompt'
+import { sendLeadNotification } from '@/lib/notifications/owner'
 import { getAvailability, createBooking } from '@/lib/calcom/client'
 import { isOriginAllowed, getCorsHeaders, type CorsHeaders } from '@/lib/cors'
 import { checkChatRateLimit } from '@/lib/rate-limit/chat'
@@ -582,6 +583,29 @@ export async function POST(request: NextRequest) {
           leadId = newLead?.id ?? null
           if (leadId) {
             await db.from('chat_sessions').update({ lead_id: leadId }).eq('id', chatSessionId)
+
+            // Fire-and-forget owner notification — never blocks the chat response
+            const { data: biz } = await db
+              .from('businesses')
+              .select('name, owner_notification_email')
+              .eq('id', business_id)
+              .single()
+            if (biz) {
+              const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://helios.ai'
+              sendLeadNotification(db, {
+                businessId:    business_id,
+                businessName:  (biz as { name: string; owner_notification_email: string | null }).name,
+                ownerEmail:    (biz as { name: string; owner_notification_email: string | null }).owner_notification_email,
+                customerName:  leadData?.name ?? null,
+                customerEmail: leadData?.email ?? null,
+                customerPhone: leadData?.phone ?? null,
+                service:       leadData?.service ?? null,
+                intent:        leadData?.intent ?? null,
+                source:        'widget',
+                leadId,
+                dashboardUrl:  appUrl,
+              }).catch((e) => console.error('[chat] lead notification:', e))
+            }
           }
         }
       }

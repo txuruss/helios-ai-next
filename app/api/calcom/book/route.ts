@@ -3,6 +3,7 @@ import { createServiceRoleClient } from '@/lib/supabase/server'
 import { createBooking } from '@/lib/calcom/client'
 import { bookingRequestSchema } from '@/lib/validation/calcom'
 import { checkChatRateLimit } from '@/lib/rate-limit/chat'
+import { sendBookingNotification } from '@/lib/notifications/owner'
 
 const MAX_BODY_BYTES = 16 * 1024
 
@@ -149,6 +150,32 @@ export async function POST(request: NextRequest) {
       scheduled_at: selected_time,
     },
   }).catch(() => undefined)
+
+  // Fire-and-forget booking notification — never blocks the response
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://helios.ai'
+  const { data: bizData } = await db
+    .from('businesses')
+    .select('name, owner_notification_email')
+    .eq('id', business_id)
+    .single()
+  if (bizData) {
+    const bizRow = bizData as { name: string; owner_notification_email: string | null }
+    const serviceName = svc?.name as string | null ?? null
+    sendBookingNotification(db, {
+      businessId:       business_id,
+      businessName:     bizRow.name,
+      ownerEmail:       bizRow.owner_notification_email,
+      customerName:     name,
+      customerEmail:    email,
+      customerPhone:    phone ?? null,
+      serviceName,
+      scheduledAt:      selected_time,
+      status:           booking?.status ?? (cal.status === 'ACCEPTED' ? 'confirmed' : 'pending'),
+      calcomBookingUid: cal.calcom_booking_uid,
+      bookingId:        booking?.id ?? null,
+      dashboardUrl:     appUrl,
+    }).catch((e) => console.error('[calcom/book] booking notification:', e))
+  }
 
   return NextResponse.json({
     ok: true,
