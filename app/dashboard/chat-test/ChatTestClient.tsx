@@ -48,15 +48,28 @@ export default function ChatTestClient({ businessId, businessName, botName, prim
           }),
         })
 
-        const data = await res.json()
+        const data = await res.json().catch(() => ({}))
 
         if (!res.ok) {
-          setError(data.error ?? 'Something went wrong. Please try again.')
+          const friendlyErrors: Record<number, string> = {
+            429: 'Too many messages sent. Please wait a moment before continuing.',
+            403: 'Chat is currently disabled or this origin is not allowed.',
+            413: 'Message too large. Please shorten your message.',
+            503: 'AI service is not configured. Set ANTHROPIC_API_KEY in .env.local and restart.',
+            404: 'Business not found. Check your configuration.',
+          }
+          setError(
+            friendlyErrors[res.status] ??
+            (data as { error?: string }).error ??
+            'Something went wrong. Please try again.',
+          )
           return
         }
 
-        setMessages((prev) => [...prev, { role: 'assistant', content: data.reply }])
-        if (data.session_id && !sessionId) setSessionId(data.session_id)
+        setMessages((prev) => [...prev, { role: 'assistant', content: (data as { reply: string }).reply }])
+        if ((data as { session_id?: string }).session_id && !sessionId) {
+          setSessionId((data as { session_id: string }).session_id)
+        }
 
       } catch {
         setError('Network error. Check your connection and try again.')

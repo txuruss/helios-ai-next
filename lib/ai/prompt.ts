@@ -25,11 +25,14 @@ function formatPrice(cents: number | null): string {
 }
 
 interface PromptParams {
-  business: Business
-  services: Service[]
-  faqs: FAQ[]
-  agentSettings: AgentSettings | null
+  business:       Business
+  services:       Service[]
+  faqs:           FAQ[]
+  agentSettings:  AgentSettings | null
   widgetSettings: WidgetSettings | null
+  // Real Cal.com availability context — injected by chat route when available.
+  // NEVER invented — only set from actual Cal.com API response.
+  calcomContext?: string
 }
 
 export function buildSystemPrompt({
@@ -38,6 +41,7 @@ export function buildSystemPrompt({
   faqs,
   agentSettings,
   widgetSettings,
+  calcomContext,
 }: PromptParams): string {
   const botName = agentSettings?.agent_name ?? widgetSettings?.bot_name ?? 'AI Assistant'
   const persona = agentSettings?.persona_prompt ?? ''
@@ -97,33 +101,47 @@ export function buildSystemPrompt({
     }
   }
 
+  // Cal.com real availability (only present when actual slots were fetched)
+  if (calcomContext) {
+    lines.push('', calcomContext)
+  }
+
   // Role and guidelines
+  const bookingGuideline = calcomContext
+    ? `When a customer selects a specific available time from the list above, confirm it with them and set "selected_time" (ISO 8601) in the LEAD annotation. Only use times from the list above — never invent availability.`
+    : `When a customer wants to book, collect their details and let them know the team will confirm availability and follow up shortly.`
+
   lines.push('', '## Your Role')
   lines.push(`You help customers by:
 - Answering questions about ${business.name}'s services, pricing, and hours
 - Helping customers book appointments
 - Collecting their contact information when they want to book or follow up
 
-When a customer wants to book or be contacted, collect: ${collectFields || 'their name and contact details'}.
-Then let them know the team will confirm their appointment or follow up shortly.
+When a customer wants to book, collect: ${collectFields || 'their name and contact details'}.
+${bookingGuideline}
 
 ## Response Guidelines
 - Keep responses concise — 2 to 4 sentences maximum
 - Be warm, professional, and helpful
 - Only state information that is explicitly listed above
-- Do not invent prices, availability, or policies not stated above
+- NEVER invent prices, availability, or appointment times
 - If asked something you do not know, say so and offer to have the team follow up
-- Do not create bookings in external systems (Cal.com, etc.)`)
+- ${calcomContext ? 'Only offer the exact times listed in the Real Available Slots section above.' : 'Do not commit to specific times — the team will confirm availability.'}`)
 
-  // Lead extraction annotation (stripped server-side before sending to client)
+
+  // Lead extraction annotation — stripped server-side before sending to client
   lines.push('', '## Lead Data Extraction')
   lines.push(`At the end of EVERY response, on its own line, output exactly:
 [LEAD:{}]
 Replace {} with a JSON object using these exact keys (null for any unknown value):
-{"name":null,"email":null,"phone":null,"service":null,"intent":null,"preferred_date":null,"preferred_time":null}
+{"name":null,"email":null,"phone":null,"service":null,"intent":null,"preferred_date":null,"preferred_time":null,"selected_time":null}
+
+- "preferred_date": what the customer said (e.g. "Saturday", "next week")
+- "preferred_time": what the customer said (e.g. "afternoon", "2pm")
+- "selected_time": ONLY set this when the customer has confirmed a specific slot from the Available Slots list above (ISO 8601 format, e.g. "2024-01-10T14:00:00.000Z"). Leave null otherwise.
 
 Example:
-[LEAD:{"name":"Jane Smith","email":"jane@example.com","phone":null,"service":"Signature Facial","intent":"book appointment","preferred_date":"Saturday","preferred_time":"afternoon"}]
+[LEAD:{"name":"Jane Smith","email":"jane@example.com","phone":null,"service":"Signature Facial","intent":"book appointment","preferred_date":"Saturday","preferred_time":"afternoon","selected_time":"2024-01-13T14:00:00.000Z"}]
 
 This line is automatically stripped before the response reaches the customer. Always include it.`)
 

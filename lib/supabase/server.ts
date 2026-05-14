@@ -44,10 +44,16 @@ export async function createClient() {
 export function createServiceRoleClient() {
   // Intentionally NOT exported from lib/supabase/client.ts
   // so it can't be tree-shaken into client bundles.
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    throw new Error(
+      '[server] SUPABASE_SERVICE_ROLE_KEY is not configured. ' +
+      'Add it to .env.local and restart the dev server.',
+    )
+  }
   const { createClient: createSupabaseClient } = require('@supabase/supabase-js') // eslint-disable-line
   return createSupabaseClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.SUPABASE_SERVICE_ROLE_KEY!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY,
     { auth: { persistSession: false } },
   )
 }
