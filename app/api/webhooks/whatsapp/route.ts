@@ -5,20 +5,32 @@ import {
   sendWhatsAppTextMessage,
   markMessageAsRead,
   parseIncomingWhatsAppMessage,
+  isHandoffRequest,
 } from '@/lib/whatsapp/client'
 import { generateAIReply } from '@/lib/ai/respond'
 import { getBusinessPlan } from '@/lib/billing/limits'
 import { whatsappWebhookVerifySchema, whatsappWebhookPayloadSchema } from '@/lib/validation/whatsapp'
 import { captureApiError } from '@/lib/logging/api'
+import { captureServerEvent } from '@/lib/analytics/server'
 
 const MAX_BODY_BYTES = 64 * 1024
 const PLAN_ORDER: Record<string, number> = { starter: 0, pro: 1, scale: 2 }
+
+// Phrases that trigger a media-based handoff
+const MEDIA_HANDOFF_TYPES = new Set(['document', 'image', 'video'])
+
+// One-time handoff reply — sent only when transitioning ai → human_requested
+const HANDOFF_REPLY_MESSAGE =
+  "I'll notify the team so someone can help you directly. Please hold on!"
+
+// Safe media acknowledgement (no AI hallucination about content)
+const MEDIA_REPLY_MESSAGE =
+  "I received your attachment. A team member can review it if needed."
 
 // ── GET — Meta webhook verification ──────────────────────────────
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url)
-
   const queryObj = {
     'hub.mode':         searchParams.get('hub.mode')         ?? '',
     'hub.verify_token': searchParams.get('hub.verify_token') ?? '',
@@ -50,7 +62,6 @@ export async function GET(request: NextRequest) {
 // ── POST — incoming WhatsApp messages ────────────────────────────
 
 export async function POST(request: NextRequest) {
-  // 1. Read raw body with size cap
   let rawBody: string
   try { rawBody = await request.text() } catch {
     return NextResponse.json({ error: 'Could not read request body.' }, { status: 400 })
@@ -60,14 +71,13 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Payload too large.' }, { status: 413 })
   }
 
-  // 2. Verify Meta signature
   const sig = request.headers.get('x-hub-signature-256')
   if (!verifyMetaWebhookSignature(rawBody, sig)) {
     console.error('[whatsapp/webhook] Signature verification failed')
+    captureApiError(new Error('Signature mismatch'), { route: '/api/webhooks/whatsapp', error_type: 'signature_failed' })
     return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 })
   }
 
-  // 3. Parse + validate payload
   let body: unknown
   try { body = JSON.parse(rawBody) } catch {
     return NextResponse.json({ error: 'Invalid JSON.' }, { status: 400 })
@@ -75,7 +85,6 @@ export async function POST(request: NextRequest) {
 
   const parsed = whatsappWebhookPayloadSchema.safeParse(body)
   if (!parsed.success) {
-    // Unrecognised event type — acknowledge silently so Meta doesn't retry
     return NextResponse.json({ ok: true, message: 'Event not handled.' })
   }
 
@@ -83,20 +92,19 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ ok: true, message: 'Not a WhatsApp event.' })
   }
 
-  // 4. Process first message entry (Meta batches rarely have more than one)
   const entry = parsed.data.entry[0]
   if (!entry) return NextResponse.json({ ok: true })
 
   const inbound = parseIncomingWhatsAppMessage(entry)
-  if (!inbound) {
-    // Status update, media, or other non-text event — return 200 quickly
+  if (!inbound || inbound.messageType === 'unsupported') {
     return NextResponse.json({ ok: true })
   }
 
-  // 5. Respond 200 immediately so Meta doesn't retry on slow processing
-  //    Use waitUntil-equivalent: run async but don't await
-  void processInboundMessage(inbound, rawBody)
+  // Track webhook receipt (safe — no phone number, no content)
+  void captureServerEvent('whatsapp_webhook_received', { message_type: inbound.messageType })
 
+  // Respond 200 immediately; process asynchronously
+  void processInboundMessage(inbound)
   return NextResponse.json({ ok: true })
 }
 
@@ -108,15 +116,19 @@ interface InboundMessage {
   toPhone:       string
   phoneNumberId: string
   customerName:  string | null
-  text:          string
+  messageType:   string
+  text:          string | null
+  mediaId:       string | null
+  mediaMimeType: string | null
+  mediaCaption:  string | null
   timestamp:     string
 }
 
-async function processInboundMessage(inbound: InboundMessage, _rawBody: string): Promise<void> {
+async function processInboundMessage(inbound: InboundMessage): Promise<void> {
   const db = createServiceRoleClient()
 
   try {
-    // 6. Find the business by phone_number_id stored in whatsapp_connections
+    // 1. Find business by phone_number_id
     const { data: conn } = await db
       .from('whatsapp_connections')
       .select('business_id, is_enabled')
@@ -124,27 +136,26 @@ async function processInboundMessage(inbound: InboundMessage, _rawBody: string):
       .single()
 
     if (!conn) {
-      console.warn('[whatsapp/webhook] No business found for phone_number_id:', inbound.phoneNumberId)
+      console.warn('[whatsapp/webhook] No business for phone_number_id:', inbound.phoneNumberId)
       return
     }
 
-    const connection = conn as { business_id: string; is_enabled: boolean }
+    const connection  = conn as { business_id: string; is_enabled: boolean }
+    const businessId  = connection.business_id
 
     if (!connection.is_enabled) {
-      console.log('[whatsapp/webhook] WhatsApp disabled for business:', connection.business_id.slice(0, 8))
+      console.log('[whatsapp/webhook] Channel disabled:', businessId.slice(0, 8))
       return
     }
 
-    const businessId = connection.business_id
-
-    // 7. Plan gate — WhatsApp requires Pro or Scale
+    // 2. Plan gate
     const plan = await getBusinessPlan(db, businessId)
     if ((PLAN_ORDER[plan] ?? 0) < (PLAN_ORDER['pro'] ?? 1)) {
-      console.log('[whatsapp/webhook] Business on starter plan — WhatsApp not allowed:', businessId.slice(0, 8))
+      console.log('[whatsapp/webhook] Starter plan — skipping:', businessId.slice(0, 8))
       return
     }
 
-    // 8. Deduplicate — skip if we've already processed this message_id
+    // 3. Deduplicate
     const { data: existingMsg } = await db
       .from('whatsapp_messages')
       .select('id')
@@ -152,40 +163,40 @@ async function processInboundMessage(inbound: InboundMessage, _rawBody: string):
       .single()
 
     if (existingMsg) {
-      console.log('[whatsapp/webhook] Duplicate message_id, skipping:', inbound.messageId)
+      console.log('[whatsapp/webhook] Duplicate, skipping:', inbound.messageId)
       return
     }
 
-    // 9. Mark as read (fire-and-forget)
+    // 4. Mark as read (fire-and-forget)
     void markMessageAsRead(inbound.messageId)
 
-    // 10. Save inbound message (content_summary = first 200 chars)
-    const contentSummary = inbound.text.length > 200
-      ? `${inbound.text.slice(0, 200)}…`
-      : inbound.text
+    // 5. Build content summary (no full text stored)
+    const rawContent = inbound.text ?? inbound.mediaCaption ?? `[${inbound.messageType}]`
+    const contentSummary = rawContent.length > 200
+      ? `${rawContent.slice(0, 200)}…`
+      : rawContent
 
+    // 6. Save inbound message
     const { data: savedMsg } = await db.from('whatsapp_messages').insert({
       business_id:         businessId,
       whatsapp_message_id: inbound.messageId,
       from_phone:          inbound.fromPhone,
       to_phone:            inbound.toPhone,
       direction:           'inbound',
-      message_type:        'text',
+      message_type:        inbound.messageType,
       content_summary:     contentSummary,
       status:              'received',
+      media_id:            inbound.mediaId,
+      media_mime_type:     inbound.mediaMimeType,
       metadata:            { customer_name: inbound.customerName, timestamp: inbound.timestamp },
     }).select('id').single()
 
     const savedMsgId = (savedMsg as { id: string } | null)?.id ?? null
 
-    // 11. Build conversation history: load recent messages for this session
-    //     We find/create the session via externalRef (fromPhone) in generateAIReply
-    //     For history, load the last 10 messages from the active session if any
-    let history: Array<{ role: 'user' | 'assistant'; content: string }> = []
-
+    // 7. Find or note existing session (to check handoff_status)
     const { data: existingSession } = await db
       .from('chat_sessions')
-      .select('id')
+      .select('id, handoff_status')
       .eq('business_id', businessId)
       .eq('external_thread_id', inbound.fromPhone)
       .eq('channel', 'whatsapp')
@@ -194,11 +205,126 @@ async function processInboundMessage(inbound: InboundMessage, _rawBody: string):
       .limit(1)
       .single()
 
-    if (existingSession) {
+    const currentHandoff = (existingSession as { id?: string; handoff_status?: string } | null)?.handoff_status ?? 'ai'
+    const sessionId      = (existingSession as { id?: string } | null)?.id ?? null
+
+    // Update last_customer_message_at on existing session
+    if (sessionId) {
+      await db.from('chat_sessions')
+        .update({ last_customer_message_at: new Date().toISOString() })
+        .eq('id', sessionId)
+    }
+
+    // Track safe event
+    void captureServerEvent('whatsapp_message_received', {
+      business_id:    businessId.slice(0, 8),
+      message_type:   inbound.messageType,
+      handoff_status: currentHandoff,
+      plan,
+    })
+
+    // 8. Human handoff check — if already human, skip AI
+    if (currentHandoff === 'human' || currentHandoff === 'resolved' || currentHandoff === 'archived') {
+      console.log('[whatsapp/webhook] Human session — no AI reply. session:', sessionId?.slice(0, 8))
+      return
+    }
+
+    // 9. Media message — send safe acknowledgement, optionally request handoff
+    if (inbound.messageType !== 'text') {
+      const shouldHandoff = MEDIA_HANDOFF_TYPES.has(inbound.messageType)
+
+      const sendResult = await sendWhatsAppTextMessage(inbound.fromPhone, MEDIA_REPLY_MESSAGE)
+
+      await db.from('whatsapp_messages').insert({
+        business_id:         businessId,
+        chat_session_id:     sessionId,
+        whatsapp_message_id: sendResult.messageId ?? `out_media_${Date.now()}`,
+        from_phone:          inbound.toPhone,
+        to_phone:            inbound.fromPhone,
+        direction:           'outbound',
+        message_type:        'text',
+        content_summary:     MEDIA_REPLY_MESSAGE,
+        status:              sendResult.ok ? 'sent' : 'failed',
+        metadata:            { auto_media_reply: true },
+      }).catch(() => undefined)
+
+      if (shouldHandoff && sessionId && currentHandoff === 'ai') {
+        await db.from('chat_sessions')
+          .update({ handoff_status: 'human_requested' })
+          .eq('id', sessionId)
+      }
+
+      void captureServerEvent('whatsapp_media_received', {
+        business_id:  businessId.slice(0, 8),
+        media_type:   inbound.messageType,
+        did_handoff:  shouldHandoff,
+      })
+      return
+    }
+
+    // 10. Handoff keyword detection (text messages only)
+    const userText  = inbound.text ?? ''
+    const wantsHuman = currentHandoff === 'human_requested'
+      ? true  // already waiting — don't re-trigger
+      : isHandoffRequest(userText)
+
+    if (wantsHuman && currentHandoff === 'ai') {
+      // Transition: ai → human_requested (one-time only)
+      if (sessionId) {
+        await db.from('chat_sessions')
+          .update({ handoff_status: 'human_requested' })
+          .eq('id', sessionId)
+      }
+
+      const sendResult = await sendWhatsAppTextMessage(inbound.fromPhone, HANDOFF_REPLY_MESSAGE)
+
+      await db.from('whatsapp_messages').insert({
+        business_id:         businessId,
+        chat_session_id:     sessionId,
+        whatsapp_message_id: sendResult.messageId ?? `out_handoff_${Date.now()}`,
+        from_phone:          inbound.toPhone,
+        to_phone:            inbound.fromPhone,
+        direction:           'outbound',
+        message_type:        'text',
+        content_summary:     HANDOFF_REPLY_MESSAGE,
+        status:              sendResult.ok ? 'sent' : 'failed',
+        metadata:            { auto_handoff_reply: true },
+      }).catch(() => undefined)
+
+      if (savedMsgId && sessionId) {
+        await db.from('whatsapp_messages')
+          .update({ chat_session_id: sessionId })
+          .eq('id', savedMsgId)
+      }
+
+      void captureServerEvent('handoff_requested', {
+        business_id: businessId.slice(0, 8),
+        plan,
+        channel:     'whatsapp',
+      })
+
+      console.log('[whatsapp/webhook] Handoff requested:', businessId.slice(0, 8))
+      return
+    }
+
+    if (wantsHuman && currentHandoff === 'human_requested') {
+      // Already in human_requested — just save, no AI, no repeat message
+      if (savedMsgId && sessionId) {
+        await db.from('whatsapp_messages')
+          .update({ chat_session_id: sessionId })
+          .eq('id', savedMsgId)
+      }
+      return
+    }
+
+    // 11. Normal AI flow — load history and generate reply
+    let history: Array<{ role: 'user' | 'assistant'; content: string }> = []
+
+    if (sessionId) {
       const { data: recentMsgs } = await db
         .from('chat_messages')
         .select('role, content')
-        .eq('session_id', (existingSession as { id: string }).id)
+        .eq('session_id', sessionId)
         .order('created_at', { ascending: false })
         .limit(10)
 
@@ -211,71 +337,83 @@ async function processInboundMessage(inbound: InboundMessage, _rawBody: string):
       }
     }
 
-    // Append current message
     const messages: Array<{ role: 'user' | 'assistant'; content: string }> = [
       ...history,
-      { role: 'user', content: inbound.text },
+      { role: 'user', content: userText },
     ]
 
-    // 12. Generate AI reply using shared engine
+    // 12. Generate AI reply
     const aiResult = await generateAIReply({
       businessId,
       channel:     'whatsapp',
       messages,
       db,
       externalRef: inbound.fromPhone,
+      existingSessionId: sessionId,
     })
 
     if (!aiResult.ok || !aiResult.reply) {
       console.error('[whatsapp/webhook] AI reply failed:', aiResult.error)
       captureApiError(new Error(aiResult.error ?? 'AI reply failed'), {
-        route: '/api/webhooks/whatsapp',
+        route:      '/api/webhooks/whatsapp',
         error_type: 'ai_reply_failed',
         business_id: businessId,
       })
-
-      // Log failure
-      await db.from('audit_logs').insert({
-        business_id: businessId,
-        user_id:     null,
-        action:      'whatsapp.webhook.ai_failed',
-        resource:    'whatsapp_messages',
-        resource_id: savedMsgId,
-      }).catch(() => undefined)
-
       return
     }
 
-    // 13. Update inbound message row with session_id and lead_id
-    if (savedMsgId && aiResult.sessionId) {
+    // Update inbound message with session + lead
+    const resolvedSessionId = aiResult.sessionId ?? sessionId
+    if (savedMsgId && resolvedSessionId) {
       await db.from('whatsapp_messages')
-        .update({ chat_session_id: aiResult.sessionId, lead_id: aiResult.leadId })
+        .update({ chat_session_id: resolvedSessionId, lead_id: aiResult.leadId })
         .eq('id', savedMsgId)
     }
 
-    // 14. Send WhatsApp reply
+    // 13. Send reply
     const sendResult = await sendWhatsAppTextMessage(inbound.fromPhone, aiResult.reply)
 
-    // 15. Save outbound message
-    const outboundSummary = aiResult.reply.length > 200
-      ? `${aiResult.reply.slice(0, 200)}…`
-      : aiResult.reply
-
+    // 14. Save outbound
+    const outSummary = aiResult.reply.length > 200 ? `${aiResult.reply.slice(0, 200)}…` : aiResult.reply
     await db.from('whatsapp_messages').insert({
       business_id:         businessId,
       lead_id:             aiResult.leadId,
-      chat_session_id:     aiResult.sessionId,
+      chat_session_id:     resolvedSessionId,
       whatsapp_message_id: sendResult.messageId ?? `out_${Date.now()}`,
       from_phone:          inbound.toPhone,
       to_phone:            inbound.fromPhone,
       direction:           'outbound',
       message_type:        'text',
-      content_summary:     outboundSummary,
+      content_summary:     outSummary,
       status:              sendResult.ok ? 'sent' : 'failed',
       metadata:            { ai_generated: true },
     }).catch(() => undefined)
 
-    // 16. Audit log
+    // Update last_agent_reply_at
+    if (resolvedSessionId) {
+      await db.from('chat_sessions')
+        .update({ last_agent_reply_at: new Date().toISOString() })
+        .eq('id', resolvedSessionId)
+    }
+
+    // 15. Analytics
+    void captureServerEvent('whatsapp_reply_sent', {
+      business_id:  businessId.slice(0, 8),
+      send_ok:      sendResult.ok,
+      has_lead:     !!aiResult.leadId,
+      lead_created: aiResult.leadCreated,
+      plan,
+    })
+
+    if (aiResult.leadCreated) {
+      void captureServerEvent('whatsapp_lead_created', {
+        business_id: businessId.slice(0, 8),
+        channel:     'whatsapp',
+        plan,
+      })
+    }
+
+    // 16. Audit
     await db.from('audit_logs').insert({
       business_id: businessId,
       user_id:     null,
@@ -284,7 +422,7 @@ async function processInboundMessage(inbound: InboundMessage, _rawBody: string):
       resource_id: savedMsgId,
     }).catch(() => undefined)
 
-    console.log(`[whatsapp/webhook] Replied to ${inbound.fromPhone.slice(-4)} biz=${businessId.slice(0, 8)} send_ok=${sendResult.ok}`)
+    console.log(`[whatsapp/webhook] OK biz=${businessId.slice(0, 8)} send=${sendResult.ok}`)
 
   } catch (err) {
     console.error('[whatsapp/webhook] processInboundMessage error:', err instanceof Error ? err.message : err)

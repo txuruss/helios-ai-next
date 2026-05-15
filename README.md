@@ -367,6 +367,93 @@ WhatsApp is now live. Incoming messages trigger the AI assistant and appear in t
 
 ---
 
+## Phase 10 — WhatsApp Inbox, Handoff & Media
+
+### How the Inbox Works
+
+Navigate to `/dashboard/inbox` (Pro+ plan). The inbox shows all WhatsApp conversations filtered by status:
+
+| Status | Meaning |
+|---|---|
+| `ai` | AI is handling replies automatically |
+| `human_requested` | Customer asked for a human — AI stopped |
+| `human` | Agent has taken over |
+| `resolved` | Conversation closed |
+| `archived` | Hidden from default views |
+
+Select a conversation to see the full message thread. Use the right panel to:
+- Change status (Mark Human, Return to AI, Resolve, Archive)
+- Assign to yourself
+- Add internal notes (visible to team only, never sent to customer)
+
+### Human Handoff Behavior
+
+When a customer sends a message containing phrases like **"human", "agent", "representative", "talk to someone", "real person"**:
+
+1. The webhook detects the handoff request
+2. Sets `handoff_status = 'human_requested'` on the session
+3. Sends a **one-time** WhatsApp reply: *"I'll notify the team so someone can help you directly."*
+4. AI stops auto-replying for that conversation
+5. The inbox shows the conversation under "Needs Agent"
+
+When an agent is ready, they click **Assign to me** → status becomes `human` → they reply manually.
+
+### How to Send Manual Replies
+
+1. Open a conversation in `/dashboard/inbox`
+2. Type a message in the Reply composer at the bottom
+3. Press Enter or click ↑ — the message is sent via WhatsApp and logged
+
+Requires Pro plan. API: `POST /api/whatsapp/send` (auth required, business_id derived from session).
+
+### How to Handle Media Messages
+
+When a customer sends an **image, document, or video**:
+- The media ID and MIME type are saved to `whatsapp_messages`
+- A safe reply is sent: *"I received your attachment. A team member can review it if needed."*
+- For images and documents, `handoff_status` is set to `human_requested`
+- Full media files are not downloaded or stored — only the Meta media ID
+
+### How Template Sending Works
+
+Templates must be **pre-approved** in Meta Business Manager before use.
+
+**Scale plan only.** From the conversation composer:
+1. Click **Template** tab
+2. Enter template name (lowercase, underscores, e.g. `appointment_reminder`)
+3. Enter language code (e.g. `en_US`)
+4. Click Send
+
+API: `POST /api/whatsapp/send-template` (Scale plan enforced server-side).
+
+### Meta Template Requirements
+
+- Submitted and approved at [business.facebook.com](https://business.facebook.com) → Message Templates
+- Template name must match exactly (case-sensitive)
+- Language code must match the approved variant (e.g. `en_US`, `es`, `en`)
+- Templates are required when the 24-hour customer messaging window has expired
+
+### Privacy Notes (Phase 10)
+
+- Phone numbers masked in all UI displays (`••• 1234`)
+- Internal notes never sent to the customer
+- Media files not stored — only `media_id` and `media_mime_type` saved
+- Template names and language codes are logged but contain no PII
+- PostHog events contain only safe metadata (business_id prefix, plan, message_type)
+
+### Plan Gating (Phase 10)
+
+| Feature | Starter | Pro | Scale |
+|---|---|---|---|
+| WhatsApp channel | — | ✓ | ✓ |
+| Inbox & handoff | — | ✓ | ✓ |
+| Manual replies | — | ✓ | ✓ |
+| Template messages | — | — | ✓ |
+
+Server-side enforcement: all plan checks happen in API routes and server actions.
+
+---
+
 ## Security Notes
 
 - `SUPABASE_SERVICE_ROLE_KEY` bypasses RLS — only use server-side in server actions or API routes.

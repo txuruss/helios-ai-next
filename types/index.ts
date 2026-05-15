@@ -284,8 +284,70 @@ export interface WhatsAppMessage {
   message_type:         string
   content_summary:      string | null
   status:               'received' | 'sent' | 'failed' | 'read'
+  // Phase 10 media + template + handoff fields
+  media_id:             string | null
+  media_url:            string | null
+  media_mime_type:      string | null
+  template_name:        string | null
+  template_language:    string | null
+  sent_by_user_id:      string | null
+  is_internal_note:     boolean
   metadata:             Record<string, unknown>
   created_at:           string
+}
+
+export type HandoffStatus = 'ai' | 'human_requested' | 'human' | 'resolved' | 'archived'
+export type ConversationPriority = 'low' | 'normal' | 'high' | 'urgent'
+
+export interface ChatSession {
+  id:                        string
+  business_id:               string
+  visitor_id:                string | null
+  lead_id:                   string | null
+  status:                    'active' | 'completed' | 'abandoned'
+  channel:                   'widget' | 'whatsapp' | 'instagram' | 'api'
+  external_thread_id:        string | null
+  // Phase 10 handoff fields
+  handoff_status:            HandoffStatus
+  assigned_to:               string | null
+  last_customer_message_at:  string | null
+  last_agent_reply_at:       string | null
+  priority:                  ConversationPriority
+  tags:                      string[]
+  internal_notes:            string | null
+  metadata:                  Record<string, unknown>
+  started_at:                string
+  ended_at:                  string | null
+  created_at:                string
+  updated_at:                string
+}
+
+export interface ConversationSummary {
+  id:                        string
+  business_id:               string
+  external_thread_id:        string | null
+  handoff_status:            HandoffStatus
+  priority:                  ConversationPriority
+  status:                    'active' | 'completed' | 'abandoned'
+  assigned_to:               string | null
+  lead_id:                   string | null
+  last_customer_message_at:  string | null
+  last_agent_reply_at:       string | null
+  created_at:                string
+  updated_at:                string
+  last_message_preview:      string | null
+  lead_name:                 string | null
+}
+
+export interface ConversationAssignment {
+  id:              string
+  business_id:     string
+  chat_session_id: string
+  assigned_to:     string
+  assigned_by:     string | null
+  status:          'active' | 'released'
+  created_at:      string
+  updated_at:      string
 }
 
 export interface AgentRecommendation {
