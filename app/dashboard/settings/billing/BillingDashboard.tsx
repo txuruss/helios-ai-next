@@ -1,8 +1,9 @@
 'use client'
 
-import { useActionState, useTransition } from 'react'
+import { useActionState, useEffect, useTransition } from 'react'
 import { createCheckoutSessionAction, createPortalSessionAction } from '@/lib/actions/billing'
 import { ALL_PLANS } from '@/lib/billing/plans'
+import { trackBillingPageViewed, trackCheckoutStarted, trackPortalOpened } from '@/lib/analytics/events'
 import type { Plan, PlanLimits } from '@/lib/billing/plans'
 import type { Subscription } from '@/types'
 
@@ -112,6 +113,9 @@ export default function BillingDashboard({
 }: Props) {
   const [portalState, portalAction, portalPending] = useActionState(createPortalSessionAction, {})
   const [, startNav] = useTransition()
+
+  // Track billing page view (safe — no PII)
+  useEffect(() => { trackBillingPageViewed('', currentPlanId) }, [currentPlanId])
 
   if (portalState.url && typeof window !== 'undefined') {
     startNav(() => { window.location.href = portalState.url! })

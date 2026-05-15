@@ -8,7 +8,7 @@ import { checkLimit, trackUsage } from '@/lib/billing/limits'
 import { getAvailability, createBooking } from '@/lib/calcom/client'
 import { isOriginAllowed, getCorsHeaders, type CorsHeaders } from '@/lib/cors'
 import { checkChatRateLimit } from '@/lib/rate-limit/chat'
-import { logApiEvent, hashIp, type ApiLogEvent } from '@/lib/logging/api'
+import { logApiEvent, hashIp, captureApiError, type ApiLogEvent } from '@/lib/logging/api'
 import type { AgentSettings, Business, FAQ, Service, WidgetSettings } from '@/types'
 
 // ── Constants ─────────────────────────────────────────────────────
@@ -506,6 +506,7 @@ export async function POST(request: NextRequest) {
       return respond({ error: 'AI service misconfigured. Contact the site administrator.' }, 503, cors)
     }
     console.error('[chat] Anthropic error:', err instanceof Error ? err.message : String(err))
+    captureApiError(err, { route: '/api/chat', error_type: 'anthropic_error', business_id })
     finish(500, 'anthropic_error')
     return respond({ error: 'Failed to generate a response. Please try again.' }, 500, cors)
   }

@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next'
 import { Poppins, JetBrains_Mono } from 'next/font/google'
+import { PostHogProvider } from '@/components/providers/PostHogProvider'
 import './globals.css'
 
 const poppins = Poppins({
@@ -54,7 +55,11 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en" className={`${poppins.variable} ${jetbrainsMono.variable}`}>
-      <body>{children}</body>
+      <body>
+        <PostHogProvider>
+          {children}
+        </PostHogProvider>
+      </body>
     </html>
   )
 }

@@ -1,0 +1,556 @@
+Helios AI Claude Skills / Functions
+
+1. Project Structure Auditor
+
+Purpose:
+Checks the full app structure before making changes.
+
+Use when:
+You want Claude to inspect folders, routes, components, API files, and missing pages.
+
+Checks:
+
+Correct Next.js structure
+Protected dashboard routes
+Public landing pages
+API route organization
+Reusable components
+Missing files
+Broken imports
+2. UI/UX Upgrade Skill
+
+Purpose:
+Improves the Helios AI interface into a premium dark SaaS product.
+
+Use when:
+You want Claude to redesign pages, dashboards, cards, navbars, forms, modals, or layouts.
+
+Focus:
+
+Dark luxury SaaS styling
+Black, charcoal, deep navy, orange, gold
+Thin borders
+Rounded cards
+Subtle glows
+Better spacing
+Mobile responsiveness
+Clear hierarchy
+Professional dashboard feel
+3. Landing Page Conversion Skill
+
+Purpose:
+Improves the landing page so local businesses understand and want Helios AI.
+
+Use when:
+You want better homepage copy, sections, CTAs, pricing, service cards, or interaction.
+
+Focus:
+
+Strong hero section
+Clear value proposition
+Services section
+Process section
+Platform section
+Pricing section
+Social proof placeholders
+Strong CTA flow
+Local business messaging
+4. Dashboard Builder Skill
+
+Purpose:
+Builds or improves Mission Control, the main Helios AI dashboard.
+
+Use when:
+You want Claude to create dashboard pages for agents, leads, bookings, automations, clients, services, or analytics.
+
+Focus:
+
+Clean admin layout
+Sidebar navigation
+Stats cards
+Agent activity feed
+Lead pipeline
+Booking timeline
+Automation logs
+Client status overview
+5. Secure API Route Builder
+
+Purpose:
+Creates production-safe backend API routes.
+
+Use when:
+You need /api/chat, /api/bookings, /api/leads, /api/calcom, /api/availability, etc.
+
+Must include:
+
+Server-side secrets only
+Request validation
+Message sanitization
+Rate limiting
+Safe error responses
+Server-side logging
+No private keys in frontend
+Proper HTTP status codes
+6. AI Chat Endpoint Skill
+
+Purpose:
+Improves the secure /api/chat backend route.
+
+Use when:
+You want Claude to connect the Helios AI chat widget to Anthropic or another AI provider safely.
+
+Rules:
+
+Frontend calls /api/chat
+Backend calls Anthropic/OpenAI
+API keys stay in .env
+System prompt built server-side
+Customer message sanitized
+Lead capture logic supported
+Booking intent detection supported
+7. Chat Widget Builder Skill
+
+Purpose:
+Builds the white-label AI chat widget for client websites.
+
+Use when:
+You want a customer-facing chat widget.
+
+Features:
+
+Floating website chat bubble
+Business-branded assistant
+FAQ answering
+Lead capture
+Booking flow
+Typing indicator
+Mobile-friendly layout
+Embed code export
+Safe frontend API call to /api/chat
+8. Lead Capture Skill
+
+Purpose:
+Builds forms and logic to collect customer leads.
+
+Use when:
+You need Helios AI to capture customer info from chats or forms.
+
+Lead fields:
+
+Name
+Phone
+Email
+Service needed
+Preferred date/time
+Message summary
+Lead status
+Source
+Assigned agent
+Business/client ID
+9. Cal.com Integration Skill
+
+Purpose:
+Creates secure backend routes for Cal.com availability and booking.
+
+Use when:
+You want Helios AI to check availability or create appointments.
+
+Required routes:
+
+/api/calcom/connect
+/api/calcom/availability
+/api/calcom/book
+/api/calcom/events
+
+Security rules:
+
+Cal.com API key server-side only
+Validate booking payloads
+Prevent duplicate bookings
+Return safe customer-facing errors
+10. Business Config Builder Skill
+
+Purpose:
+Creates the business setup system for each client.
+
+Use when:
+You want business owners to configure their AI assistant.
+
+Config fields:
+
+Business name
+Industry
+Services
+Pricing
+FAQs
+Hours
+Location
+Contact info
+Booking rules
+Tone of voice
+Escalation instructions
+11. FAQ Knowledge Base Skill
+
+Purpose:
+Builds the knowledge base system for each business agent.
+
+Use when:
+You want the AI to answer business-specific questions.
+
+Features:
+
+FAQ management
+Business policy storage
+Service descriptions
+Hours and availability rules
+Emergency fallback answers
+Owner notification triggers
+12. Agent Builder Skill
+
+Purpose:
+Creates and manages AI agents inside Helios AI.
+
+Use when:
+You want a page where admins can create/edit agents.
+
+Agent fields:
+
+Agent name
+Role
+Business/client
+Instructions
+Tools enabled
+Status
+Assigned workflow
+Last run
+Error state
+13. Agent Workflow Builder Skill
+
+Purpose:
+Designs multi-step workflows between Helios AI agents.
+
+Use when:
+You want orchestrator-style flows for leads, bookings, client onboarding, QA, or outreach.
+
+Example workflow:
+
+Business Research Agent
+Website Audit Agent
+Client Qualifier Agent
+Sales Offer Builder Agent
+Outreach Agent
+Quality Check Tool
+Admin Notification Tool
+Client Status Update Tool
+14. Relevance AI Integration Skill
+
+Purpose:
+Prepares the system to connect Mission Control with Relevance AI agents and workforces later.
+
+Use when:
+You want dashboard buttons to run agents, view outputs, or trigger workflows.
+
+Features:
+
+Agent run trigger
+Workforce run trigger
+Run status
+Logs
+Output viewer
+Error handling
+Webhook-ready structure
+15. Supabase Schema Builder
+
+Purpose:
+Creates clean database tables for Helios AI.
+
+Use when:
+You are ready to store real data.
+
+Tables:
+
+profiles
+businesses
+services
+faqs
+leads
+bookings
+agents
+agent_runs
+automations
+integrations
+chat_messages
+notifications
+16. Supabase Auth Integration Skill
+
+Purpose:
+Adds authentication properly when ready.
+
+Use when:
+You want real login/logout, protected dashboard pages, and user sessions.
+
+Rules:
+
+Landing page stays public
+/dashboard stays protected
+Unauthenticated users redirect to /login
+Logout button in dashboard
+No dashboard data visible before auth
+Role-based access later
+17. Form Validation Skill
+
+Purpose:
+Adds safe validation to every form and API payload.
+
+Use when:
+You add forms, booking flows, onboarding flows, or admin settings.
+
+Checks:
+
+Required fields
+Email format
+Phone format
+Message length limit
+Service selection validation
+Date/time validation
+Safe error messages
+18. Error Handling Skill
+
+Purpose:
+Makes the app feel production-ready instead of fragile.
+
+Use when:
+Any page, form, API route, or integration can fail.
+
+Must include:
+
+Loading states
+Empty states
+Error states
+Retry buttons
+Safe user messages
+Detailed server logs only
+No secret leaks
+19. Mobile Responsiveness Skill
+
+Purpose:
+Ensures every Helios AI page works on phones and tablets.
+
+Use when:
+You build or redesign any page.
+
+Checks:
+
+Mobile sidebar behavior
+Responsive cards
+Clean form spacing
+Proper button sizes
+No horizontal overflow
+Chat widget mobile mode
+Dashboard mobile fallback
+20. Component Refactor Skill
+
+Purpose:
+Turns messy repeated UI into clean reusable components.
+
+Use when:
+A page becomes too long or duplicated.
+
+Components to create:
+
+DashboardShell
+Sidebar
+Topbar
+StatCard
+AgentCard
+LeadCard
+BookingCard
+StatusBadge
+EmptyState
+LoadingState
+ErrorState
+SectionHeader
+21. Code Cleanup Skill
+
+Purpose:
+Cleans messy files without breaking existing features.
+
+Use when:
+You want Claude to improve code quality.
+
+Rules:
+
+Preserve working features
+Do not delete important logic
+Remove dead code carefully
+Fix naming consistency
+Improve imports
+Split large files only when useful
+Keep Helios branding
+22. Security Review Skill
+
+Purpose:
+Checks if the build is safe enough for production.
+
+Use when:
+Before deploying or adding API integrations.
+
+Checks:
+
+No API keys in frontend
+No secrets in localStorage
+.env used properly
+Public routes protected with rate limits
+Dashboard protected
+Inputs validated
+Errors sanitized
+CORS considered
+Logs do not expose private data
+23. Deployment Readiness Skill
+
+Purpose:
+Checks if Helios AI is ready to deploy.
+
+Use when:
+Before pushing to Vercel, Netlify, or production.
+
+Checks:
+
+Build passes
+Environment variables documented
+Routes working
+Mobile layout working
+No placeholder-only core sections
+Auth flow ready
+API routes safe
+Landing page complete
+Dashboard usable
+24. Client Onboarding Flow Skill
+
+Purpose:
+Builds the flow for collecting client setup information.
+
+Use when:
+You want business owners to submit everything needed to build their AI assistant.
+
+Steps:
+
+Business info
+Services
+FAQs
+Booking rules
+Hours
+Contact info
+Branding
+Integrations
+Review
+Submit
+25. AI Booking Rules Skill
+
+Purpose:
+Creates rules for how the assistant should handle booking conversations.
+
+Use when:
+You want the AI to book correctly.
+
+Rules include:
+
+Ask for service first
+Ask for preferred day/time
+Check business hours
+Check availability
+Confirm customer details
+Create booking
+Send confirmation
+Escalate unclear requests
+26. Notification System Skill
+
+Purpose:
+Creates owner/admin notifications for new leads, bookings, failed bookings, or urgent messages.
+
+Use when:
+You want the business owner to be notified automatically.
+
+Notification triggers:
+
+New lead captured
+Booking requested
+Booking confirmed
+Customer asks for human
+AI confidence is low
+Integration error
+Missed booking attempt
+27. Test Chat Flow Skill
+
+Purpose:
+Creates a testing page where you can simulate customer conversations.
+
+Use when:
+You want to test AI behavior before giving it to a client.
+
+Features:
+
+Select business profile
+Test customer message
+View AI response
+View detected intent
+View lead data captured
+View booking step
+View system warnings
+28. Embed Code Export Skill
+
+Purpose:
+Generates client-ready embed code for the AI chat widget.
+
+Use when:
+You want businesses to install Helios AI on their website.
+
+Output:
+
+<script src="https://yourdomain.com/widget.js" data-business-id="CLIENT_ID"></script>
+
+Should include:
+
+Business ID
+Theme options
+Widget position
+Brand color
+Safe initialization
+29. White-Label Branding Skill
+
+Purpose:
+Lets businesses customize the widget.
+
+Use when:
+You want client branding controls.
+
+Fields:
+
+Business logo
+Widget color
+Assistant name
+Greeting message
+Chat bubble position
+Brand visibility
+Custom domain later
+
+30. QA Delivery Skill
+
+Purpose:
+Reviews everything before client handoff.
+
+Use when:
+Before delivering a client build.
+
+Checks:
+
+Business info complete
+Services loaded
+FAQs loaded
+Booking flow tested
+Lead capture works
+Notifications work
+Widget installed
+Mobile tested
+Owner knows how to use dashboard
+No test data exposed

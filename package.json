@@ -12,6 +12,7 @@
   "dependencies": {
     "@anthropic-ai/sdk": "^0.96.0",
     "@hookform/resolvers": "^3.10.0",
+    "@sentry/nextjs": "^10.53.1",
     "@supabase/ssr": "^0.6.1",
     "@supabase/supabase-js": "^2.49.4",
     "@upstash/ratelimit": "^2.0.8",
@@ -21,6 +22,7 @@
     "framer-motion": "^11.18.2",
     "lucide-react": "^0.469.0",
     "next": "15.1.8",
+    "posthog-js": "^1.373.4",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-hook-form": "^7.56.3",

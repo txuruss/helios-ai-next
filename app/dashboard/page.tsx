@@ -1,7 +1,9 @@
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createServiceRoleClient } from '@/lib/supabase/server'
 import Link from 'next/link'
 import PageHeader from '@/components/dashboard/PageHeader'
 import StatCard from '@/components/dashboard/StatCard'
+import { getBusinessPlan, getBusinessUsage } from '@/lib/billing/limits'
+import { getPlanLimits } from '@/lib/billing/plans'
 
 const MOCK_ACTIVITY = [
   { color: 'green',  title: 'Booking confirmed',           desc: 'Signature Facial · Island Glow · Sat 1:30 PM',    time: '2 min ago' },
@@ -39,6 +41,22 @@ export default async function DashboardPage() {
         .limit(1)
         .single()
     : { data: null }
+
+  // Real usage data for the stats section
+  let liveUsage: { ai_conversations: number; leads: number; bookings: number } | null = null
+  let planId = 'starter'
+  let planLimits = getPlanLimits('starter')
+
+  if (membership?.business_id && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    const db = createServiceRoleClient()
+    const [plan, usage] = await Promise.all([
+      getBusinessPlan(db, membership.business_id as string),
+      getBusinessUsage(db, membership.business_id as string),
+    ])
+    planId    = plan
+    planLimits = getPlanLimits(plan)
+    liveUsage  = usage
+  }
 
   if (!membership) {
     return (
@@ -113,14 +131,41 @@ export default async function DashboardPage() {
         description="Real-time view of leads, bookings, agents, and system health."
       />
 
-      {/* KPI grid */}
+      {/* KPI grid — live usage data when available */}
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
-        <StatCard label="Total Leads"         value="1,248" delta="+18.4%"   deltaDir="up"      sub="this month" />
-        <StatCard label="Bookings This Week"  value="47"    delta="+12%"     deltaDir="up"      sub="confirmed" />
-        <StatCard label="Active AI Agents"    value="7"     delta="1 degraded" deltaDir="warn"  sub="of 8 total"       variant="warn" />
-        <StatCard label="Pending Tasks"       value="23"    delta="4 due today" deltaDir="warn" sub="across all clients" variant="warn" />
-        <StatCard label="Failed Automations"  value="2"     delta="last 24 hrs" deltaDir="bad"  sub="need attention"   variant="danger" />
-        <StatCard label="New Inquiries"       value="8"     delta="+3 today"  deltaDir="up"      sub="unreviewed" />
+        <StatCard
+          label="AI Conversations"
+          value={liveUsage ? String(liveUsage.ai_conversations) : '—'}
+          delta={liveUsage ? `${planLimits.ai_conversations_month} limit` : '—'}
+          deltaDir={liveUsage && liveUsage.ai_conversations >= planLimits.ai_conversations_month * 0.9 ? 'warn' : 'neutral'}
+          sub="this month"
+          variant={liveUsage && liveUsage.ai_conversations >= planLimits.ai_conversations_month ? 'danger' : 'default'}
+        />
+        <StatCard
+          label="Leads Captured"
+          value={liveUsage ? String(liveUsage.leads) : '—'}
+          delta={liveUsage ? `${planLimits.leads_month} limit` : '—'}
+          deltaDir={liveUsage && liveUsage.leads >= planLimits.leads_month * 0.9 ? 'warn' : 'neutral'}
+          sub="this month"
+          variant={liveUsage && liveUsage.leads >= planLimits.leads_month ? 'danger' : 'default'}
+        />
+        <StatCard
+          label="Bookings"
+          value={liveUsage ? String(liveUsage.bookings) : '—'}
+          delta={liveUsage ? `${planLimits.bookings_month} limit` : '—'}
+          deltaDir={liveUsage && liveUsage.bookings >= planLimits.bookings_month * 0.9 ? 'warn' : 'neutral'}
+          sub="this month"
+          variant={liveUsage && liveUsage.bookings >= planLimits.bookings_month ? 'danger' : 'default'}
+        />
+        <StatCard
+          label="Current Plan"
+          value={planId.charAt(0).toUpperCase() + planId.slice(1)}
+          delta="active"
+          deltaDir="up"
+          sub={`${planLimits.ai_conversations_month.toLocaleString()} convos/mo`}
+        />
+        <StatCard label="Active AI Agents"   value="7"  delta="1 degraded" deltaDir="warn" sub="of 8 total" variant="warn" />
+        <StatCard label="Widget Messages"    value={liveUsage ? '—' : '—'} delta="this month" deltaDir="neutral" sub="tracked in usage" />
       </div>
 
       {/* Quick Actions */}

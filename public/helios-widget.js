@@ -37,7 +37,23 @@
       if (window.console) console.error('[Helios Widget] Failed to load config:', err);
     });
 
-  // ── 3. Widget initialisation ──────────────────────────────────
+  // ── 3. Safe analytics — fire-and-forget ──────────────────────
+  // Sends only widget_id + event name. Never sends message content or PII.
+  function trackEvent(wid, eventName) {
+    try {
+      fetch(baseUrl + '/api/analytics/widget', {
+        method:  'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body:    JSON.stringify({
+          widget_id: wid,
+          event:     eventName,
+          metadata:  { timestamp: new Date().toISOString() },
+        }),
+      }).catch(function () {}); // silent fail — never block the widget
+    } catch (e) {}
+  }
+
+  // ── 4. Widget initialisation ──────────────────────────────────
   function init(cfg) {
     var color      = cfg.primary_color    || '#ff7a18';
     var botName    = cfg.agent_display_name || 'AI Assistant';
@@ -126,10 +142,14 @@
     // Add greeting
     addMessage('assistant', greeting);
 
+    // Track widget_loaded (once after init)
+    trackEvent(widgetId, 'widget_loaded');
+
     // ── Toggle open/close ──────────────────────────────────────
     function open() {
       isOpen = true;
       panel.classList.add('open');
+      trackEvent(widgetId, 'widget_opened');
       fab.innerHTML = '&#10005;';
       fab.setAttribute('aria-label', 'Close chat');
       setTimeout(function () { input.focus(); }, 220);
@@ -177,6 +197,7 @@
 
       addMessage('user', text);
       messages.push({ role: 'user', content: text });
+      trackEvent(widgetId, 'widget_message_sent');
       showTyping();
       isBusy = true;
 

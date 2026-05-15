@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { trackEmbedCopied } from '@/lib/analytics/events'
 
 interface Props {
   widgetId: string
@@ -16,6 +17,7 @@ export default function EmbedCodeBox({ widgetId, appUrl }: Props) {
     navigator.clipboard?.writeText(code).then(() => {
       setCopied(true)
       setTimeout(() => setCopied(false), 2000)
+      trackEmbedCopied(widgetId, '')
     })
   }
 

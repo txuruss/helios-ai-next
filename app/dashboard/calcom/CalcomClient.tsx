@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import { syncCalcomEventTypes } from '@/lib/actions/calcom'
+import { trackCalcomSync } from '@/lib/analytics/events'
 
 interface DbEventType {
   id:           string
@@ -29,6 +30,7 @@ export default function CalcomClient({ eventTypes: initialEventTypes, apiKeyConf
       const result = await syncCalcomEventTypes()
       if (result.success) {
         setSyncResult({ ok: true, message: result.success })
+        trackCalcomSync('', result.count ?? 0)
         // Reload the page to refresh all data
         window.location.reload()
       } else {
