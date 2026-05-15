@@ -259,6 +259,114 @@ npx supabase gen types typescript --project-id your-project-id > types/database.
 
 ---
 
+## Phase 9 — WhatsApp Business API Setup
+
+### Prerequisites
+
+- A [Meta Developer account](https://developers.facebook.com)
+- A WhatsApp Business Account
+- A verified phone number in WhatsApp Business Manager
+- Pro or Scale Helios AI plan
+
+### Step 1 — Create a Meta Developer App
+
+1. Go to [developers.facebook.com](https://developers.facebook.com) → **My Apps** → **Create App**.
+2. Choose **Business** as the app type.
+3. Name it (e.g. "Helios AI WhatsApp").
+
+### Step 2 — Add the WhatsApp Product
+
+1. In your app dashboard, click **Add Product**.
+2. Select **WhatsApp** → **Set Up**.
+
+### Step 3 — Get Your IDs
+
+In **WhatsApp** → **API Setup**:
+- Copy **Phone Number ID** → `WHATSAPP_PHONE_NUMBER_ID`
+- Copy **WhatsApp Business Account ID** → `WHATSAPP_BUSINESS_ACCOUNT_ID`
+
+### Step 4 — Create a System User Access Token
+
+1. Go to **Business Settings** → **System Users** → **Add**.
+2. Assign the system user the **Admin** role.
+3. Click **Generate New Token** → select your app → grant `whatsapp_business_messaging` permission.
+4. Copy the token → `META_ACCESS_TOKEN`
+
+> Use a **System User token** (not a temporary test token) — it never expires.
+
+### Step 5 — Set Environment Variables
+
+In your `.env.local` (and production env):
+
+```env
+META_ACCESS_TOKEN=your_permanent_system_user_token
+WHATSAPP_PHONE_NUMBER_ID=your_phone_number_id
+WHATSAPP_BUSINESS_ACCOUNT_ID=your_waba_id
+WHATSAPP_VERIFY_TOKEN=any_random_secret_string_you_choose
+META_APP_SECRET=your_app_secret   # optional — enables signature verification
+```
+
+Get `META_APP_SECRET` from **App Settings** → **Basic** → **App Secret**.
+
+### Step 6 — Configure the Webhook
+
+In your Meta App → **WhatsApp** → **Configuration** → **Webhook**:
+
+| Field | Value |
+|---|---|
+| **Callback URL** | `https://your-domain.com/api/webhooks/whatsapp` |
+| **Verify Token** | The value you set in `WHATSAPP_VERIFY_TOKEN` |
+
+Click **Verify and Save**. The webhook will call `GET /api/webhooks/whatsapp` — the route returns the challenge if the token matches.
+
+### Step 7 — Subscribe to Webhook Fields
+
+In **Webhook Fields**, click **Manage** and subscribe to:
+- `messages` ✓
+
+### Step 8 — Test Locally with ngrok
+
+```bash
+ngrok http 3001
+```
+
+Use the ngrok HTTPS URL as your Callback URL in the Meta App. The webhook route handles both verification (GET) and incoming messages (POST).
+
+### Step 9 — Enable WhatsApp in the Dashboard
+
+1. Navigate to `/dashboard/whatsapp`.
+2. Confirm all env status indicators show green.
+3. Toggle **Enable WhatsApp Channel** to ON.
+4. Click **Save Settings**.
+
+WhatsApp is now live. Incoming messages trigger the AI assistant and appear in the Message Log.
+
+### Webhook Events Reference
+
+| Event | What it does |
+|---|---|
+| Incoming text message | Creates/updates chat session → AI reply → saves to whatsapp_messages |
+| Delivery/read receipt | Acknowledged silently (no DB write) |
+| Media, reaction, etc. | Acknowledged silently — text-only in Phase 9 |
+
+### Plan Requirements
+
+| Plan | Widget | WhatsApp |
+|---|---|---|
+| Starter | ✓ | — |
+| Pro | ✓ | ✓ |
+| Scale | ✓ | ✓ |
+
+### Privacy Notes
+
+- Phone numbers are masked in all logs (`••• 1234`).
+- Only the first 200 characters of each message are stored in `content_summary`.
+- Full message content is never logged to Sentry or PostHog.
+- `META_ACCESS_TOKEN`, `WHATSAPP_VERIFY_TOKEN`, and `META_APP_SECRET` are server-only — never prefix with `NEXT_PUBLIC_`.
+- Webhook signature verification (`x-hub-signature-256`) is enforced in production when `META_APP_SECRET` is set.
+
+---
+
 ## Security Notes
 
 - `SUPABASE_SERVICE_ROLE_KEY` bypasses RLS — only use server-side in server actions or API routes.
@@ -266,3 +374,4 @@ npx supabase gen types typescript --project-id your-project-id > types/database.
 - All dashboard routes are protected by middleware + layout-level auth checks.
 - RLS policies ensure users can only access their own business data.
 - No secrets are committed — `.env.local` is in `.gitignore`.
+- All Meta API calls happen server-side only. No WhatsApp credentials reach the browser.

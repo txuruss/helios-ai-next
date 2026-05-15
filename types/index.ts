@@ -257,6 +257,37 @@ export interface AgentOutput {
   updated_at:    string
 }
 
+// ── WhatsApp types ─────────────────────────────────────────────────
+
+export interface WhatsAppConnection {
+  id:                   string
+  business_id:          string
+  phone_number_id:      string | null
+  business_account_id:  string | null
+  display_phone_number: string | null
+  status:               'connected' | 'disconnected' | 'error'
+  is_enabled:           boolean
+  metadata:             Record<string, unknown>
+  created_at:           string
+  updated_at:           string
+}
+
+export interface WhatsAppMessage {
+  id:                   string
+  business_id:          string
+  lead_id:              string | null
+  chat_session_id:      string | null
+  whatsapp_message_id:  string
+  from_phone:           string
+  to_phone:             string
+  direction:            'inbound' | 'outbound'
+  message_type:         string
+  content_summary:      string | null
+  status:               'received' | 'sent' | 'failed' | 'read'
+  metadata:             Record<string, unknown>
+  created_at:           string
+}
+
 export interface AgentRecommendation {
   id:                   string
   business_id:          string

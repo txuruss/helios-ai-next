@@ -7,12 +7,12 @@ import { DASHBOARD_NAV } from '@/lib/constants'
 import { cn } from '@/components/ui/cn'
 import {
   LayoutDashboard, Bot, Users, Calendar, Briefcase,
-  Building2, Link2, MessageSquare, Settings, LogOut, X,
+  Building2, Link2, MessageSquare, MessageCircle, Settings, LogOut, X,
 } from 'lucide-react'
 
 const ICON_MAP: Record<string, React.ComponentType<{ size?: number; className?: string }>> = {
   LayoutDashboard, Bot, Users, Calendar, Briefcase,
-  Building2, Link: Link2, MessageSquare, Settings,
+  Building2, Link: Link2, MessageSquare, MessageCircle, Settings,
 }
 
 interface SidebarProps {

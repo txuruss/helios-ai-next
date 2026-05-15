@@ -22,6 +22,7 @@ export const DASHBOARD_NAV = [
   { id: 'services',    label: 'Services',       href: '/dashboard/services',    icon: 'Briefcase'       },
   { id: 'business',    label: 'Business',       href: '/dashboard/business',    icon: 'Building2'       },
   { id: 'calcom',      label: 'Cal.com',        href: '/dashboard/calcom',      icon: 'Link'            },
+  { id: 'whatsapp',   label: 'WhatsApp',       href: '/dashboard/whatsapp',    icon: 'MessageCircle'   },
   { id: 'widget',      label: 'Widget',         href: '/dashboard/widget',      icon: 'MessageSquare'   },
   { id: 'settings',    label: 'Settings',       href: '/dashboard/settings',    icon: 'Settings'        },
 ] as const
