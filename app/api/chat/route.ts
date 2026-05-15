@@ -4,6 +4,7 @@ import { z } from 'zod'
 import { createServiceRoleClient } from '@/lib/supabase/server'
 import { buildSystemPrompt } from '@/lib/ai/prompt'
 import { sendLeadNotification } from '@/lib/notifications/owner'
+import { checkLimit, trackUsage } from '@/lib/billing/limits'
 import { getAvailability, createBooking } from '@/lib/calcom/client'
 import { isOriginAllowed, getCorsHeaders, type CorsHeaders } from '@/lib/cors'
 import { checkChatRateLimit } from '@/lib/rate-limit/chat'
@@ -448,6 +449,17 @@ export async function POST(request: NextRequest) {
     })
   }
 
+  // 9b. Plan limit check — before calling Anthropic to avoid unnecessary API cost
+  const rlCheck = await checkLimit(db, business_id, 'ai_conversation')
+  if (!rlCheck.allowed) {
+    finish(402, 'plan_limit_ai')
+    return respond(
+      { error: 'Plan limit reached. Please upgrade to continue.' },
+      402,
+      cors,
+    )
+  }
+
   // 10. Fetch real Cal.com availability if a mapped service is mentioned (server-side only)
   const calcomContext = await getCalcomAvailabilityContext(db, business_id, messages)
 
@@ -611,6 +623,9 @@ export async function POST(request: NextRequest) {
       }
     }
   }
+
+  // Track AI conversation usage (fire-and-forget — never blocks response)
+  trackUsage(db, business_id, 'ai_conversation', { session_id: chatSessionId }).catch(() => undefined)
 
   finish(200)
   return respond(

@@ -1,14 +1,16 @@
 'use client'
 
 import { useActionState, useState, useTransition } from 'react'
+import Link from 'next/link'
 import { upsertWidgetSettings, regenerateWidgetId } from '@/lib/actions/widget'
 import WidgetPreview from './WidgetPreview'
 import EmbedCodeBox from './EmbedCodeBox'
 import type { WidgetSettings } from '@/types'
 
 interface Props {
-  settings:  WidgetSettings | null
-  appUrl:    string
+  settings:    WidgetSettings | null
+  appUrl:      string
+  currentPlan: string
 }
 
 const fieldCls =
@@ -16,7 +18,10 @@ const fieldCls =
   'placeholder:text-[#6a6a6e] outline-none transition-all focus:border-[#ff7a18]/50 disabled:opacity-50'
 const labelCls = 'text-[12px] font-medium uppercase tracking-[0.1em] text-[#6a6a6e] mb-1.5 block'
 
-export default function WidgetSettingsForm({ settings, appUrl }: Props) {
+export default function WidgetSettingsForm({ settings, appUrl, currentPlan }: Props) {
+  // Pro and Scale plans can hide the "Powered by Helios AI" badge.
+  // Starter is always required — server enforces this; UI just shows why.
+  const canHidePoweredBy = currentPlan === 'pro' || currentPlan === 'scale'
   const [state, formAction, pending] = useActionState(upsertWidgetSettings, {})
 
   const [previewColor, setPreviewColor] = useState(settings?.primary_color ?? '#ff7a18')
@@ -115,6 +120,34 @@ export default function WidgetSettingsForm({ settings, appUrl }: Props) {
             </select>
           </div>
 
+          {/* Powered by Helios AI branding — plan-gated */}
+          <div className="pt-3 border-t border-white/[0.06] flex flex-col gap-2">
+            <label className={`flex items-center gap-2.5 text-[13.5px] ${canHidePoweredBy ? 'cursor-pointer' : 'opacity-60 cursor-not-allowed'}`}>
+              <input
+                type="checkbox"
+                name="show_powered_by"
+                defaultChecked={
+                  !canHidePoweredBy
+                    ? true                                    // Starter: always checked
+                    : (settings?.show_powered_by ?? true)     // Pro/Scale: stored value
+                }
+                disabled={pending || !canHidePoweredBy}
+                className="w-4 h-4 rounded accent-[#ff7a18]"
+              />
+              Show &ldquo;Powered by Helios AI&rdquo;
+            </label>
+            {!canHidePoweredBy && (
+              <p className="text-[12px] text-[#6a6a6e] ml-[26px]">
+                <Link href="/dashboard/settings/billing"
+                  className="text-[#ffae3c] hover:text-[#ff7a18] transition-colors underline underline-offset-2">
+                  Upgrade to Pro
+                </Link>
+                {' '}to hide the Helios AI badge from your widget.
+              </p>
+            )}
+          </div>
+
+          {/* Widget enabled + save */}
           <div className="flex items-center justify-between pt-2 border-t border-white/[0.06]">
             <label className="flex items-center gap-2 text-[13.5px] cursor-pointer">
               <input type="checkbox" name="is_enabled" defaultChecked={settings?.is_enabled ?? true}

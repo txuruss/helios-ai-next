@@ -2,6 +2,8 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { createServiceRoleClient } from '@/lib/supabase/server'
 import { widgetConfigRequestSchema } from '@/lib/validation/widget'
 import { getPublicCorsHeaders } from '@/lib/cors'
+import { getBusinessPlan } from '@/lib/billing/limits'
+import { getPlanLimits } from '@/lib/billing/plans'
 
 const CORS = getPublicCorsHeaders()
 
@@ -33,7 +35,7 @@ export async function GET(request: NextRequest) {
 
   const db = createServiceRoleClient()
 
-  // Look up widget_settings by widget_id — join only what the widget needs
+  // Look up widget_settings — select only fields the public widget needs
   const { data: ws } = await db
     .from('widget_settings')
     .select(`
@@ -45,7 +47,8 @@ export async function GET(request: NextRequest) {
       placeholder_text,
       position,
       is_enabled,
-      logo_url
+      logo_url,
+      show_powered_by
     `)
     .eq('widget_id', parsed.data.widget_id)
     .single()
@@ -55,22 +58,34 @@ export async function GET(request: NextRequest) {
   }
 
   const settings = ws as {
-    business_id: string
-    widget_id: string
-    primary_color: string
-    bot_name: string
+    business_id:     string
+    widget_id:       string
+    primary_color:   string
+    bot_name:        string
     welcome_message: string
     placeholder_text: string
-    position: string
-    is_enabled: boolean
-    logo_url: string | null
+    position:        string
+    is_enabled:      boolean
+    logo_url:        string | null
+    show_powered_by: boolean
   }
 
   if (!settings.is_enabled) {
     return NextResponse.json({ error: 'Widget is disabled.' }, { status: 403, headers: CORS })
   }
 
-  // Return ONLY safe display fields — no private business data
+  // Plan gate — enforce server-side, never trust the client toggle.
+  // Starter: show_powered_by is always true regardless of the stored value.
+  // Pro/Scale: respect the value the business owner saved in their settings.
+  const businessPlan = await getBusinessPlan(db, settings.business_id)
+  const planLimits   = getPlanLimits(businessPlan)
+
+  const showPoweredBy =
+    planLimits.show_powered_by === 'required'
+      ? true                       // Starter — forced, cannot be overridden
+      : settings.show_powered_by   // Pro/Scale — honour saved preference
+
+  // Return ONLY safe display fields — no private business data, no secrets
   return NextResponse.json(
     {
       business_id:        settings.business_id,
@@ -81,7 +96,7 @@ export async function GET(request: NextRequest) {
       greeting:           settings.welcome_message,
       placeholder:        settings.placeholder_text,
       position:           settings.position,
-      show_powered_by:    true,   // Phase 6: gate behind plan
+      show_powered_by:    showPoweredBy,
       is_enabled:         true,
     },
     { status: 200, headers: CORS },

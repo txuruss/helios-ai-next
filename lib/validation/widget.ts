@@ -19,6 +19,7 @@ export const widgetSettingsUpdateSchema = z.object({
   placeholder_text: z.string().trim().min(1).max(100),
   position:         z.enum(['bottom-right', 'bottom-left']),
   is_enabled:       z.boolean(),
+  show_powered_by:  z.boolean().default(true),
   logo_url:         z.string().url().max(500).optional().or(z.literal('')),
 })
 

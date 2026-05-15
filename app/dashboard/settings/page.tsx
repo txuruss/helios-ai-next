@@ -1,7 +1,10 @@
-import { createClient } from '@/lib/supabase/server'
+import { createClient, createServiceRoleClient } from '@/lib/supabase/server'
+import Link from 'next/link'
 import PageHeader from '@/components/dashboard/PageHeader'
 import AccountForm from './AccountForm'
 import PasswordForm from './PasswordForm'
+import { getBusinessPlan } from '@/lib/billing/limits'
+import { getPlan } from '@/lib/billing/plans'
 
 export default async function SettingsPage() {
   const supabase = await createClient()
@@ -9,6 +12,16 @@ export default async function SettingsPage() {
   const { data: profile } = user
     ? await supabase.from('profiles').select('*').eq('id', user.id).single()
     : { data: null }
+
+  // Load plan info for the billing card
+  let planId = 'starter'
+  if (user && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    const db = createServiceRoleClient()
+    const { data: membership } = await db
+      .from('business_members').select('business_id').eq('user_id', user.id).limit(1).single()
+    if (membership) planId = await getBusinessPlan(db, membership.business_id as string)
+  }
+  const plan = getPlan(planId)
 
   return (
     <>
@@ -34,13 +47,15 @@ export default async function SettingsPage() {
         {/* Billing */}
         <div className="border border-white/10 rounded-2xl p-6">
           <h3 className="text-[16px] font-semibold mb-1">Billing</h3>
-          <p className="text-[14px] text-[#9a9a9d] mb-5">Manage your subscription plan and billing.</p>
+          <p className="text-[14px] text-[#9a9a9d] mb-5">Manage your subscription plan and usage limits.</p>
           <div className="flex items-center justify-between p-4 rounded-xl bg-white/[0.02] border border-white/[0.06]">
             <div>
-              <div className="font-semibold">Free Trial</div>
-              <div className="text-[13px] text-[#9a9a9d] mt-0.5">Phase 3: Connect Stripe to manage subscriptions</div>
+              <div className="font-semibold capitalize">{plan.name} Plan</div>
+              <div className="text-[13px] text-[#9a9a9d] mt-0.5">${plan.price_monthly}/month · {plan.limits.ai_conversations_month.toLocaleString()} AI conversations</div>
             </div>
-            <button className="btn-primary btn-sm" disabled>Upgrade Plan</button>
+            <Link href="/dashboard/settings/billing" className="btn-primary btn-sm">
+              Manage Billing
+            </Link>
           </div>
         </div>
       </div>

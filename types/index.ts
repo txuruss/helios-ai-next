@@ -132,7 +132,8 @@ export interface WidgetSettings {
   welcome_message: string
   placeholder_text: string
   position: 'bottom-right' | 'bottom-left'
-  is_enabled: boolean
+  is_enabled:      boolean
+  show_powered_by: boolean   // true = show badge; false = hide (Pro/Scale only, Starter forced true)
   created_at: string
   updated_at: string
 }
@@ -140,10 +141,18 @@ export interface WidgetSettings {
 export interface Subscription {
   id: string
   business_id: string
-  plan: 'free' | 'starter' | 'growth' | 'command'
-  status: 'trialing' | 'active' | 'past_due' | 'cancelled'
-  trial_ends_at: string | null
-  current_period_end: string | null
+  user_id:                string | null
+  plan:                   'free' | 'starter' | 'pro' | 'scale'
+  status:                 'trialing' | 'active' | 'past_due' | 'cancelled' |
+                          'incomplete' | 'incomplete_expired' | 'unpaid' | 'paused'
+  stripe_customer_id:     string | null
+  stripe_subscription_id: string | null
+  stripe_price_id:        string | null
+  trial_ends_at:          string | null
+  current_period_start:   string | null
+  current_period_end:     string | null
+  cancel_at_period_end:   boolean
+  metadata:               Record<string, unknown>
   created_at: string
   updated_at: string
 }

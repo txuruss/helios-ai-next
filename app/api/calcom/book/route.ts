@@ -4,6 +4,7 @@ import { createBooking } from '@/lib/calcom/client'
 import { bookingRequestSchema } from '@/lib/validation/calcom'
 import { checkChatRateLimit } from '@/lib/rate-limit/chat'
 import { sendBookingNotification } from '@/lib/notifications/owner'
+import { checkLimit, trackUsage } from '@/lib/billing/limits'
 
 const MAX_BODY_BYTES = 16 * 1024
 
@@ -71,6 +72,15 @@ export async function POST(request: NextRequest) {
 
   if (!process.env.CALCOM_API_KEY) {
     return NextResponse.json({ error: 'Booking service not configured.' }, { status: 503 })
+  }
+
+  // Plan limit check
+  const bookingLimit = await checkLimit(db, business_id, 'booking_created')
+  if (!bookingLimit.allowed) {
+    return NextResponse.json(
+      { error: 'Plan limit reached. Please upgrade to continue.' },
+      { status: 402 },
+    )
   }
 
   // Create Cal.com booking (server-side only)
@@ -176,6 +186,9 @@ export async function POST(request: NextRequest) {
       dashboardUrl:     appUrl,
     }).catch((e) => console.error('[calcom/book] booking notification:', e))
   }
+
+  // Track booking usage (fire-and-forget)
+  trackUsage(db, business_id, 'booking_created', { booking_id: booking?.id }).catch(() => undefined)
 
   return NextResponse.json({
     ok: true,
