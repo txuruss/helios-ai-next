@@ -196,3 +196,77 @@ export type ActionState = {
   error?: string
   success?: string
 }
+
+// ── Relevance AI / Agent Hub types ─────────────────────────────────
+
+export interface HeliosAgent {
+  id:                  string
+  business_id:         string | null
+  name:                string
+  description:         string | null
+  category:            string | null
+  relevance_agent_id:  string | null
+  status:              'idle' | 'running' | 'completed' | 'error' | 'degraded'
+  is_enabled:          boolean
+  required_plan:       'starter' | 'pro' | 'scale'
+  created_at:          string
+  updated_at:          string
+}
+
+export interface RelevanceWorkforce {
+  id:                       string
+  business_id:              string | null
+  name:                     string
+  description:              string | null
+  relevance_workforce_id:   string | null
+  status:                   string
+  is_enabled:               boolean
+  required_plan:            'starter' | 'pro' | 'scale'
+  created_at:               string
+  updated_at:               string
+}
+
+export interface AgentRun {
+  id:               string
+  business_id:      string
+  agent_id:         string | null
+  workforce_id:     string | null
+  provider_run_id:  string | null
+  run_type:         'agent' | 'workforce'
+  status:           'pending' | 'running' | 'completed' | 'failed' | 'cancelled'
+  input_summary:    string | null
+  output_summary:   string | null
+  error_message:    string | null
+  started_at:       string
+  completed_at:     string | null
+  metadata:         Record<string, unknown>
+  created_at:       string
+  updated_at:       string
+}
+
+export interface AgentOutput {
+  id:            string
+  business_id:   string
+  agent_run_id:  string
+  output_type:   string
+  title:         string | null
+  content:       string | null
+  status:        'pending_review' | 'approved' | 'rejected' | 'archived'
+  metadata:      Record<string, unknown>
+  created_at:    string
+  updated_at:    string
+}
+
+export interface AgentRecommendation {
+  id:                   string
+  business_id:          string
+  agent_run_id:         string | null
+  title:                string
+  description:          string | null
+  recommendation_type:  string
+  priority:             'low' | 'medium' | 'high' | 'critical'
+  status:               'pending' | 'approved' | 'rejected' | 'completed'
+  metadata:             Record<string, unknown>
+  created_at:           string
+  updated_at:           string
+}
