@@ -69,6 +69,8 @@ export interface ConversationSummary {
   lead_id:                   string | null
   last_customer_message_at:  string | null
   last_agent_reply_at:       string | null
+  last_message_at:           string | null
+  unread_count:              number
   created_at:                string
   updated_at:                string
   last_message_preview:      string | null
@@ -82,10 +84,11 @@ export async function getConversations(
   conversations: ConversationSummary[]
   stats:         InboxStats
   plan:          string
+  businessId:    string | null
   error:         string | null
 }> {
   const auth = await requireInboxAccess()
-  if (!auth.ok) return { conversations: [], stats: zeroStats(), plan: 'starter', error: auth.error }
+  if (!auth.ok) return { conversations: [], stats: zeroStats(), plan: 'starter', businessId: null, error: auth.error }
 
   const db = createServiceRoleClient()
 
@@ -93,7 +96,7 @@ export async function getConversations(
     // Fetch sessions filtered by channel + handoff_status
     let query = db
       .from('chat_sessions')
-      .select('id, business_id, external_thread_id, handoff_status, priority, status, assigned_to, lead_id, last_customer_message_at, last_agent_reply_at, created_at, updated_at')
+      .select('id, business_id, external_thread_id, handoff_status, priority, status, assigned_to, lead_id, last_customer_message_at, last_agent_reply_at, last_message_at, last_message_preview, unread_count, created_at, updated_at')
       .eq('business_id', auth.businessId)
       .eq('channel', 'whatsapp')
       .order('updated_at', { ascending: false })
@@ -166,17 +169,20 @@ export async function getConversations(
       lead_id:                  s.lead_id as string | null,
       last_customer_message_at: s.last_customer_message_at as string | null,
       last_agent_reply_at:      s.last_agent_reply_at as string | null,
+      last_message_at:          (s.last_message_at as string | null) ?? null,
+      unread_count:             (s.unread_count as number | null) ?? 0,
       created_at:               s.created_at as string,
       updated_at:               s.updated_at as string,
-      last_message_preview:     lastMessages[s.id as string] ?? null,
+      // Prefer DB-cached preview, fall back to separate query
+      last_message_preview:     (s.last_message_preview as string | null) ?? lastMessages[s.id as string] ?? null,
       lead_name:                s.lead_id ? (leadNames[s.lead_id as string] ?? null) : null,
     }))
 
-    return { conversations, stats, plan: auth.plan, error: null }
+    return { conversations, stats, plan: auth.plan, businessId: auth.businessId, error: null }
   } catch (err) {
     console.error('[inbox] getConversations error:', err instanceof Error ? err.message : err)
     captureApiError(err, { route: 'actions/inbox', error_type: 'get_conversations_error', business_id: auth.businessId })
-    return { conversations: [], stats: zeroStats(), plan: auth.plan, error: 'Could not load conversations.' }
+    return { conversations: [], stats: zeroStats(), plan: auth.plan, businessId: auth.businessId, error: 'Could not load conversations.' }
   }
 }
 
@@ -187,14 +193,15 @@ function zeroStats(): InboxStats {
 // ── getConversationThread ──────────────────────────────────────────
 
 export interface ThreadSession {
-  id:                  string
-  external_thread_id:  string | null
-  handoff_status:      HandoffStatus
-  priority:            ConversationPriority
-  assigned_to:         string | null
-  lead_id:             string | null
-  internal_notes:      string | null
-  updated_at:          string
+  id:                        string
+  external_thread_id:        string | null
+  handoff_status:            HandoffStatus
+  priority:                  ConversationPriority
+  assigned_to:               string | null
+  lead_id:                   string | null
+  internal_notes:            string | null
+  last_customer_message_at:  string | null
+  updated_at:                string
 }
 
 export async function getConversationThread(
@@ -212,7 +219,7 @@ export async function getConversationThread(
   try {
     const { data: sess, error: sessErr } = await db
       .from('chat_sessions')
-      .select('id, business_id, external_thread_id, handoff_status, priority, assigned_to, lead_id, internal_notes, updated_at')
+      .select('id, business_id, external_thread_id, handoff_status, priority, assigned_to, lead_id, internal_notes, last_customer_message_at, updated_at')
       .eq('id', sessionId)
       .eq('business_id', auth.businessId)
       .single()
@@ -221,14 +228,15 @@ export async function getConversationThread(
 
     const s = sess as DbRow
     const session: ThreadSession = {
-      id:                 s.id as string,
-      external_thread_id: s.external_thread_id as string | null,
-      handoff_status:     s.handoff_status as HandoffStatus,
-      priority:           (s.priority ?? 'normal') as ConversationPriority,
-      assigned_to:        s.assigned_to as string | null,
-      lead_id:            s.lead_id as string | null,
-      internal_notes:     s.internal_notes as string | null,
-      updated_at:         s.updated_at as string,
+      id:                        s.id as string,
+      external_thread_id:        s.external_thread_id as string | null,
+      handoff_status:            s.handoff_status as HandoffStatus,
+      priority:                  (s.priority ?? 'normal') as ConversationPriority,
+      assigned_to:               s.assigned_to as string | null,
+      lead_id:                   s.lead_id as string | null,
+      internal_notes:            s.internal_notes as string | null,
+      last_customer_message_at:  s.last_customer_message_at as string | null,
+      updated_at:                s.updated_at as string,
     }
 
     const { data: msgs, error: msgErr } = await db
@@ -348,10 +356,41 @@ export async function assignConversation(
     })
 
     // Update session
-    await db.from('chat_sessions')
+    const { data: updatedSess } = await db
+      .from('chat_sessions')
       .update({ assigned_to: auth.userId, handoff_status: 'human' })
       .eq('id', sessionId)
       .eq('business_id', auth.businessId)
+      .select('external_thread_id, priority')
+      .single()
+
+    // Fire-and-forget assignment email notification
+    void (async () => {
+      try {
+        const { sendAssignmentNotification } = await import('@/lib/notifications/assignment')
+        const { data: profile } = await db
+          .from('profiles').select('email').eq('id', auth.userId).single()
+        const { data: biz } = await db
+          .from('businesses').select('name, owner_notification_email').eq('id', auth.businessId).single()
+
+        const phone = (updatedSess as DbRow | null)?.external_thread_id as string | null ?? ''
+        const maskedPhone = phone.length > 4 ? `••• ${phone.slice(-4)}` : phone
+        const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://helios.ai'
+
+        await sendAssignmentNotification(db, {
+          businessId:    auth.businessId,
+          businessName:  (biz as DbRow | null)?.name as string ?? 'Your Business',
+          assigneeEmail: (profile as DbRow | null)?.email as string | null ?? null,
+          maskedPhone,
+          priority:      (updatedSess as DbRow | null)?.priority as string ?? 'normal',
+          handoffStatus: 'human',
+          sessionId,
+          dashboardUrl:  appUrl,
+        })
+      } catch (e) {
+        console.error('[inbox] assignment notification failed:', (e as Error).message)
+      }
+    })()
 
     return { success: 'Conversation assigned to you.' }
   } catch (err) {
@@ -431,5 +470,160 @@ export async function getInboxStats(): Promise<{
   } catch (err) {
     captureApiError(err, { route: 'actions/inbox', error_type: 'get_stats_error', business_id: auth.businessId })
     return { stats: zeroStats(), plan: auth.plan, error: 'Could not load stats.' }
+  }
+}
+
+// ── markConversationRead ──────────────────────────────────────────
+
+export async function markConversationRead(
+  sessionId: string,
+): Promise<{ success?: string; error?: string }> {
+  if (!sessionId) return { error: 'Invalid session.' }
+
+  const auth = await requireInboxAccess()
+  if (!auth.ok) return { error: auth.error }
+
+  const db = createServiceRoleClient()
+  try {
+    const { error: upErr } = await db
+      .from('chat_sessions')
+      .update({ unread_count: 0, last_read_at: new Date().toISOString() })
+      .eq('id', sessionId)
+      .eq('business_id', auth.businessId)
+
+    if (upErr) throw upErr
+    return { success: 'Marked as read.' }
+  } catch (err) {
+    captureApiError(err, { route: 'actions/inbox', error_type: 'mark_read_error', business_id: auth.businessId })
+    return { error: 'Could not mark conversation as read.' }
+  }
+}
+
+// ── getInboxUnreadCount ───────────────────────────────────────────
+
+export async function getInboxUnreadCount(): Promise<{
+  count: number
+  error: string | null
+}> {
+  const authClient = await createClient()
+  const { data: { user } } = await authClient.auth.getUser()
+  if (!user) return { count: 0, error: null }
+
+  const db = createServiceRoleClient()
+  const { data: membership } = await db
+    .from('business_members').select('business_id').eq('user_id', user.id).limit(1).single()
+  if (!membership) return { count: 0, error: null }
+
+  const businessId = (membership as DbRow).business_id as string
+  const plan       = await getBusinessPlan(db, businessId)
+  if ((PLAN_ORDER[plan] ?? 0) < (PLAN_ORDER['pro'] ?? 1)) return { count: 0, error: null }
+
+  try {
+    const { data: rows } = await db
+      .from('chat_sessions')
+      .select('unread_count')
+      .eq('business_id', businessId)
+      .eq('channel', 'whatsapp')
+      .gt('unread_count', 0)
+
+    const total = ((rows ?? []) as DbRow[]).reduce((sum, r) => sum + ((r.unread_count as number) ?? 0), 0)
+    return { count: total, error: null }
+  } catch (err) {
+    captureApiError(err, { route: 'actions/inbox', error_type: 'unread_count_error', business_id: businessId })
+    return { count: 0, error: null }
+  }
+}
+
+// ── bulkUpdateConversations ───────────────────────────────────────
+
+const BULK_MAX = 50
+
+export type BulkAction = 'resolve' | 'archive' | 'mark_read' | 'assign_to_me'
+
+export async function bulkUpdateConversations(
+  sessionIds: string[],
+  action:     BulkAction,
+): Promise<{ updated: number; error?: string }> {
+  if (!sessionIds.length) return { updated: 0, error: 'No conversations selected.' }
+  if (sessionIds.length > BULK_MAX) return { updated: 0, error: `Select at most ${BULK_MAX} conversations at once.` }
+
+  // Validate all IDs are valid UUIDs
+  const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+  if (!sessionIds.every((id) => UUID_RE.test(id))) {
+    return { updated: 0, error: 'Invalid session IDs.' }
+  }
+
+  const auth = await requireInboxAccess()
+  if (!auth.ok) return { updated: 0, error: auth.error }
+
+  const db = createServiceRoleClient()
+
+  try {
+    let updates: Record<string, unknown> = {}
+
+    if (action === 'resolve') {
+      updates = { handoff_status: 'resolved', resolved_at: new Date().toISOString() }
+    } else if (action === 'archive') {
+      updates = { handoff_status: 'archived', archived_at: new Date().toISOString() }
+    } else if (action === 'mark_read') {
+      updates = { unread_count: 0, last_read_at: new Date().toISOString() }
+    } else if (action === 'assign_to_me') {
+      updates = { assigned_to: auth.userId, handoff_status: 'human' }
+    }
+
+    const { data, error: upErr } = await db
+      .from('chat_sessions')
+      .update(updates)
+      .in('id', sessionIds)
+      .eq('business_id', auth.businessId)
+      .select('id')
+
+    if (upErr) throw upErr
+
+    const updated = (data ?? []).length
+
+    await db.from('audit_logs').insert({
+      business_id: auth.businessId,
+      user_id:     auth.userId,
+      action:      `whatsapp.bulk.${action}`,
+      resource:    'chat_sessions',
+    }).catch(() => undefined)
+
+    return { updated }
+  } catch (err) {
+    captureApiError(err, { route: 'actions/inbox', error_type: 'bulk_update_error', business_id: auth.businessId })
+    return { updated: 0, error: 'Bulk update failed.' }
+  }
+}
+
+// ── unassignConversation ──────────────────────────────────────────
+
+export async function unassignConversation(
+  sessionId: string,
+): Promise<{ success?: string; error?: string }> {
+  if (!sessionId) return { error: 'Invalid session.' }
+
+  const auth = await requireInboxAccess()
+  if (!auth.ok) return { error: auth.error }
+
+  const db = createServiceRoleClient()
+  try {
+    await db.from('conversation_assignments')
+      .update({ status: 'released' })
+      .eq('chat_session_id', sessionId)
+      .eq('business_id', auth.businessId)
+      .eq('status', 'active')
+
+    const { error: upErr } = await db
+      .from('chat_sessions')
+      .update({ assigned_to: null })
+      .eq('id', sessionId)
+      .eq('business_id', auth.businessId)
+
+    if (upErr) throw upErr
+    return { success: 'Conversation unassigned.' }
+  } catch (err) {
+    captureApiError(err, { route: 'actions/inbox', error_type: 'unassign_error', business_id: auth.businessId })
+    return { error: 'Could not unassign conversation.' }
   }
 }

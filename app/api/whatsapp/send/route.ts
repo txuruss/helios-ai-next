@@ -106,14 +106,18 @@ export async function POST(request: NextRequest) {
     metadata:            { manual_reply: true },
   }).catch((e: unknown) => console.error('[whatsapp/send] save outbound:', (e as Error).message))
 
-  // 9. Update session: mark handoff_status = human if not already, set last_agent_reply_at
+  // 9. Update session metadata + handoff transition
   const newStatus = session.handoff_status === 'ai' || session.handoff_status === 'human_requested'
     ? 'human'
     : session.handoff_status
 
   await db.from('chat_sessions').update({
-    handoff_status:      newStatus,
-    last_agent_reply_at: new Date().toISOString(),
+    handoff_status:         newStatus,
+    last_agent_reply_at:    new Date().toISOString(),
+    last_message_at:        new Date().toISOString(),
+    last_message_preview:   summary,
+    last_message_direction: 'outbound',
+    unread_count:           0,
   }).eq('id', session_id)
 
   // 10. Audit + analytics

@@ -4,12 +4,16 @@ import type { ConversationSummary, InboxFilter } from '@/lib/actions/inbox'
 import type { HandoffStatus } from '@/types'
 
 interface Props {
-  conversations:  ConversationSummary[]
-  selectedId:     string | null
-  onSelect:       (id: string) => void
-  currentFilter:  InboxFilter
-  onFilterChange: (f: InboxFilter) => void
-  stats:          Record<string, number>
+  conversations:   ConversationSummary[]
+  selectedId:      string | null
+  onSelect:        (id: string) => void
+  currentFilter:   InboxFilter
+  onFilterChange:  (f: InboxFilter) => void
+  stats:           Record<string, number>
+  // Bulk select
+  selectedConvIds: Set<string>
+  onToggleSelect:  (id: string) => void
+  rtConnected:     boolean
 }
 
 const FILTERS: Array<{ id: InboxFilter; label: string; color?: string }> = [
@@ -29,10 +33,16 @@ const STATUS_COLORS: Record<HandoffStatus, string> = {
   archived:        '#4a4a4e',
 }
 
+const PRIORITY_COLORS: Record<string, string> = {
+  urgent: '#ff8a7a',
+  high:   '#ffae3c',
+  normal: 'transparent',
+  low:    'transparent',
+}
+
 function maskPhone(phone: string | null): string {
   if (!phone) return 'Unknown'
-  if (phone.length <= 4) return phone
-  return `••• ${phone.slice(-4)}`
+  return phone.length > 4 ? `••• ${phone.slice(-4)}` : phone
 }
 
 function relativeTime(ts: string | null): string {
@@ -42,21 +52,27 @@ function relativeTime(ts: string | null): string {
   if (min < 1)  return 'just now'
   if (min < 60) return `${min}m ago`
   const h = Math.floor(min / 60)
-  if (h  < 24)  return `${h}h ago`
+  if (h < 24)   return `${h}h ago`
   return `${Math.floor(h / 24)}d ago`
 }
 
 export default function ConversationList({
-  conversations, selectedId, onSelect, currentFilter, onFilterChange, stats,
+  conversations, selectedId, onSelect, currentFilter, onFilterChange,
+  stats, selectedConvIds, onToggleSelect, rtConnected,
 }: Props) {
   return (
-    <div className="flex flex-col h-full">
-      <div className="px-4 py-3.5 border-b border-white/[0.06]">
-        <h2 className="text-[14px] font-semibold text-white">Inbox</h2>
+    <div className="flex flex-col h-full min-h-0">
+      {/* Header */}
+      <div className="px-4 py-3 border-b border-white/[0.06] flex items-center justify-between shrink-0">
+        <h2 className="text-[13.5px] font-semibold text-white">Inbox</h2>
+        <div className="flex items-center gap-1.5">
+          <span className={`w-1.5 h-1.5 rounded-full ${rtConnected ? 'bg-[#22d093]' : 'bg-[#6a6a6e]'}`} />
+          <span className="text-[10px] text-[#6a6a6e]">{rtConnected ? 'Live' : 'Offline'}</span>
+        </div>
       </div>
 
       {/* Filter tabs */}
-      <div className="flex gap-1 px-3 py-2 border-b border-white/[0.06] flex-wrap">
+      <div className="flex gap-1 px-3 py-2 border-b border-white/[0.06] flex-wrap shrink-0">
         {FILTERS.map((f) => {
           const count  = stats[f.id] ?? 0
           const active = currentFilter === f.id
@@ -64,10 +80,10 @@ export default function ConversationList({
             <button
               key={f.id}
               onClick={() => onFilterChange(f.id)}
-              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all
+              className={`flex items-center gap-1 px-2 py-1 rounded-lg text-[11px] font-medium transition-all
                           ${active ? 'bg-white/[0.08] text-white' : 'text-[#6a6a6e] hover:text-[#9a9a9d] hover:bg-white/[0.04]'}`}
             >
-              {f.color && <span className="w-1.5 h-1.5 rounded-full" style={{ background: f.color }} />}
+              {f.color && <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: f.color }} />}
               {f.label}
               {count > 0 && <span className="text-[10px] text-[#6a6a6e]">{count}</span>}
             </button>
@@ -75,8 +91,8 @@ export default function ConversationList({
         })}
       </div>
 
-      {/* List */}
-      <div className="flex-1 overflow-y-auto">
+      {/* Conversation list — scrollable */}
+      <div className="flex-1 overflow-y-auto min-h-0">
         {conversations.length === 0 ? (
           <div className="flex flex-col items-center gap-2 py-12 text-center px-4">
             <span className="text-[24px]">💬</span>
@@ -88,8 +104,10 @@ export default function ConversationList({
               key={conv.id}
               conv={conv}
               isSelected={selectedId === conv.id}
-              onSelect={() => onSelect(conv.id)}
+              isChecked={selectedConvIds.has(conv.id)}
               statusColor={STATUS_COLORS[conv.handoff_status] ?? '#6a6a6e'}
+              onSelect={() => onSelect(conv.id)}
+              onToggle={() => onToggleSelect(conv.id)}
             />
           ))
         )}
@@ -99,24 +117,43 @@ export default function ConversationList({
 }
 
 function ConvRow({
-  conv, isSelected, onSelect, statusColor,
+  conv, isSelected, isChecked, statusColor, onSelect, onToggle,
 }: {
   conv:        ConversationSummary
   isSelected:  boolean
-  onSelect:    () => void
+  isChecked:   boolean
   statusColor: string
+  onSelect:    () => void
+  onToggle:    () => void
 }) {
-  const time  = relativeTime(conv.last_customer_message_at ?? conv.updated_at)
-  const phone = maskPhone(conv.external_thread_id)
-  const name  = conv.lead_name ?? phone
+  const time         = relativeTime(conv.last_message_at ?? conv.last_customer_message_at ?? conv.updated_at)
+  const phone        = maskPhone(conv.external_thread_id)
+  const name         = conv.lead_name ?? phone
+  const priorityBg   = PRIORITY_COLORS[conv.priority] ?? 'transparent'
+  const hasUnread    = conv.unread_count > 0
 
   return (
-    <button
-      onClick={onSelect}
-      className={`w-full flex items-start gap-3 px-4 py-3.5 text-left border-b border-white/[0.03]
-                  transition-colors ${isSelected ? 'bg-white/[0.06]' : 'hover:bg-white/[0.03]'}`}
+    <div
+      className={`flex items-start px-3 py-3 gap-2 border-b border-white/[0.03] transition-colors cursor-pointer
+                  ${isSelected ? 'bg-white/[0.06]' : 'hover:bg-white/[0.03]'}`}
     >
-      <div className="relative shrink-0 mt-0.5">
+      {/* Checkbox (appears on hover or when any selected) */}
+      <label className="flex items-center mt-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+        <input
+          type="checkbox"
+          checked={isChecked}
+          onChange={onToggle}
+          className="w-3.5 h-3.5 accent-[#ff7a18] cursor-pointer"
+        />
+      </label>
+
+      {/* Priority stripe */}
+      {priorityBg !== 'transparent' && (
+        <div className="w-0.5 self-stretch rounded-full shrink-0" style={{ background: priorityBg }} />
+      )}
+
+      {/* Avatar + status dot */}
+      <div className="relative shrink-0 mt-0.5" onClick={onSelect}>
         <div className="w-8 h-8 rounded-full bg-[#25d366]/10 flex items-center justify-center text-[13px] text-[#25d366]">
           ✆
         </div>
@@ -126,16 +163,26 @@ function ConvRow({
         />
       </div>
 
-      <div className="flex-1 min-w-0">
+      {/* Content */}
+      <div className="flex-1 min-w-0" onClick={onSelect}>
         <div className="flex items-center justify-between gap-1">
-          <span className="text-[12.5px] font-medium text-white truncate">{name}</span>
-          <span className="text-[10.5px] text-[#6a6a6e] shrink-0">{time}</span>
+          <span className={`text-[12.5px] font-medium truncate ${hasUnread ? 'text-white' : 'text-[#c8c8cc]'}`}>
+            {name}
+          </span>
+          <div className="flex items-center gap-1 shrink-0">
+            {hasUnread && (
+              <span className="min-w-[18px] h-[18px] px-1 rounded-full bg-[#ff7a18] text-[#1a0c00] text-[10px] font-bold flex items-center justify-center">
+                {conv.unread_count > 9 ? '9+' : conv.unread_count}
+              </span>
+            )}
+            <span className="text-[10.5px] text-[#6a6a6e]">{time}</span>
+          </div>
         </div>
         <div className="flex items-center gap-1.5 mt-0.5">
           <span className="text-[10px] px-1.5 py-0.5 rounded-md bg-[#25d366]/10 text-[#25d366] font-medium shrink-0">
             WA
           </span>
-          <p className="text-[11.5px] text-[#6a6a6e] truncate">
+          <p className={`text-[11.5px] truncate ${hasUnread ? 'text-[#9a9a9d]' : 'text-[#6a6a6e]'}`}>
             {conv.last_message_preview ?? 'No messages yet'}
           </p>
         </div>
@@ -144,7 +191,12 @@ function ConvRow({
             Needs agent
           </span>
         )}
+        {conv.priority === 'urgent' && (
+          <span className="inline-block mt-1 ml-1 text-[10px] px-1.5 py-0.5 rounded-md bg-[#ff8a7a]/10 text-[#ff8a7a] font-medium">
+            Urgent
+          </span>
+        )}
       </div>
-    </button>
+    </div>
   )
 }

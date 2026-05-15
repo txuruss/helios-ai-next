@@ -207,12 +207,19 @@ async function processInboundMessage(inbound: InboundMessage): Promise<void> {
 
     const currentHandoff = (existingSession as { id?: string; handoff_status?: string } | null)?.handoff_status ?? 'ai'
     const sessionId      = (existingSession as { id?: string } | null)?.id ?? null
+    const now            = new Date().toISOString()
 
-    // Update last_customer_message_at on existing session
+    // Update session metadata + increment unread count atomically
     if (sessionId) {
-      await db.from('chat_sessions')
-        .update({ last_customer_message_at: new Date().toISOString() })
-        .eq('id', sessionId)
+      await db.from('chat_sessions').update({
+        last_customer_message_at: now,
+        last_message_at:          now,
+        last_message_preview:     contentSummary,
+        last_message_direction:   'inbound',
+      }).eq('id', sessionId)
+
+      // Atomic unread increment via SQL function
+      await db.rpc('increment_chat_session_unread', { p_session_id: sessionId }).catch(() => undefined)
     }
 
     // Track safe event
@@ -389,11 +396,14 @@ async function processInboundMessage(inbound: InboundMessage): Promise<void> {
       metadata:            { ai_generated: true },
     }).catch(() => undefined)
 
-    // Update last_agent_reply_at
+    // Update session: last_agent_reply_at + last_message fields for the AI reply
     if (resolvedSessionId) {
-      await db.from('chat_sessions')
-        .update({ last_agent_reply_at: new Date().toISOString() })
-        .eq('id', resolvedSessionId)
+      await db.from('chat_sessions').update({
+        last_agent_reply_at:      new Date().toISOString(),
+        last_message_at:          new Date().toISOString(),
+        last_message_preview:     outSummary,
+        last_message_direction:   'outbound',
+      }).eq('id', resolvedSessionId)
     }
 
     // 15. Analytics

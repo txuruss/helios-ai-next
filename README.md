@@ -454,6 +454,81 @@ Server-side enforcement: all plan checks happen in API routes and server actions
 
 ---
 
+## Phase 11 — Realtime Inbox, Unread Counts & Bulk Actions
+
+### How Realtime Inbox Works
+
+The inbox uses Supabase Realtime (`postgres_changes`) to push live updates:
+- `chat_sessions` changes are broadcast per `business_id` → conversation list updates in place without refresh
+- `whatsapp_messages` inserts are broadcast per `business_id` → new messages append to the open thread in real time
+- A green dot + "Live" indicator appears in the inbox header when the subscription is active
+- Subscriptions are cleaned up on component unmount
+
+**Supabase Realtime requirements**: Run `db/add-inbox-realtime-fields.sql` to add the tables to the `supabase_realtime` publication. Both `chat_sessions` and `whatsapp_messages` must be enabled. Check Supabase Dashboard → Database → Replication if the migration doesn't apply.
+
+### How Unread Counts Work
+
+- `unread_count` on `chat_sessions` is incremented atomically by the webhook handler (`increment_chat_session_unread` SQL function) each time an inbound WhatsApp message arrives
+- The sidebar badge (`InboxUnreadBadge`) fetches the total unread count on mount, then re-fetches every 30 seconds
+- Opening a conversation calls `markConversationRead()` which resets `unread_count = 0` and sets `last_read_at`
+- Sending a manual reply also resets `unread_count = 0`
+- Badge shows 99+ for counts over 99
+
+### How Conversation Sorting Works
+
+Conversations are sorted client-side:
+1. Priority: `urgent > high > normal > low`
+2. Handoff urgency: `human_requested` appears first within the same priority
+3. Recency: `last_message_at DESC` as tiebreaker
+
+Priority badges (red stripe = urgent, orange = high) appear on conversation rows.
+
+### How Bulk Actions Work
+
+1. Check the checkbox on one or more conversations
+2. The bulk action bar appears at the bottom of the conversation list
+3. Available actions: **Mark Read**, **Resolve**, **Archive**, **Assign to me**
+4. Maximum 50 conversations per bulk operation (server-enforced)
+5. Session IDs are validated as UUIDs server-side; `business_id` is derived from the authenticated user
+
+### How Assignment Works
+
+- Click **Assign to me** in the conversation controls sidebar
+- An assignment email is sent to the assignee (if email is configured) via Resend
+- A `conversation_assignments` row is created; any previous active assignment is released
+- Session `handoff_status` is set to `human` on assignment
+- Click **Unassign** to release the assignment — `assigned_to` is cleared
+
+### WhatsApp 24-Hour Window Behavior
+
+WhatsApp's customer service messaging window closes 24 hours after the last message from the customer:
+
+| State | Time since last customer message | UI behavior |
+|---|---|---|
+| Open | < 23 hours | Normal reply box |
+| Warning | 23–24 hours | Orange warning + time remaining |
+| Closed | > 24 hours | Reply box disabled, template tab highlighted |
+
+- Normal reply is blocked server-side if the window is closed (`/api/whatsapp/send` returns an appropriate error)
+- Approved template messages remain available for Scale plan users to re-open the conversation
+
+### How Assignment Email Notifications Work
+
+When a conversation is assigned:
+- A Resend email is sent to the assignee's profile email (fire-and-forget — never blocks assignment)
+- The email includes: business name, masked phone number, priority, and a direct link to the conversation
+- A `notifications` row is created for in-app tracking
+- Full message content and customer phone are never included in the email
+
+### Privacy Notes (Phase 11)
+
+- Realtime payloads contain `content_summary` (max 200 chars) and session metadata — no full messages
+- Unread count badge contains only a number — no phone numbers or content
+- Bulk action audit logs contain action type and count — no phone numbers or message content
+- Assignment emails contain masked phone number only (`••• 1234`)
+
+---
+
 ## Security Notes
 
 - `SUPABASE_SERVICE_ROLE_KEY` bypasses RLS — only use server-side in server actions or API routes.

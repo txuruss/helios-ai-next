@@ -1,4 +1,4 @@
-import { getConversations, getInboxStats } from '@/lib/actions/inbox'
+import { getConversations } from '@/lib/actions/inbox'
 import InboxClient from './InboxClient'
 
 export const metadata = { title: 'Inbox — Helios AI' }
@@ -13,9 +13,7 @@ export default async function InboxPage({
     ? (rawFilter as 'all' | 'ai' | 'human_requested' | 'human' | 'resolved' | 'archived')
     : 'all'
 
-  const [{ conversations, stats, plan, error: convErr }] = await Promise.all([
-    getConversations(filter),
-  ])
+  const { conversations, stats, plan, businessId, error: convErr } = await getConversations(filter)
 
   // Upgrade gate
   if (convErr === 'Inbox requires the Pro plan.') {
@@ -50,6 +48,7 @@ export default async function InboxPage({
         initialConversations={conversations}
         initialStats={stats}
         plan={plan}
+        businessId={businessId}
         currentFilter={filter}
         initialSelectedId={selectedSessionId ?? null}
         error={convErr}
