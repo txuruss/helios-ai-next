@@ -15,6 +15,7 @@ import type {
   ApprovalItem, SystemHealthItem, ClientSystem,
   AutomationRule, BusinessMember,
   SlaPolicy, NotificationRule, AuditTrailRow, SlaSummary, OpsExportRow,
+  PaginatedOpsResult,
 } from '@/lib/actions/ops'
 import ExportHistoryPanel from './ExportHistoryPanel'
 import OpsOverview        from './OpsOverview'
@@ -42,28 +43,29 @@ const TABS: Array<{ id: OpsTab; label: string }> = [
 ]
 
 interface Props {
-  initialTab:       OpsTab
-  initialMetrics:   OpsOverviewMetrics
-  initialEvents:    OpsEvent[]
-  initialAlerts:    OpsAlert[]
-  initialTasks:     OpsTask[]
-  initialApprovals: ApprovalItem[]
-  initialHealth:    SystemHealthItem[]
-  initialSystems:   ClientSystem[]
-  initialRules:     AutomationRule[]
-  initialPolicies:  SlaPolicy[]
+  initialTab:        OpsTab
+  initialMetrics:    OpsOverviewMetrics
+  initialEvents:     PaginatedOpsResult<OpsEvent>
+  initialAlerts:     PaginatedOpsResult<OpsAlert>
+  initialTasks:      PaginatedOpsResult<OpsTask>
+  initialApprovals:  PaginatedOpsResult<ApprovalItem>
+  initialHealth:     SystemHealthItem[]
+  initialSystems:    ClientSystem[]
+  initialRules:      AutomationRule[]
+  initialPolicies:   SlaPolicy[]
   initialNotifRules: NotificationRule[]
-  initialAudit:     AuditTrailRow[]
+  initialAudit:      AuditTrailRow[]
+  initialAuditTotal: number
   initialSlaSummary: SlaSummary
-  initialExports:   OpsExportRow[]
-  businessId:       string | null
-  plan:             string
+  initialExports:    OpsExportRow[]
+  businessId:        string | null
+  plan:              string
 }
 
 export default function OpsCenterClient({
   initialTab, initialMetrics, initialEvents, initialAlerts, initialTasks,
   initialApprovals, initialHealth, initialSystems, initialRules,
-  initialPolicies, initialNotifRules, initialAudit, initialSlaSummary, initialExports,
+  initialPolicies, initialNotifRules, initialAudit, initialAuditTotal, initialSlaSummary, initialExports,
   businessId, plan,
 }: Props) {
   const [tab,       setTab]       = useState<OpsTab>(initialTab)
@@ -74,6 +76,7 @@ export default function OpsCenterClient({
   const [approvals, setApprovals] = useState(initialApprovals)
   const [health,    setHealth]    = useState(initialHealth)
   const [systems,   setSystems]   = useState(initialSystems)
+  const [auditTotal, setAuditTotal] = useState(initialAuditTotal)
   const [rules,       setRules]      = useState(initialRules)
   const [policies,    setPolicies]   = useState(initialPolicies)
   const [notifRules,  setNotifRules] = useState(initialNotifRules)
@@ -110,7 +113,7 @@ export default function OpsCenterClient({
         filter: `business_id=eq.${businessId}`,
       }, (payload) => {
         const newRow = payload.new as OpsEvent
-        setEvents((prev) => [newRow, ...prev].slice(0, 100))
+        setEvents((prev) => ({ ...prev, rows: [newRow, ...prev.rows].slice(0, 100), total_count: prev.total_count + 1 }))
         setMetrics((prev) => ({ ...prev, openEvents: prev.openEvents + 1 }))
         setLastLive(new Date().toLocaleTimeString())
         capture('ops_event_received_live', { source: newRow.source, severity: newRow.severity })
@@ -126,7 +129,7 @@ export default function OpsCenterClient({
         filter: `business_id=eq.${businessId}`,
       }, (payload) => {
         const newRow = payload.new as OpsAlert
-        setAlerts((prev) => [newRow, ...prev].slice(0, 100))
+        setAlerts((prev) => ({ ...prev, rows: [newRow, ...prev.rows].slice(0, 100), total_count: prev.total_count + 1 }))
         setMetrics((prev) => ({ ...prev, activeAlerts: prev.activeAlerts + 1 }))
         setLastLive(new Date().toLocaleTimeString())
       })
@@ -135,7 +138,7 @@ export default function OpsCenterClient({
         filter: `business_id=eq.${businessId}`,
       }, (payload) => {
         const updated = payload.new as OpsAlert
-        setAlerts((prev) => prev.map((a) => a.id === updated.id ? updated : a))
+        setAlerts((prev) => ({ ...prev, rows: prev.rows.map((a) => a.id === updated.id ? updated : a) }))
       })
       .subscribe()
 
@@ -145,7 +148,7 @@ export default function OpsCenterClient({
         filter: `business_id=eq.${businessId}`,
       }, (payload) => {
         const newRow = payload.new as OpsTask
-        setTasks((prev) => [newRow, ...prev].slice(0, 100))
+        setTasks((prev) => ({ ...prev, rows: [newRow, ...prev.rows].slice(0, 100), total_count: prev.total_count + 1 }))
         setMetrics((prev) => ({ ...prev, activeTasks: prev.activeTasks + 1 }))
         setLastLive(new Date().toLocaleTimeString())
       })
@@ -154,7 +157,7 @@ export default function OpsCenterClient({
         filter: `business_id=eq.${businessId}`,
       }, (payload) => {
         const updated = payload.new as OpsTask
-        setTasks((prev) => prev.map((t) => t.id === updated.id ? updated : t))
+        setTasks((prev) => ({ ...prev, rows: prev.rows.map((t) => t.id === updated.id ? updated : t) }))
       })
       .subscribe()
 
@@ -164,7 +167,7 @@ export default function OpsCenterClient({
         filter: `business_id=eq.${businessId}`,
       }, (payload) => {
         const newRow = payload.new as ApprovalItem
-        setApprovals((prev) => [newRow, ...prev].slice(0, 100))
+        setApprovals((prev) => ({ ...prev, rows: [newRow, ...prev.rows].slice(0, 100), total_count: prev.total_count + 1 }))
         setMetrics((prev) => ({ ...prev, pendingApprovals: prev.pendingApprovals + 1 }))
         setLastLive(new Date().toLocaleTimeString())
       })
@@ -173,7 +176,7 @@ export default function OpsCenterClient({
         filter: `business_id=eq.${businessId}`,
       }, (payload) => {
         const updated = payload.new as ApprovalItem
-        setApprovals((prev) => prev.map((a) => a.id === updated.id ? updated : a))
+        setApprovals((prev) => ({ ...prev, rows: prev.rows.map((a) => a.id === updated.id ? updated : a) }))
       })
       .subscribe()
 
@@ -190,30 +193,30 @@ export default function OpsCenterClient({
     startTransition(async () => {
       const [m, ev, al, tk, ap, he, sy, ru, po, nr, aud, sla, exp] = await Promise.all([
         getOpsOverview(),
-        getOpsEvents(50),
-        getOpsAlerts(50),
-        getOpsTasks(50),
-        getApprovalItems(50),
+        getOpsEvents({ pageSize: 50 }),
+        getOpsAlerts({ pageSize: 50 }),
+        getOpsTasks({ pageSize: 50 }),
+        getApprovalItems({ pageSize: 50 }),
         getSystemHealthSummary(),
         getClientSystemsSummary(),
         getAutomationRules(),
         getSlaPolicies(),
         getNotificationRules(),
-        getOpsAuditTrailAction(30),
+        getOpsAuditTrailAction({ limit: 30 }),
         getSlaDashboardSummary(),
-        getOpsExports(20),
+        getOpsExports({ limit: 20 }),
       ])
       if (!m.error)   setMetrics(m.metrics)
-      if (!ev.error)  setEvents(ev.events)
-      if (!al.error)  setAlerts(al.alerts)
-      if (!tk.error)  setTasks(tk.tasks)
-      if (!ap.error)  setApprovals(ap.items)
+      if (!ev.error)  setEvents(ev)
+      if (!al.error)  setAlerts(al)
+      if (!tk.error)  setTasks(tk)
+      if (!ap.error)  setApprovals({ ...ap, rows: ap.rows })
       if (!he.error)  setHealth(he.items)
       if (!sy.error)  setSystems(sy.systems)
       if (!ru.error)  setRules(ru.rules)
       if (!po.error)  setPolicies(po.policies)
       if (!nr.error)  setNotifRules(nr.rules)
-      if (!aud.error) setAudit(aud.rows)
+      if (!aud.error) { setAudit(aud.rows); setAuditTotal(aud.total_count) }
       if (!sla.error) setSlaSummary(sla.summary)
       if (!exp.error) setOpsExports(exp.exports)
     })
@@ -254,8 +257,8 @@ export default function OpsCenterClient({
     .catch(() => undefined)
   }
 
-  const activeAlertCount    = alerts.filter((a) => a.status === 'active').length
-  const pendingApprovalCount = approvals.filter((a) => a.status === 'pending').length
+  const activeAlertCount     = alerts.rows.filter((a) => a.status === 'active').length
+  const pendingApprovalCount = approvals.rows.filter((a) => a.status === 'pending').length
 
   return (
     <div className="flex flex-col gap-6">
@@ -312,16 +315,16 @@ export default function OpsCenterClient({
       </div>
 
       {/* Tab content */}
-      {tab === 'overview'   && <OpsOverview metrics={metrics} events={events.slice(0, 5)} alerts={alerts.slice(0, 5)} tasks={tasks.slice(0, 5)} />}
+      {tab === 'overview'   && <OpsOverview metrics={metrics} events={events.rows.slice(0, 5)} alerts={alerts.rows.slice(0, 5)} tasks={tasks.rows.slice(0, 5)} />}
       {tab === 'activity'   && (
         <>
-          <OpsEventFeed events={events} members={members} businessId={businessId} onRefresh={refresh} />
+          <OpsEventFeed initialData={events} members={members} businessId={businessId} onRefresh={refresh} />
           <ExportHistoryPanel exports={opsExports} onRefresh={refresh} />
         </>
       )}
-      {tab === 'alerts'     && <OpsAlertPanel alerts={alerts} members={members} businessId={businessId} onRefresh={refresh} />}
-      {tab === 'tasks'      && <OpsTaskBoard tasks={tasks} members={members} businessId={businessId} onRefresh={refresh} />}
-      {tab === 'approvals'  && <ApprovalQueue items={approvals} members={members} businessId={businessId} onRefresh={refresh} />}
+      {tab === 'alerts'     && <OpsAlertPanel initialData={alerts} members={members} businessId={businessId} onRefresh={refresh} />}
+      {tab === 'tasks'      && <OpsTaskBoard initialData={tasks} members={members} businessId={businessId} onRefresh={refresh} />}
+      {tab === 'approvals'  && <ApprovalQueue initialData={approvals} members={members} businessId={businessId} onRefresh={refresh} />}
       {tab === 'health'     && <SystemHealthPanel items={health} />}
       {tab === 'clients'    && <ClientSystemsPanel systems={systems} />}
       {tab === 'automation' && <AutomationRulesPanel rules={rules} onRefresh={refresh} />}

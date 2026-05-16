@@ -907,6 +907,112 @@ Audit trail supports search and pagination (20 items/page). Click ▼ on any row
 
 ---
 
+## Phase 16 — Production Polish: Server Search, SLA Timers, Snooze & Launch Checklist
+
+### Vercel Cron Setup
+
+`vercel.json` now includes the SLA cron job:
+```json
+{ "crons": [{ "path": "/api/cron/ops/sla", "schedule": "*/10 * * * *" }] }
+```
+
+**Important**: Vercel's managed cron does not send custom `Authorization` headers by default. Options:
+1. Use Vercel's built-in `CRON_SECRET` env var and check `x-vercel-cron-signature` header (add check to the route)
+2. Use an external scheduler (GitHub Actions, Upstash QStash, Render Cron) that can send `Authorization: Bearer ${OPS_CRON_SECRET}` headers
+3. Deploy with `OPS_CRON_SECRET` set in Vercel environment variables and the cron route continues to validate it
+
+Always set `OPS_CRON_SECRET` as a server-only env var. Never prefix with `NEXT_PUBLIC_`.
+
+### Server-Side Search Behavior
+
+All 5 Ops Center data tabs now perform server-side search and pagination:
+- **Activity, Alerts, Tasks, Approvals**: `getOpsEvents/Alerts/Tasks/Approvals()` with `search`, `status`, `severity`, `page`, `pageSize` parameters
+- **Audit Trail**: `getOpsAuditTrailAction()` with `search`, `page`
+- Search uses Supabase `.ilike()` on `title` — server-side, efficient with trigram indexes
+- Default page size: 25; max: 100
+- Each page change triggers a server action call via `useTransition`
+- Initial load is SSR (50 items), subsequent pages are client-triggered server calls
+
+### Server-Side Pagination Behavior
+
+Each tab returns: `{ rows, total_count, page, pageSize, has_next, has_previous }`. The `SearchPaginationBar` shows "X–Y of N" from server-side counts. Page changes trigger new server action calls — no client-side data re-filtering.
+
+### SLA Countdown Timers
+
+`SlaCountdown` is a client component that:
+- Displays time remaining until `sla_due_at` using a 60-second `setInterval`
+- Shows: "Due in 2h", "Due in 14m", "Overdue 8m", "Escalated (L1)", "Resolved"
+- Colors: green (on_track) → amber (warning, < 1h) → orange (due_soon, < 15m) → red (breached) → purple (escalated)
+- Appears on every row in Activity, Alerts, Tasks, and Approvals tabs
+- Updates client-side without server calls every minute
+
+### Snooze Behavior
+
+**Snooze Control** (💤 button on each row):
+- Dropdown presets: 1 hour, 4 hours, 24 hours, 7 days
+- Max snooze: 30 days (server-enforced)
+- Snoozed items are hidden by default in all tabs
+- "Show snoozed" toggle makes them visible (with dimmed opacity)
+- Snoozed items show remaining snooze time and an "Unsnooze" button
+- Bulk snooze: select multiple items → set snooze duration → Snooze all
+
+### Multi-Recipient Notification Rules
+
+Notification rules now support:
+- `recipient_user_ids: uuid[]` — business members selected from a dropdown
+- `recipient_emails: text[]` — custom email addresses
+- All recipients are resolved server-side and de-duplicated
+- Maximum 10 recipients per rule
+- Recipient type `owner`, `assigned_user`, `all_admins`, `custom_email` still supported
+
+### Email Template Customization
+
+Notification rules can override the default email with custom templates:
+- `email_subject_template` — safe variables only
+- `email_body_template` — safe variables only
+
+**Allowed safe template variables:**
+`{{title}}`, `{{severity}}`, `{{source}}`, `{{status}}`, `{{priority}}`, `{{dashboard_url}}`, `{{business_name}}`, `{{created_at}}`, `{{sla_due_at}}`
+
+Unknown variables are replaced with `[removed]`. Customer messages, phone numbers, and emails are never allowed as variables. Template length is capped at 2000 characters.
+
+### Notification Dry-Run Preview
+
+**Preview route**: `POST /api/ops/notifications/preview`
+- Generates subject + body preview using rule template
+- No email is sent
+- Returns: `{ subject, body_text, recipients, warning }`
+- Stores a row in `ops_notification_previews` for audit
+- Warning message always states: "This is a preview only. No email was sent."
+
+### Production Launch Checklist
+
+Located in the **System Health** tab of the Ops Center.
+
+Click **▶ Run Checks** to audit 13 production configuration items across categories:
+- AI, Database, Billing, Email, WhatsApp, Agents, Monitoring, Analytics, Cron, Bookings, Config, Rate Limit
+
+Each check returns: `passed`, `warning`, `failed`, `pending`, `skipped`.
+
+**Create tasks for failures**: checkbox option automatically creates `ops_tasks` for critical/high severity failures.
+
+Checks are stored in `ops_launch_checks` (upserted on `business_id + check_key`). No env var values are ever returned — only `passed`/`failed` status.
+
+### Automation Retry
+
+In the Activity tab, events with `automation_status = 'failed'` show a **Retry** button. This resets `processed_at = null` and `automation_status = 'retrying'`, then fires `processOpsEvent()` again.
+
+### Privacy and Security Notes (Phase 16)
+
+- Snooze reason is optional free text — stored in `snooze_reason` (max 256 chars) — no customer content
+- Template variables allowlist enforced server-side before rendering
+- Preview route stores only subject + safe body preview — never stores customer data
+- Cron endpoint still requires `Authorization: Bearer ${OPS_CRON_SECRET}` — 401 if missing
+- Trigram GIN indexes created for search — performance without storing customer content
+- `include_snoozed` parameter allows temporarily seeing snoozed items without deleting them
+
+---
+
 ## Security Notes
 
 - `SUPABASE_SERVICE_ROLE_KEY` bypasses RLS — only use server-side in server actions or API routes.

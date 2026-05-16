@@ -9,10 +9,11 @@ interface Props {
   pageSize:   number
   onPage:     (p: number) => void
   placeholder?: string
+  loading?:   boolean
 }
 
 export default function SearchPaginationBar({
-  search, onSearch, page, totalPages, total, pageSize, onPage, placeholder = 'Search…',
+  search, onSearch, page, totalPages, total, pageSize, onPage, placeholder = 'Search…', loading,
 }: Props) {
   const from = total === 0 ? 0 : (page - 1) * pageSize + 1
   const to   = Math.min(page * pageSize, total)
@@ -40,9 +41,10 @@ export default function SearchPaginationBar({
           {from}–{to} of {total}
         </span>
       )}
-      {total === 0 && search && (
+      {total === 0 && search && !loading && (
         <span className="text-[11.5px] text-[#6a6a6e]">No results</span>
       )}
+      {loading && <span className="text-[11.5px] text-[#6a6a6e]">Loading…</span>}
 
       {/* Pagination */}
       {totalPages > 1 && (

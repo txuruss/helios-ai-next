@@ -20,7 +20,6 @@ export default async function OpsCenterPage({
   const validTabs: OpsTab[] = ['overview','activity','alerts','tasks','approvals','health','clients','automation','sla']
   const initialTab: OpsTab = validTabs.includes(rawTab as OpsTab) ? (rawTab as OpsTab) : 'overview'
 
-  // Get business context
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
@@ -37,51 +36,51 @@ export default async function OpsCenterPage({
     }
   }
 
-  // Load all ops data in parallel
   const [
     { metrics },
-    { events },
-    { alerts },
-    { tasks },
-    { items: approvals },
+    eventsData,
+    alertsData,
+    tasksData,
+    approvalsData,
     { items: healthItems },
     { systems },
     { rules },
     { policies },
     { rules: notifRules },
-    { rows: auditRows },
+    auditData,
     { summary: slaSummary },
     { exports: opsExports },
   ] = await Promise.all([
     getOpsOverview(),
-    getOpsEvents(50),
-    getOpsAlerts(50),
-    getOpsTasks(50),
-    getApprovalItems(50),
+    getOpsEvents({ pageSize: 50 }),
+    getOpsAlerts({ pageSize: 50 }),
+    getOpsTasks({ pageSize: 50 }),
+    getApprovalItems({ pageSize: 50 }),
     getSystemHealthSummary(),
     getClientSystemsSummary(),
     getAutomationRules(),
     getSlaPolicies(),
     getNotificationRules(),
-    getOpsAuditTrailAction(30),
+    getOpsAuditTrailAction({ limit: 30 }),
     getSlaDashboardSummary(),
-    getOpsExports(20),
+    getOpsExports({ limit: 20 }),
   ])
 
   return (
     <OpsCenterClient
       initialTab={initialTab}
       initialMetrics={metrics}
-      initialEvents={events}
-      initialAlerts={alerts}
-      initialTasks={tasks}
-      initialApprovals={approvals}
+      initialEvents={eventsData}
+      initialAlerts={alertsData}
+      initialTasks={tasksData}
+      initialApprovals={approvalsData}
       initialHealth={healthItems}
       initialSystems={systems}
       initialRules={rules}
       initialPolicies={policies}
       initialNotifRules={notifRules}
-      initialAudit={auditRows}
+      initialAudit={auditData.rows}
+      initialAuditTotal={auditData.total_count}
       initialSlaSummary={slaSummary}
       initialExports={opsExports}
       businessId={businessId}

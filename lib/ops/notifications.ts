@@ -76,28 +76,68 @@ function buildOpsEmail(params: {
   return { html, text }
 }
 
-// ── Resolve recipient ─────────────────────────────────────────────
+// ── Safe template variables ───────────────────────────────────────
 
-async function resolveRecipient(
+const SAFE_VARS = ['{{title}}','{{severity}}','{{source}}','{{status}}','{{priority}}','{{dashboard_url}}','{{business_name}}','{{created_at}}','{{sla_due_at}}']
+
+function applyTemplate(template: string, vars: Record<string, string>): string {
+  let result = template
+  for (const [key, value] of Object.entries(vars)) {
+    result = result.replace(new RegExp(key.replace(/[{}]/g, '\\$&'), 'g'), value)
+  }
+  // Strip any remaining template vars that aren't safe
+  result = result.replace(/\{\{[^}]+\}\}/g, '[removed]')
+  return result.slice(0, 2000)
+}
+
+function isTemplateSafe(template: string): boolean {
+  const found = template.match(/\{\{[^}]+\}\}/g) ?? []
+  return found.every((v) => SAFE_VARS.includes(v))
+}
+
+// ── Resolve all recipients for a rule ────────────────────────────
+
+async function resolveAllRecipients(
   rule:        NotificationRule,
   businessId:  string,
   assignedTo?: string | null,
   db?:         DbClient,
-): Promise<string | null> {
+): Promise<string[]> {
   const client = db ?? createServiceRoleClient()
+  const emails = new Set<string>()
 
-  if (rule.recipient_type === 'custom_email') return rule.recipient_email ?? null
-
-  if (rule.recipient_type === 'assigned_user' && assignedTo) {
-    const { data: profile } = await client
-      .from('profiles').select('email').eq('id', assignedTo).single()
-    return (profile as DbRow | null)?.email as string | null
+  // Primary recipient_type
+  if (rule.recipient_type === 'custom_email' && rule.recipient_email) {
+    emails.add(rule.recipient_email)
+  } else if (rule.recipient_type === 'assigned_user' && assignedTo) {
+    const { data: profile } = await client.from('profiles').select('email').eq('id', assignedTo).single()
+    const email = (profile as DbRow | null)?.email as string | null
+    if (email) emails.add(email)
+  } else {
+    // owner (default)
+    const { data: biz } = await client.from('businesses').select('owner_notification_email').eq('id', businessId).single()
+    const email = (biz as DbRow | null)?.owner_notification_email as string | null
+    if (email) emails.add(email)
   }
 
-  // Default: owner email
-  const { data: biz } = await client
-    .from('businesses').select('owner_notification_email').eq('id', businessId).single()
-  return (biz as DbRow | null)?.owner_notification_email as string | null
+  // Multi-recipient: additional user IDs
+  const r = rule as { recipient_user_ids?: string[]; recipient_emails?: string[] }
+  if (r.recipient_user_ids?.length) {
+    const { data: profiles } = await client.from('profiles').select('email').in('id', r.recipient_user_ids)
+    for (const p of ((profiles ?? []) as DbRow[])) {
+      const e = p.email as string | null
+      if (e) emails.add(e)
+    }
+  }
+
+  // Multi-recipient: additional custom emails
+  if (r.recipient_emails?.length) {
+    for (const e of r.recipient_emails) {
+      if (e) emails.add(e)
+    }
+  }
+
+  return Array.from(emails).slice(0, 10) // max 10 recipients
 }
 
 // ── Route a notification ──────────────────────────────────────────
@@ -137,17 +177,38 @@ export async function routeOpsNotification(params: {
         if (rule.channel === 'none') continue
 
         if (rule.channel === 'email') {
-          const to = await resolveRecipient(rule, businessId, assignedTo, client)
-          if (!to) continue
+          const recipients = await resolveAllRecipients(rule, businessId, assignedTo, client)
+          if (!recipients.length) continue
 
-          const { html, text } = buildOpsEmail({ title, severity, source, description: description ?? null, dashboardUrl: dashUrl, section })
+          // Build template vars (safe only)
+          const r16 = rule as { email_subject_template?: string; email_body_template?: string }
+          const templateVars = {
+            '{{title}}':        title,
+            '{{severity}}':     severity ?? '',
+            '{{source}}':       source ?? '',
+            '{{status}}':       '',
+            '{{priority}}':     '',
+            '{{dashboard_url}}': `${dashUrl}/dashboard/ops?tab=${section}`,
+            '{{business_name}}': '',
+            '{{created_at}}':   new Date().toISOString(),
+            '{{sla_due_at}}':   '',
+          }
+
           const subjectLabel =
             severity === 'critical' ? '[Critical] ' :
             severity === 'error'    ? '[Error] '    :
             trigger_type === 'payment_failed' ? '[Urgent] ' : ''
 
-          await sendEmail({ to, subject: `${subjectLabel}${title} — Helios AI Ops`, html, text })
-          await client.from('ops_notification_rules').update({ }).eq('id', rule.id).catch(() => undefined) // touch to update
+          let subject = `${subjectLabel}${title} — Helios AI Ops`
+          if (r16.email_subject_template && isTemplateSafe(r16.email_subject_template)) {
+            subject = applyTemplate(r16.email_subject_template, templateVars)
+          }
+
+          const { html, text } = buildOpsEmail({ title, severity, source, description: description ?? null, dashboardUrl: dashUrl, section })
+
+          for (const to of recipients) {
+            await sendEmail({ to, subject, html, text })
+          }
 
         } else if (rule.channel === 'dashboard') {
           // Create in-app notification
@@ -241,5 +302,60 @@ export async function seedDefaultNotificationRules(
     return { seeded, error: 'Could not seed notification rules.' }
   }
 }
+
+// ── Generate notification preview (no email sent) ─────────────────
+
+export interface NotificationPreview {
+  subject:          string
+  body_text:        string
+  recipients:       string[]
+  warning:          string
+}
+
+export async function generateNotificationPreview(params: {
+  ruleId?:      string
+  triggerType?: string
+  title?:       string
+  severity?:    string
+  source?:      string
+  businessId:   string
+  db?:          DbClient
+}): Promise<NotificationPreview> {
+  const { ruleId, triggerType, title = 'Sample event title', severity = 'warning', source = 'system', businessId, db } = params
+  const client  = db ?? createServiceRoleClient()
+  const dashUrl = process.env.NEXT_PUBLIC_APP_URL ?? 'https://helios.ai'
+
+  let subjectPreview = `[Preview] ${title} — Helios AI Ops`
+  const recipients: string[] = ['(configured recipients)']
+
+  if (ruleId) {
+    const { data: rule } = await client.from('ops_notification_rules').select('*').eq('id', ruleId).single()
+    if (rule) {
+      const r = rule as { email_subject_template?: string; name?: string }
+      if (r.email_subject_template && isTemplateSafe(r.email_subject_template)) {
+        subjectPreview = applyTemplate(r.email_subject_template, {
+          '{{title}}': title, '{{severity}}': severity, '{{source}}': source,
+          '{{status}}': 'open', '{{priority}}': 'normal',
+          '{{dashboard_url}}': `${dashUrl}/dashboard/ops`,
+          '{{business_name}}': 'Your Business', '{{created_at}}': new Date().toISOString(), '{{sla_due_at}}': '',
+        })
+      }
+    }
+  }
+
+  const { html: _, text: bodyText } = buildOpsEmail({
+    title, severity, source, description: 'This is a preview — no real event was triggered.',
+    dashboardUrl: dashUrl, section: 'activity',
+  })
+
+  return {
+    subject:    subjectPreview,
+    body_text:  bodyText,
+    recipients,
+    warning:    'This is a preview only. No email was sent.',
+  }
+}
+
+export { isTemplateSafe, applyTemplate, SAFE_VARS }
 
 // NotificationRule is the primary export of this module

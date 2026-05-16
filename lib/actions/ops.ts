@@ -196,93 +196,179 @@ function zeroMetrics(): OpsOverviewMetrics {
   return { openEvents: 0, activeTasks: 0, activeAlerts: 0, pendingApprovals: 0, criticalCount: 0, resolvedToday: 0 }
 }
 
+// ── Paginated result type ─────────────────────────────────────────
+
+export interface PaginatedOpsResult<T> {
+  rows:          T[]
+  total_count:   number
+  page:          number
+  pageSize:      number
+  has_next:      boolean
+  has_previous:  boolean
+  error:         string | null
+}
+
+export interface OpsSearchParams {
+  search?:          string
+  status?:          string
+  severity?:        string
+  source?:          string
+  priority?:        string
+  date_from?:       string
+  date_to?:         string
+  page?:            number
+  pageSize?:        number
+  include_snoozed?: boolean
+  // legacy compat
+  limit?:           number
+}
+
+function emptyPage<T>(error: string | null = null): PaginatedOpsResult<T> {
+  return { rows: [], total_count: 0, page: 1, pageSize: 25, has_next: false, has_previous: false, error }
+}
+
 // ── getOpsEvents ──────────────────────────────────────────────────
 
-export async function getOpsEvents(limit = 30, status?: string): Promise<{
-  events: OpsEvent[]; error: string | null
-}> {
+export async function getOpsEvents(params: OpsSearchParams = {}): Promise<PaginatedOpsResult<OpsEvent>> {
   const auth = await requireAuth()
-  if (!auth.ok) return { events: [], error: auth.error }
-  const db = createServiceRoleClient()
+  if (!auth.ok) return emptyPage(auth.error)
+  const db  = createServiceRoleClient()
+  const ps  = params.pageSize ?? params.limit ?? 25
+  const pg  = params.page ?? 1
+  const from = (pg - 1) * ps
+  const to   = from + ps - 1
+
   try {
-    let query = db.from('ops_events').select('*')
+    let query = db.from('ops_events').select('*', { count: 'exact' })
       .eq('business_id', auth.businessId)
-      .order('created_at', { ascending: false }).limit(limit)
-    if (status) query = query.eq('status', status)
-    const { data, error } = await query
+      .order('created_at', { ascending: false })
+      .range(from, to)
+
+    if (params.status)   query = query.eq('status', params.status)
+    if (params.severity) query = query.eq('severity', params.severity)
+    if (params.source)   query = query.eq('source', params.source)
+    if (params.date_from) query = query.gte('created_at', params.date_from)
+    if (params.date_to)   query = query.lte('created_at', params.date_to)
+    if (params.search)   query = query.ilike('title', `%${params.search}%`)
+    if (!params.include_snoozed) {
+      query = query.or(`snoozed_until.is.null,snoozed_until.lt.${new Date().toISOString()}`)
+    }
+
+    const { data, count, error } = await query
     if (error) throw error
-    return { events: (data ?? []) as OpsEvent[], error: null }
+    const total = count ?? 0
+    return { rows: (data ?? []) as OpsEvent[], total_count: total, page: pg, pageSize: ps, has_next: from + ps < total, has_previous: pg > 1, error: null }
   } catch (err) {
     captureApiError(err, { route: 'actions/ops', error_type: 'events_error', business_id: auth.businessId })
-    return { events: [], error: 'Could not load ops events.' }
+    return emptyPage('Could not load ops events.')
   }
 }
 
 // ── getOpsTasks ───────────────────────────────────────────────────
 
-export async function getOpsTasks(limit = 30, status?: string): Promise<{
-  tasks: OpsTask[]; error: string | null
-}> {
+export async function getOpsTasks(params: OpsSearchParams = {}): Promise<PaginatedOpsResult<OpsTask>> {
   const auth = await requireAuth()
-  if (!auth.ok) return { tasks: [], error: auth.error }
-  const db = createServiceRoleClient()
+  if (!auth.ok) return emptyPage(auth.error)
+  const db  = createServiceRoleClient()
+  const ps  = params.pageSize ?? params.limit ?? 25
+  const pg  = params.page ?? 1
+  const from = (pg - 1) * ps
+  const to   = from + ps - 1
+
   try {
-    let query = db.from('ops_tasks').select('*')
+    let query = db.from('ops_tasks').select('*', { count: 'exact' })
       .eq('business_id', auth.businessId)
-      .order('priority', { ascending: false })
-      .order('created_at', { ascending: false }).limit(limit)
-    if (status) query = query.eq('status', status)
-    const { data, error } = await query
+      .order('created_at', { ascending: false })
+      .range(from, to)
+
+    if (params.status)   query = query.eq('status', params.status)
+    if (params.priority) query = query.eq('priority', params.priority)
+    if (params.date_from) query = query.gte('created_at', params.date_from)
+    if (params.date_to)   query = query.lte('created_at', params.date_to)
+    if (params.search)   query = query.ilike('title', `%${params.search}%`)
+    if (!params.include_snoozed) {
+      query = query.or(`snoozed_until.is.null,snoozed_until.lt.${new Date().toISOString()}`)
+    }
+
+    const { data, count, error } = await query
     if (error) throw error
-    return { tasks: (data ?? []) as OpsTask[], error: null }
+    const total = count ?? 0
+    return { rows: (data ?? []) as OpsTask[], total_count: total, page: pg, pageSize: ps, has_next: from + ps < total, has_previous: pg > 1, error: null }
   } catch (err) {
     captureApiError(err, { route: 'actions/ops', error_type: 'tasks_error', business_id: auth.businessId })
-    return { tasks: [], error: 'Could not load ops tasks.' }
+    return emptyPage('Could not load ops tasks.')
   }
 }
 
 // ── getOpsAlerts ──────────────────────────────────────────────────
 
-export async function getOpsAlerts(limit = 30, status?: string): Promise<{
-  alerts: OpsAlert[]; error: string | null
-}> {
+export async function getOpsAlerts(params: OpsSearchParams = {}): Promise<PaginatedOpsResult<OpsAlert>> {
   const auth = await requireAuth()
-  if (!auth.ok) return { alerts: [], error: auth.error }
-  const db = createServiceRoleClient()
+  if (!auth.ok) return emptyPage(auth.error)
+  const db  = createServiceRoleClient()
+  const ps  = params.pageSize ?? params.limit ?? 25
+  const pg  = params.page ?? 1
+  const from = (pg - 1) * ps
+  const to   = from + ps - 1
+
   try {
-    let query = db.from('ops_alerts').select('*')
+    let query = db.from('ops_alerts').select('*', { count: 'exact' })
       .eq('business_id', auth.businessId)
-      .order('severity', { ascending: false })
-      .order('created_at', { ascending: false }).limit(limit)
-    if (status) query = query.eq('status', status)
-    const { data, error } = await query
+      .order('created_at', { ascending: false })
+      .range(from, to)
+
+    if (params.status)   query = query.eq('status', params.status)
+    if (params.severity) query = query.eq('severity', params.severity)
+    if (params.date_from) query = query.gte('created_at', params.date_from)
+    if (params.date_to)   query = query.lte('created_at', params.date_to)
+    if (params.search)   query = query.ilike('title', `%${params.search}%`)
+    if (!params.include_snoozed) {
+      query = query.or(`snoozed_until.is.null,snoozed_until.lt.${new Date().toISOString()}`)
+    }
+
+    const { data, count, error } = await query
     if (error) throw error
-    return { alerts: (data ?? []) as OpsAlert[], error: null }
+    const total = count ?? 0
+    return { rows: (data ?? []) as OpsAlert[], total_count: total, page: pg, pageSize: ps, has_next: from + ps < total, has_previous: pg > 1, error: null }
   } catch (err) {
     captureApiError(err, { route: 'actions/ops', error_type: 'alerts_error', business_id: auth.businessId })
-    return { alerts: [], error: 'Could not load ops alerts.' }
+    return emptyPage('Could not load ops alerts.')
   }
 }
 
 // ── getApprovalItems ──────────────────────────────────────────────
 
-export async function getApprovalItems(limit = 30, status?: string): Promise<{
-  items: ApprovalItem[]; error: string | null
-}> {
+export async function getApprovalItems(params: OpsSearchParams = {}): Promise<PaginatedOpsResult<ApprovalItem>> {
   const auth = await requireAuth()
-  if (!auth.ok) return { items: [], error: auth.error }
-  const db = createServiceRoleClient()
+  if (!auth.ok) return emptyPage(auth.error)
+  const db  = createServiceRoleClient()
+  const ps  = params.pageSize ?? params.limit ?? 25
+  const pg  = params.page ?? 1
+  const from = (pg - 1) * ps
+  const to   = from + ps - 1
+
   try {
-    let query = db.from('approval_items').select('*')
+    let query = db.from('approval_items').select('*', { count: 'exact' })
       .eq('business_id', auth.businessId)
-      .order('created_at', { ascending: false }).limit(limit)
-    if (status) query = query.eq('status', status)
-    const { data, error } = await query
+      .order('created_at', { ascending: false })
+      .range(from, to)
+
+    if (params.status)   query = query.eq('status', params.status)
+    if (params.priority) query = query.eq('priority', params.priority)
+    if (params.date_from) query = query.gte('created_at', params.date_from)
+    if (params.date_to)   query = query.lte('created_at', params.date_to)
+    if (params.search)   query = query.ilike('title', `%${params.search}%`)
+    if (!params.include_snoozed) {
+      query = query.or(`snoozed_until.is.null,snoozed_until.lt.${new Date().toISOString()}`)
+    }
+
+    const { data, count, error } = await query
     if (error) throw error
-    return { items: (data ?? []) as ApprovalItem[], error: null }
+    const total = count ?? 0
+    return { rows: (data ?? []) as ApprovalItem[], total_count: total, page: pg, pageSize: ps, has_next: from + ps < total, has_previous: pg > 1, error: null }
   } catch (err) {
     captureApiError(err, { route: 'actions/ops', error_type: 'approvals_error', business_id: auth.businessId })
-    return { items: [], error: 'Could not load approval items.' }
+    return emptyPage('Could not load approval items.')
   }
 }
 
@@ -889,20 +975,32 @@ export async function seedDefaultNotificationRulesAction(): Promise<{ seeded: nu
 import type { AuditTrailRow } from '@/lib/ops/audit'
 export type { AuditTrailRow }
 
-export async function getOpsAuditTrailAction(limit = 50): Promise<{
-  rows:  AuditTrailRow[]
-  error: string | null
+export async function getOpsAuditTrailAction(
+  params: { limit?: number; search?: string; page?: number; pageSize?: number } = {},
+): Promise<{
+  rows:        AuditTrailRow[]
+  total_count: number
+  error:       string | null
 }> {
   const auth = await requireAuth()
-  if (!auth.ok) return { rows: [], error: auth.error }
+  if (!auth.ok) return { rows: [], total_count: 0, error: auth.error }
   const db = createServiceRoleClient()
+  const ps  = params.pageSize ?? params.limit ?? 50
+  const pg  = params.page ?? 1
+  const from = (pg - 1) * ps
+  const to   = from + ps - 1
   try {
-    const { getOpsAuditTrail } = await import('@/lib/ops/audit')
-    const rows = await getOpsAuditTrail({ businessId: auth.businessId, limit, db })
-    return { rows, error: null }
+    let query = db.from('ops_audit_trail').select('*', { count: 'exact' })
+      .eq('business_id', auth.businessId)
+      .order('created_at', { ascending: false })
+      .range(from, to)
+    if (params.search) query = query.ilike('action', `%${params.search}%`)
+    const { data, count, error } = await query
+    if (error) throw error
+    return { rows: (data ?? []) as AuditTrailRow[], total_count: count ?? 0, error: null }
   } catch (err) {
     captureApiError(err, { route: 'actions/ops', error_type: 'audit_trail_error', business_id: auth.businessId })
-    return { rows: [], error: 'Could not load audit trail.' }
+    return { rows: [], total_count: 0, error: 'Could not load audit trail.' }
   }
 }
 
@@ -1214,23 +1312,249 @@ export interface OpsExportRow {
   completed_at:      string | null
 }
 
-export async function getOpsExports(limit = 20): Promise<{
-  exports: OpsExportRow[]
-  error:   string | null
+export async function getOpsExports(
+  params: { limit?: number; page?: number; pageSize?: number } = {},
+): Promise<{
+  exports:     OpsExportRow[]
+  total_count: number
+  error:       string | null
 }> {
   const auth = await requireAuth()
-  if (!auth.ok) return { exports: [], error: auth.error }
+  if (!auth.ok) return { exports: [], total_count: 0, error: auth.error }
+  const db  = createServiceRoleClient()
+  const ps  = params.pageSize ?? params.limit ?? 20
+  const pg  = params.page ?? 1
+  const from = (pg - 1) * ps
+  const to   = from + ps - 1
+  try {
+    const { data, count, error } = await db
+      .from('ops_exports').select('*', { count: 'exact' })
+      .eq('business_id', auth.businessId)
+      .order('created_at', { ascending: false })
+      .range(from, to)
+    if (error) throw error
+    return { exports: (data ?? []) as OpsExportRow[], total_count: count ?? 0, error: null }
+  } catch (err) {
+    captureApiError(err, { route: 'actions/ops', error_type: 'get_exports_error', business_id: auth.businessId })
+    return { exports: [], total_count: 0, error: 'Could not load export history.' }
+  }
+}
+
+// ── Phase 16: Snooze actions ──────────────────────────────────────
+
+export async function snoozeOpsItem(params: {
+  table:         'ops_events' | 'ops_alerts' | 'ops_tasks' | 'approval_items'
+  target_id:     string
+  snoozed_until: string
+  snooze_reason?: string
+}): Promise<{ success?: string; error?: string }> {
+  const auth = await requireAuth()
+  if (!auth.ok) return { error: auth.error }
+  const db = createServiceRoleClient()
+
+  // Max 30-day snooze
+  const maxDate = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+  if (params.snoozed_until > maxDate) return { error: 'Snooze cannot exceed 30 days.' }
+
+  try {
+    await db.from(params.table).update({
+      snoozed_until: params.snoozed_until,
+      snooze_reason: params.snooze_reason ?? null,
+    }).eq('id', params.target_id).eq('business_id', auth.businessId)
+
+    void import('@/lib/ops/audit').then(({ createOpsAuditLog }) =>
+      createOpsAuditLog({ businessId: auth.businessId, actorUserId: auth.userId, action: 'item_snoozed', targetTable: params.table, targetId: params.target_id, afterState: { snoozed_until: params.snoozed_until } }, db)
+    ).catch(() => undefined)
+
+    return { success: 'Item snoozed.' }
+  } catch (err) {
+    captureApiError(err, { route: 'actions/ops', error_type: 'snooze_error', business_id: auth.businessId })
+    return { error: 'Could not snooze item.' }
+  }
+}
+
+export async function unsnoozeOpsItem(
+  table: 'ops_events' | 'ops_alerts' | 'ops_tasks' | 'approval_items',
+  id:    string,
+): Promise<{ success?: string; error?: string }> {
+  const auth = await requireAuth()
+  if (!auth.ok) return { error: auth.error }
+  const db = createServiceRoleClient()
+  try {
+    await db.from(table).update({ snoozed_until: null, snooze_reason: null })
+      .eq('id', id).eq('business_id', auth.businessId)
+    void import('@/lib/ops/audit').then(({ createOpsAuditLog }) =>
+      createOpsAuditLog({ businessId: auth.businessId, actorUserId: auth.userId, action: 'item_unsnoozed', targetTable: table, targetId: id }, db)
+    ).catch(() => undefined)
+    return { success: 'Item unsnoozed.' }
+  } catch (err) {
+    captureApiError(err, { route: 'actions/ops', error_type: 'unsnooze_error', business_id: auth.businessId })
+    return { error: 'Could not unsnooze item.' }
+  }
+}
+
+export async function bulkSnoozeOpsItems(
+  table:    'ops_events' | 'ops_alerts' | 'ops_tasks' | 'approval_items',
+  ids:      string[],
+  snoozedUntil: string,
+): Promise<{ updated: number; error?: string }> {
+  if (!ids.length || ids.length > 50) return { updated: 0, error: 'Select 1–50 items.' }
+  const auth = await requireAuth()
+  if (!auth.ok) return { updated: 0, error: auth.error }
+  const db = createServiceRoleClient()
+  try {
+    const { data } = await db.from(table)
+      .update({ snoozed_until: snoozedUntil })
+      .in('id', ids).eq('business_id', auth.businessId).select('id')
+    return { updated: (data ?? []).length }
+  } catch (err) {
+    captureApiError(err, { route: 'actions/ops', error_type: 'bulk_snooze_error', business_id: auth.businessId })
+    return { updated: 0, error: 'Bulk snooze failed.' }
+  }
+}
+
+// ── Phase 16: Automation retry ────────────────────────────────────
+
+export async function retryOpsEventAutomation(eventId: string): Promise<{ success?: string; error?: string }> {
+  const auth = await requireAuth()
+  if (!auth.ok) return { error: auth.error }
+  const db = createServiceRoleClient()
+  try {
+    // Reset processed_at so it gets re-processed
+    await db.from('ops_events')
+      .update({ processed_at: null, automation_status: 'retrying', processing_error: null })
+      .eq('id', eventId).eq('business_id', auth.businessId)
+
+    // Fire automation (fire-and-forget)
+    void import('@/lib/ops/automation').then(({ processOpsEvent }) =>
+      processOpsEvent(eventId, db)
+    ).catch(() => undefined)
+
+    return { success: 'Automation retry queued.' }
+  } catch (err) {
+    captureApiError(err, { route: 'actions/ops', error_type: 'automation_retry_error', business_id: auth.businessId })
+    return { error: 'Could not retry automation.' }
+  }
+}
+
+// ── Phase 16: Production launch checks ───────────────────────────
+
+export interface LaunchCheck {
+  id:             string
+  business_id:    string
+  check_key:      string
+  category:       string
+  title:          string
+  description:    string | null
+  status:         string
+  severity:       string
+  result_summary: string | null
+  last_checked_at: string | null
+  metadata:       Record<string, unknown>
+  created_at:     string
+  updated_at:     string
+}
+
+const LAUNCH_CHECKS_DEF: Array<{
+  key:         string
+  category:    string
+  title:       string
+  description: string
+  severity:    'low' | 'normal' | 'high' | 'critical'
+  check:       () => boolean
+}> = [
+  { key: 'anthropic_key',   category: 'AI',          title: 'Anthropic API key',         description: 'ANTHROPIC_API_KEY is set.',           severity: 'critical', check: () => !!process.env.ANTHROPIC_API_KEY },
+  { key: 'supabase_svc',    category: 'Database',    title: 'Supabase service role key',  description: 'SUPABASE_SERVICE_ROLE_KEY is set.',   severity: 'critical', check: () => !!process.env.SUPABASE_SERVICE_ROLE_KEY },
+  { key: 'stripe_key',      category: 'Billing',     title: 'Stripe secret key',         description: 'STRIPE_SECRET_KEY is set.',           severity: 'high',     check: () => !!process.env.STRIPE_SECRET_KEY },
+  { key: 'stripe_webhook',  category: 'Billing',     title: 'Stripe webhook secret',     description: 'STRIPE_WEBHOOK_SECRET is set.',       severity: 'high',     check: () => !!process.env.STRIPE_WEBHOOK_SECRET },
+  { key: 'resend_key',      category: 'Email',       title: 'Resend API key',            description: 'RESEND_API_KEY is set.',             severity: 'normal',   check: () => !!process.env.RESEND_API_KEY },
+  { key: 'meta_token',      category: 'WhatsApp',    title: 'Meta access token',         description: 'META_ACCESS_TOKEN is set.',          severity: 'normal',   check: () => !!process.env.META_ACCESS_TOKEN },
+  { key: 'relevance_key',   category: 'Agents',      title: 'Relevance AI API key',      description: 'RELEVANCE_API_KEY is set.',          severity: 'normal',   check: () => !!process.env.RELEVANCE_API_KEY },
+  { key: 'sentry_dsn',      category: 'Monitoring',  title: 'Sentry DSN',                description: 'NEXT_PUBLIC_SENTRY_DSN is set.',     severity: 'normal',   check: () => !!process.env.NEXT_PUBLIC_SENTRY_DSN },
+  { key: 'posthog_key',     category: 'Analytics',   title: 'PostHog key',               description: 'NEXT_PUBLIC_POSTHOG_KEY is set.',    severity: 'low',      check: () => !!process.env.NEXT_PUBLIC_POSTHOG_KEY },
+  { key: 'cron_secret',     category: 'Cron',        title: 'Ops cron secret',           description: 'OPS_CRON_SECRET is set.',            severity: 'normal',   check: () => !!process.env.OPS_CRON_SECRET },
+  { key: 'calcom_key',      category: 'Bookings',    title: 'Cal.com API key',           description: 'CALCOM_API_KEY is set.',             severity: 'normal',   check: () => !!process.env.CALCOM_API_KEY },
+  { key: 'app_url',         category: 'Config',      title: 'App URL configured',        description: 'NEXT_PUBLIC_APP_URL is set.',        severity: 'high',     check: () => !!process.env.NEXT_PUBLIC_APP_URL },
+  { key: 'upstash_redis',   category: 'Rate Limit',  title: 'Upstash Redis configured',  description: 'UPSTASH_REDIS_REST_URL is set.',     severity: 'normal',   check: () => !!process.env.UPSTASH_REDIS_REST_URL },
+]
+
+export async function runProductionLaunchChecks(
+  createTasksForFailures = false,
+): Promise<{ checks: LaunchCheck[]; error: string | null }> {
+  const auth = await requireAuth()
+  if (!auth.ok) return { checks: [], error: auth.error }
+  const db = createServiceRoleClient()
+
+  const now = new Date().toISOString()
+  const results: LaunchCheck[] = []
+
+  try {
+    for (const def of LAUNCH_CHECKS_DEF) {
+      const passed = def.check()
+      const status = passed ? 'passed' : def.severity === 'critical' ? 'failed' : 'warning'
+      const summary = passed ? 'Configured' : 'Not configured'
+
+      // Upsert check result
+      await db.from('ops_launch_checks').upsert(
+        {
+          business_id:     auth.businessId,
+          check_key:       def.key,
+          category:        def.category,
+          title:           def.title,
+          description:     def.description,
+          status,
+          severity:        def.severity,
+          result_summary:  summary,
+          last_checked_at: now,
+        },
+        { onConflict: 'business_id,check_key' },
+      )
+
+      // Create ops_task for critical failures if requested
+      if (!passed && createTasksForFailures && (def.severity === 'critical' || def.severity === 'high')) {
+        void import('@/lib/ops/events').then(({ createOpsTask }) =>
+          createOpsTask({ business_id: auth.businessId, title: `Configure: ${def.title}`, description: def.description, task_type: 'launch_check', priority: def.severity === 'critical' ? 'urgent' : 'high', metadata: { check_key: def.key } }, db)
+        ).catch(() => undefined)
+      }
+
+      results.push({
+        id: `${auth.businessId}_${def.key}`,
+        business_id: auth.businessId,
+        check_key: def.key,
+        category: def.category,
+        title: def.title,
+        description: def.description,
+        status,
+        severity: def.severity,
+        result_summary: summary,
+        last_checked_at: now,
+        metadata: {},
+        created_at: now,
+        updated_at: now,
+      })
+    }
+
+    return { checks: results, error: null }
+  } catch (err) {
+    captureApiError(err, { route: 'actions/ops', error_type: 'launch_check_error', business_id: auth.businessId })
+    return { checks: results, error: 'Some checks could not complete.' }
+  }
+}
+
+export async function getProductionLaunchChecks(): Promise<{ checks: LaunchCheck[]; error: string | null }> {
+  const auth = await requireAuth()
+  if (!auth.ok) return { checks: [], error: auth.error }
   const db = createServiceRoleClient()
   try {
     const { data, error } = await db
-      .from('ops_exports').select('*')
+      .from('ops_launch_checks').select('*')
       .eq('business_id', auth.businessId)
-      .order('created_at', { ascending: false }).limit(limit)
+      .order('severity', { ascending: false })
     if (error) throw error
-    return { exports: (data ?? []) as OpsExportRow[], error: null }
+    return { checks: (data ?? []) as LaunchCheck[], error: null }
   } catch (err) {
-    captureApiError(err, { route: 'actions/ops', error_type: 'get_exports_error', business_id: auth.businessId })
-    return { exports: [], error: 'Could not load export history.' }
+    captureApiError(err, { route: 'actions/ops', error_type: 'get_checks_error', business_id: auth.businessId })
+    return { checks: [], error: 'Could not load launch checks.' }
   }
 }
 

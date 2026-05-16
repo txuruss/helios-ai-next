@@ -116,16 +116,16 @@ export default async function DashboardPage() {
 
   const [
     { metrics },
-    { events },
-    { alerts },
-    { tasks },
+    eventsResult,
+    alertsResult,
+    tasksResult,
     { items: healthItems },
     { summary: slaSummary },
   ] = await Promise.all([
     getOpsOverview(),
-    getOpsEvents(8),
-    getOpsAlerts(6),
-    getOpsTasks(6),
+    getOpsEvents({ pageSize: 8 }),
+    getOpsAlerts({ pageSize: 6 }),
+    getOpsTasks({ pageSize: 6 }),
     getSystemHealthSummary(),
     getSlaDashboardSummary(),
   ])
@@ -202,13 +202,13 @@ export default async function DashboardPage() {
 
       {/* Attention + Plan Usage */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-5">
-        <AttentionRequiredPanel alerts={alerts} tasks={tasks} />
+        <AttentionRequiredPanel alerts={alertsResult.rows} tasks={tasksResult.rows} />
         <PlanUsageCard plan={planId} conversations={usage.ai_conversations} leads={usage.leads} bookings={usage.bookings} limits={planLimits} />
       </div>
 
       {/* Activity + Agent Runs */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-5">
-        <LiveActivityFeed events={events} />
+        <LiveActivityFeed events={eventsResult.rows} />
         <AgentWorkforceSnapshot recentRuns={agentRuns} totalRuns={totalRuns} />
       </div>
 

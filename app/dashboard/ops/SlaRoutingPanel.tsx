@@ -51,7 +51,7 @@ export default function SlaRoutingPanel({
       const [p, r, a, s] = await Promise.all([
         getSlaPolicies(),
         getNotificationRules(),
-        getOpsAuditTrailAction(30),
+        getOpsAuditTrailAction({ limit: 30 }),
         getSlaDashboardSummary(),
       ])
       if (!p.error) setPolicies(p.policies)
@@ -137,7 +137,7 @@ export default function SlaRoutingPanel({
       {/* Audit trail */}
       <div>
         <h3 className="text-[12px] font-semibold uppercase tracking-[0.12em] text-[#6a6a6e] mb-3">Recent Audit Trail</h3>
-        <OpsAuditTrail rows={audit} />
+        <OpsAuditTrail initialRows={audit} initialTotal={audit.length} />
       </div>
     </div>
   )

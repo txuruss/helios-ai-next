@@ -255,6 +255,60 @@ export const rerunExportSchema = z.object({
   export_id: z.string().uuid(),
 })
 
+// ── Phase 16 schemas ──────────────────────────────────────────────
+
+export const opsServerSearchSchema = z.object({
+  search:          z.string().max(256).optional(),
+  status:          z.string().max(32).optional(),
+  severity:        z.string().max(32).optional(),
+  source:          z.string().max(64).optional(),
+  priority:        z.string().max(32).optional(),
+  date_from:       z.string().datetime().optional(),
+  date_to:         z.string().datetime().optional(),
+  page:            z.number().int().min(1).default(1),
+  pageSize:        z.number().int().min(5).max(100).default(25),
+  include_snoozed: z.boolean().default(false),
+})
+
+export const snoozeItemSchema = z.object({
+  table:         z.enum(['ops_events','ops_alerts','ops_tasks','approval_items']),
+  target_id:     z.string().uuid(),
+  snoozed_until: z.string().datetime(),
+  snooze_reason: z.string().max(256).optional(),
+})
+
+export const bulkSnoozeSchema = z.object({
+  table:         z.enum(['ops_events','ops_alerts','ops_tasks','approval_items']),
+  ids:           z.array(z.string().uuid()).min(1).max(50),
+  snoozed_until: z.string().datetime(),
+  snooze_reason: z.string().max(256).optional(),
+})
+
+export const notificationPreviewSchema = z.object({
+  rule_id:      z.string().uuid().optional(),
+  trigger_type: z.string().max(64).optional(),
+  title:        z.string().max(256).optional(),
+  severity:     z.string().max(32).optional(),
+  source:       z.string().max(64).optional(),
+  preview_type: z.enum(['rule_preview','dry_run']).default('rule_preview'),
+})
+
+export const emailTemplateSchema = z.object({
+  subject_template: z.string().max(256).optional(),
+  body_template:    z.string().max(4000).optional(),
+})
+
+// Safe template variables (allowlist)
+export const SAFE_TEMPLATE_VARS = [
+  '{{title}}', '{{severity}}', '{{source}}', '{{status}}',
+  '{{priority}}', '{{dashboard_url}}', '{{business_name}}',
+  '{{created_at}}', '{{sla_due_at}}',
+] as const
+
+export const launchCheckRunSchema = z.object({
+  create_tasks_for_failures: z.boolean().default(false),
+})
+
 // ── Inferred types ────────────────────────────────────────────────
 
 export type OpsEventInput            = z.infer<typeof opsEventSchema>
@@ -269,3 +323,5 @@ export type CreateAutomationRuleInput = z.infer<typeof createAutomationRuleSchem
 export type CreateSlaPolicyInput     = z.infer<typeof createSlaPolicySchema>
 export type CreateNotificationRuleInput = z.infer<typeof createNotificationRuleSchema>
 export type OpsSearchInput           = z.infer<typeof opsSearchSchema>
+export type OpsServerSearchInput     = z.infer<typeof opsServerSearchSchema>
+export type SnoozeItemInput          = z.infer<typeof snoozeItemSchema>
