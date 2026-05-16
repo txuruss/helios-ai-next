@@ -1,6 +1,7 @@
 import {
   getOpsOverview, getOpsEvents, getOpsTasks, getOpsAlerts,
   getApprovalItems, getSystemHealthSummary, getClientSystemsSummary,
+  getAutomationRules,
 } from '@/lib/actions/ops'
 import { createClient, createServiceRoleClient } from '@/lib/supabase/server'
 import { getBusinessPlan } from '@/lib/billing/limits'
@@ -15,7 +16,7 @@ export default async function OpsCenterPage({
   searchParams: Promise<{ tab?: string }>
 }) {
   const { tab: rawTab } = await searchParams
-  const validTabs: OpsTab[] = ['overview','activity','alerts','tasks','approvals','health','clients']
+  const validTabs: OpsTab[] = ['overview','activity','alerts','tasks','approvals','health','clients','automation']
   const initialTab: OpsTab = validTabs.includes(rawTab as OpsTab) ? (rawTab as OpsTab) : 'overview'
 
   // Get business context
@@ -44,14 +45,16 @@ export default async function OpsCenterPage({
     { items: approvals },
     { items: healthItems },
     { systems },
+    { rules },
   ] = await Promise.all([
     getOpsOverview(),
-    getOpsEvents(30),
-    getOpsAlerts(30),
-    getOpsTasks(30),
-    getApprovalItems(30),
+    getOpsEvents(50),
+    getOpsAlerts(50),
+    getOpsTasks(50),
+    getApprovalItems(50),
     getSystemHealthSummary(),
     getClientSystemsSummary(),
+    getAutomationRules(),
   ])
 
   return (
@@ -64,6 +67,7 @@ export default async function OpsCenterPage({
       initialApprovals={approvals}
       initialHealth={healthItems}
       initialSystems={systems}
+      initialRules={rules}
       businessId={businessId}
       plan={plan}
     />

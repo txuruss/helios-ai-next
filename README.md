@@ -608,6 +608,102 @@ Ops Center subscribes to Supabase Realtime on `ops_events`, `ops_alerts`, and `o
 
 ---
 
+## Phase 13 — Ops Center: Realtime, Automation, Export & Bulk Actions
+
+### Ops Center Realtime Behavior
+
+The Ops Center now subscribes to Supabase Realtime on all 4 ops tables filtered by `business_id`:
+- `ops_events` → prepends new events to the Activity feed, updates metrics counter
+- `ops_alerts` → prepends new alerts, updates Active Alerts count, syncs updates in place
+- `ops_tasks` → prepends new tasks, updates Active Tasks count, syncs updates in place
+- `approval_items` → prepends new approvals, updates Pending count, syncs updates in place
+
+A green "Live" indicator with pulse animation appears in the Ops Center header. "Updated [time]" appears after each real-time event. Subscriptions are cleaned up on component unmount.
+
+### Automation Rules
+
+The **Automation Rules** tab (8th tab) shows rules that automatically process ops events to create alerts, tasks, and approval items.
+
+**Default rules** (seeded via "Seed Default Rules" button):
+| Trigger | Action | Priority |
+|---|---|---|
+| Any severity = `critical` | Create alert | Urgent |
+| Any event_type contains `failed` | Create alert | High |
+| `stripe` / `payment_failed` | Create urgent alert | Urgent |
+| `calcom` / `booking_failed` | Create task | High |
+| `whatsapp` / `manual_reply_failed` | Create task | High |
+| `chat` / `plan_limit_reached` | Create alert | Normal |
+| `whatsapp` / `handoff_requested` | Create task | High |
+| `relevance` / `agent_run_failed` | Create alert | Normal |
+
+**"Run Automation Now"** processes all unprocessed open events against all enabled rules (max 50 per run). Events are marked `processed_at` after processing.
+
+Rule toggle enables/disables individual rules without deleting them.
+
+### Auto-Created Alerts
+
+Alerts are automatically created by the automation engine when:
+- A critical-severity ops event is logged
+- Any `_failed` event is logged (chat AI error, booking failure, manual reply failure, agent run failure)
+- Payment failure is detected from Stripe
+
+### Auto-Created Tasks
+
+Tasks are automatically created when:
+- A Cal.com booking fails
+- A WhatsApp manual reply fails to send
+- A WhatsApp customer requests a human agent (handoff)
+
+### Approval Generation
+
+Approval items are automatically created when:
+- A Relevance AI agent run completes with output (via `POST /api/relevance/webhook`)
+- The approval_type is `agent_output`, linked to the `agent_runs` row
+- Output content is stored in `agent_outputs` with status `pending_review`
+
+### CSV/JSON Export
+
+Export buttons appear in the Activity, Alerts, Tasks, and Approvals tabs.
+
+**Safe fields only** — no raw metadata, no phone numbers, no API keys, no full message content.
+
+| Export type | Fields |
+|---|---|
+| ops_events | id, source, event_type, severity, title, description, status, timestamps |
+| ops_alerts | id, alert_type, severity, title, message, status, timestamps |
+| ops_tasks | id, title, description, task_type, priority, status, timestamps |
+| approvals | id, approval_type, title, description, status, requested_by, priority, timestamps |
+
+Max 2000 rows per export. Each export is logged to `ops_exports`. Download triggered in-browser via `blob URL`.
+
+### Bulk Actions
+
+Each tab now has checkboxes per row and a bulk action bar:
+
+| Tab | Actions |
+|---|---|
+| Activity | Resolve, Ignore |
+| Alerts | Acknowledge, Resolve |
+| Tasks | Start, Complete, Dismiss |
+| Approvals | Approve, Reject, Archive |
+
+Max 50 items per bulk operation (server-enforced). IDs validated as UUIDs server-side.
+
+### Assignment Behavior
+
+Each row in Activity, Alerts, Tasks, and Approvals shows an "Assign" dropdown when `business_members` has team members. Loaded once on mount via `getBusinessMembersForAssignment()`. Assignment stored in `assigned_to` field per row. Team members identified by profile email/name (masked in logs).
+
+### Privacy and Security Notes (Phase 13)
+
+- Export files contain no raw metadata fields, phone numbers, or API keys
+- Automation rules contain no customer data — only event type patterns and template strings
+- Approval content truncated to 500 chars in the UI, 10,000 chars in DB (safe summary only)
+- `processed_at` marks events after automation — does not store the output
+- `processing_error` stores only the error message (max 500 chars) — no raw payloads
+- Realtime payloads use the existing RLS-filtered Supabase subscription
+
+---
+
 ## Security Notes
 
 - `SUPABASE_SERVICE_ROLE_KEY` bypasses RLS — only use server-side in server actions or API routes.

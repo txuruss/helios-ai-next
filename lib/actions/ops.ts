@@ -89,6 +89,10 @@ export interface ApprovalItem {
   reviewed_by:   string | null
   related_table: string | null
   related_id:    string | null
+  priority:      string
+  assigned_to:   string | null
+  source_table:  string | null
+  source_id:     string | null
   metadata:      Record<string, unknown>
   created_at:    string
   reviewed_at:   string | null
@@ -490,4 +494,239 @@ export async function getClientSystemsSummary(): Promise<{
     captureApiError(err, { route: 'actions/ops', error_type: 'client_systems_error', business_id: auth.businessId })
     return { systems: [], error: 'Could not load client systems.' }
   }
+}
+
+// ── Phase 13: Automation Rules ────────────────────────────────────
+
+import type { AutomationRule } from '@/lib/ops/automation'
+export type { AutomationRule }
+
+export async function getAutomationRules(): Promise<{
+  rules: AutomationRule[]
+  error: string | null
+}> {
+  const auth = await requireAuth()
+  if (!auth.ok) return { rules: [], error: auth.error }
+  const db = createServiceRoleClient()
+  try {
+    const { data, error } = await db
+      .from('ops_automation_rules')
+      .select('*')
+      .or(`business_id.eq.${auth.businessId},business_id.is.null`)
+      .order('created_at', { ascending: true })
+    if (error) throw error
+    return { rules: (data ?? []) as AutomationRule[], error: null }
+  } catch (err) {
+    captureApiError(err, { route: 'actions/ops', error_type: 'get_rules_error', business_id: auth.businessId })
+    return { rules: [], error: 'Could not load automation rules.' }
+  }
+}
+
+export async function toggleAutomationRule(
+  id: string, isEnabled: boolean,
+): Promise<{ success?: string; error?: string }> {
+  const auth = await requireAuth()
+  if (!auth.ok) return { error: auth.error }
+  const db = createServiceRoleClient()
+  try {
+    await db.from('ops_automation_rules')
+      .update({ is_enabled: isEnabled })
+      .eq('id', id).eq('business_id', auth.businessId)
+    return { success: `Rule ${isEnabled ? 'enabled' : 'disabled'}.` }
+  } catch (err) {
+    captureApiError(err, { route: 'actions/ops', error_type: 'toggle_rule_error', business_id: auth.businessId })
+    return { error: 'Could not update rule.' }
+  }
+}
+
+export async function seedDefaultRules(): Promise<{ seeded: number; error?: string }> {
+  const auth = await requireAuth()
+  if (!auth.ok) return { seeded: 0, error: auth.error }
+  const db = createServiceRoleClient()
+  const { seedDefaultAutomationRules } = await import('@/lib/ops/automation')
+  const result = await seedDefaultAutomationRules(auth.businessId, db)
+  return { seeded: result.seeded, error: result.error ?? undefined }
+}
+
+export async function runOpsAutomationNow(): Promise<{
+  processed: number; errors: number; error?: string
+}> {
+  const auth = await requireAuth()
+  if (!auth.ok) return { processed: 0, errors: 0, error: auth.error }
+  const { processUnprocessedOpsEvents } = await import('@/lib/ops/automation')
+  return processUnprocessedOpsEvents(auth.businessId, 50)
+}
+
+// ── Phase 13: Bulk actions ────────────────────────────────────────
+
+export async function bulkUpdateOpsEvents(
+  ids: string[], action: 'resolve' | 'ignore',
+): Promise<{ updated: number; error?: string }> {
+  if (!ids.length || ids.length > 50) return { updated: 0, error: 'Select 1–50.' }
+  if (!ids.every((id) => UUID_RE.test(id))) return { updated: 0, error: 'Invalid IDs.' }
+  const auth = await requireAuth()
+  if (!auth.ok) return { updated: 0, error: auth.error }
+  const db = createServiceRoleClient()
+  try {
+    const now = new Date().toISOString()
+    const updates = action === 'resolve'
+      ? { status: 'resolved', resolved_at: now }
+      : { status: 'resolved', ignored_at: now }
+    const { data } = await db.from('ops_events')
+      .update(updates).in('id', ids).eq('business_id', auth.businessId).select('id')
+    return { updated: (data ?? []).length }
+  } catch (err) {
+    captureApiError(err, { route: 'actions/ops', error_type: 'bulk_events_error', business_id: auth.businessId })
+    return { updated: 0, error: 'Bulk event update failed.' }
+  }
+}
+
+export async function bulkUpdateOpsAlerts(
+  ids: string[], action: 'acknowledge' | 'resolve' | 'ignore',
+): Promise<{ updated: number; error?: string }> {
+  if (!ids.length || ids.length > 50) return { updated: 0, error: 'Select 1–50.' }
+  if (!ids.every((id) => UUID_RE.test(id))) return { updated: 0, error: 'Invalid IDs.' }
+  const auth = await requireAuth()
+  if (!auth.ok) return { updated: 0, error: auth.error }
+  const db = createServiceRoleClient()
+  try {
+    const now = new Date().toISOString()
+    const updates: Record<string, unknown> =
+      action === 'acknowledge' ? { status: 'acknowledged', acknowledged_at: now, acknowledged_by: auth.userId } :
+      action === 'resolve'     ? { status: 'resolved', resolved_at: now, resolved_by: auth.userId } :
+                                 { status: 'resolved', resolved_at: now }
+    const { data } = await db.from('ops_alerts')
+      .update(updates).in('id', ids).eq('business_id', auth.businessId).select('id')
+    return { updated: (data ?? []).length }
+  } catch (err) {
+    captureApiError(err, { route: 'actions/ops', error_type: 'bulk_alerts_error', business_id: auth.businessId })
+    return { updated: 0, error: 'Bulk alert update failed.' }
+  }
+}
+
+export async function bulkUpdateOpsTasks(
+  ids: string[], action: 'start' | 'complete' | 'dismiss',
+): Promise<{ updated: number; error?: string }> {
+  if (!ids.length || ids.length > 50) return { updated: 0, error: 'Select 1–50.' }
+  if (!ids.every((id) => UUID_RE.test(id))) return { updated: 0, error: 'Invalid IDs.' }
+  const auth = await requireAuth()
+  if (!auth.ok) return { updated: 0, error: auth.error }
+  const db = createServiceRoleClient()
+  try {
+    const now = new Date().toISOString()
+    const updates: Record<string, unknown> =
+      action === 'start'    ? { status: 'in_progress' } :
+      action === 'complete' ? { status: 'completed', completed_at: now, completed_by: auth.userId } :
+                              { status: 'cancelled', dismissed_at: now, dismissed_by: auth.userId }
+    const { data } = await db.from('ops_tasks')
+      .update(updates).in('id', ids).eq('business_id', auth.businessId).select('id')
+    return { updated: (data ?? []).length }
+  } catch (err) {
+    captureApiError(err, { route: 'actions/ops', error_type: 'bulk_tasks_error', business_id: auth.businessId })
+    return { updated: 0, error: 'Bulk task update failed.' }
+  }
+}
+
+export async function bulkUpdateApprovals(
+  ids: string[], action: 'approve' | 'reject' | 'archive',
+): Promise<{ updated: number; error?: string }> {
+  if (!ids.length || ids.length > 50) return { updated: 0, error: 'Select 1–50.' }
+  if (!ids.every((id) => UUID_RE.test(id))) return { updated: 0, error: 'Invalid IDs.' }
+  const auth = await requireAuth()
+  if (!auth.ok) return { updated: 0, error: auth.error }
+  const db = createServiceRoleClient()
+  try {
+    const now = new Date().toISOString()
+    const updates: Record<string, unknown> =
+      action === 'approve' ? { status: 'approved', reviewed_by: auth.userId, reviewed_at: now } :
+      action === 'reject'  ? { status: 'rejected', reviewed_by: auth.userId, reviewed_at: now } :
+                             { status: 'expired', reviewed_at: now }
+    const { data } = await db.from('approval_items')
+      .update(updates).in('id', ids).eq('business_id', auth.businessId).select('id')
+    return { updated: (data ?? []).length }
+  } catch (err) {
+    captureApiError(err, { route: 'actions/ops', error_type: 'bulk_approvals_error', business_id: auth.businessId })
+    return { updated: 0, error: 'Bulk approval update failed.' }
+  }
+}
+
+// ── Phase 13: Assignment ──────────────────────────────────────────
+
+export async function assignOpsItem(
+  table: 'ops_events' | 'ops_tasks' | 'ops_alerts' | 'approval_items',
+  id: string,
+  assignedTo: string | null,
+): Promise<{ success?: string; error?: string }> {
+  const auth = await requireAuth()
+  if (!auth.ok) return { error: auth.error }
+  const db = createServiceRoleClient()
+  try {
+    await db.from(table).update({ assigned_to: assignedTo }).eq('id', id).eq('business_id', auth.businessId)
+    return { success: assignedTo ? 'Item assigned.' : 'Assignment removed.' }
+  } catch (err) {
+    captureApiError(err, { route: 'actions/ops', error_type: 'assign_item_error', business_id: auth.businessId })
+    return { error: 'Could not assign item.' }
+  }
+}
+
+export interface BusinessMember {
+  user_id:   string
+  email:     string
+  full_name: string | null
+  role:      string
+}
+
+export async function getBusinessMembersForAssignment(): Promise<{
+  members: BusinessMember[]
+  error:   string | null
+}> {
+  const auth = await requireAuth()
+  if (!auth.ok) return { members: [], error: auth.error }
+  const db = createServiceRoleClient()
+  try {
+    const { data } = await db
+      .from('business_members')
+      .select('user_id, role, profiles(email, full_name)')
+      .eq('business_id', auth.businessId)
+      .limit(20)
+
+    const members = ((data ?? []) as DbRow[]).map((m) => {
+      const profile = m.profiles as { email?: string; full_name?: string } | null
+      return {
+        user_id:   m.user_id as string,
+        email:     profile?.email ?? '',
+        full_name: profile?.full_name ?? null,
+        role:      m.role as string,
+      }
+    })
+
+    return { members, error: null }
+  } catch (err) {
+    captureApiError(err, { route: 'actions/ops', error_type: 'get_members_error', business_id: auth.businessId })
+    return { members: [], error: 'Could not load team members.' }
+  }
+}
+
+// ── Phase 13: Export log ──────────────────────────────────────────
+
+export async function logOpsExport(
+  exportType: string,
+  format:     string,
+  rowCount:   number,
+  filters:    Record<string, unknown>,
+): Promise<void> {
+  const auth = await requireAuth()
+  if (!auth.ok) return
+  const db = createServiceRoleClient()
+  try {
+    await db.from('ops_exports').insert({
+      business_id:  auth.businessId,
+      export_type:  exportType,
+      format,
+      status:       'completed',
+      requested_by: auth.userId,
+      filters,
+      row_count:    rowCount,
+    })
+  } catch { /* silent */ }
 }

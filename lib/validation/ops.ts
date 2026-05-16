@@ -1,11 +1,18 @@
 import { z } from 'zod'
 
-const SEVERITY  = z.enum(['info','warning','error','critical'])
-const PRIORITY  = z.enum(['low','normal','high','urgent'])
-const OPS_STATUS = z.enum(['open','acknowledged','resolved'])
-const TASK_STATUS = z.enum(['pending','in_progress','completed','cancelled'])
-const ALERT_STATUS = z.enum(['active','acknowledged','resolved'])
+const SEVERITY       = z.enum(['info','warning','error','critical'])
+const PRIORITY       = z.enum(['low','normal','high','urgent'])
+const OPS_STATUS     = z.enum(['open','acknowledged','resolved'])
+const TASK_STATUS    = z.enum(['pending','in_progress','completed','cancelled'])
+const ALERT_STATUS   = z.enum(['active','acknowledged','resolved'])
 const APPROVAL_STATUS = z.enum(['pending','approved','rejected','expired'])
+const ACTION_TYPE    = z.enum(['create_alert','create_task','create_approval','ignore'])
+const EXPORT_TYPE    = z.enum(['ops_events','ops_alerts','ops_tasks','approvals'])
+const EXPORT_FORMAT  = z.enum(['csv','json'])
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+// ── Base schemas ──────────────────────────────────────────────────
 
 export const opsEventSchema = z.object({
   business_id:   z.string().uuid().optional(),
@@ -51,6 +58,9 @@ export const approvalItemSchema = z.object({
   requested_by:  z.string().max(256).optional(),
   related_table: z.string().max(64).optional(),
   related_id:    z.string().uuid().optional(),
+  priority:      PRIORITY.default('normal'),
+  source_table:  z.string().max(64).optional(),
+  source_id:     z.string().uuid().optional(),
   metadata:      z.record(z.unknown()).optional().default({}),
 })
 
@@ -61,10 +71,82 @@ export const updateOpsStatusSchema = z.object({
 
 export const bulkOpsActionSchema = z.object({
   ids:    z.array(z.string().uuid()).min(1).max(50),
-  action: z.enum(['resolve','acknowledge','dismiss','complete']),
+  action: z.enum(['resolve','acknowledge','dismiss','complete','ignore','approve','reject','assign']),
 })
+
+// ── Phase 13 schemas ──────────────────────────────────────────────
+
+export const opsAutomationRuleSchema = z.object({
+  business_id:                 z.string().uuid().optional(),
+  name:                        z.string().min(1).max(128),
+  description:                 z.string().max(2000).optional(),
+  trigger_source:              z.string().max(64).optional(),
+  trigger_event_type:          z.string().max(128).optional(),
+  trigger_severity:            SEVERITY.optional(),
+  action_type:                 ACTION_TYPE,
+  action_title_template:       z.string().min(1).max(256),
+  action_description_template: z.string().max(2000).optional(),
+  priority:                    PRIORITY.default('normal'),
+  is_enabled:                  z.boolean().default(true),
+  metadata:                    z.record(z.unknown()).optional().default({}),
+})
+
+export const toggleAutomationRuleSchema = z.object({
+  id:         z.string().uuid(),
+  is_enabled: z.boolean(),
+})
+
+export const runAutomationSchema = z.object({
+  limit: z.number().int().min(1).max(100).default(50),
+})
+
+export const assignOpsItemSchema = z.object({
+  table:       z.enum(['ops_events','ops_tasks','ops_alerts','approval_items']),
+  id:          z.string().uuid(),
+  assigned_to: z.string().uuid().nullable(),
+})
+
+export const exportOpsSchema = z.object({
+  export_type:  EXPORT_TYPE,
+  format:       EXPORT_FORMAT,
+  status:       z.string().max(32).optional(),
+  severity:     z.string().max(32).optional(),
+  source:       z.string().max(64).optional(),
+  search:       z.string().max(256).optional(),
+  date_from:    z.string().datetime().optional(),
+  date_to:      z.string().datetime().optional(),
+  limit:        z.number().int().min(1).max(2000).default(500),
+})
+
+export const bulkOpsEventsSchema = z.object({
+  ids:    z.array(z.string().regex(UUID_RE)).min(1).max(50),
+  action: z.enum(['resolve','ignore','assign']),
+  assigned_to: z.string().uuid().optional(),
+})
+
+export const bulkOpsAlertsSchema = z.object({
+  ids:    z.array(z.string().regex(UUID_RE)).min(1).max(50),
+  action: z.enum(['acknowledge','resolve','ignore','assign']),
+  assigned_to: z.string().uuid().optional(),
+})
+
+export const bulkOpsTasksSchema = z.object({
+  ids:    z.array(z.string().regex(UUID_RE)).min(1).max(50),
+  action: z.enum(['start','complete','dismiss','assign']),
+  assigned_to: z.string().uuid().optional(),
+})
+
+export const bulkApprovalItemsSchema = z.object({
+  ids:    z.array(z.string().regex(UUID_RE)).min(1).max(50),
+  action: z.enum(['approve','reject','archive','assign']),
+  assigned_to: z.string().uuid().optional(),
+})
+
+// ── Inferred types ────────────────────────────────────────────────
 
 export type OpsEventInput    = z.infer<typeof opsEventSchema>
 export type OpsTaskInput     = z.infer<typeof opsTaskSchema>
 export type OpsAlertInput    = z.infer<typeof opsAlertSchema>
 export type ApprovalInput    = z.infer<typeof approvalItemSchema>
+export type AutomationRuleInput = z.infer<typeof opsAutomationRuleSchema>
+export type ExportOpsInput   = z.infer<typeof exportOpsSchema>

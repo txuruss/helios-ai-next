@@ -3,6 +3,7 @@ import { createHmac } from 'crypto'
 import { createServiceRoleClient } from '@/lib/supabase/server'
 import { relevanceWebhookSchema } from '@/lib/validation/relevance'
 import { captureApiError } from '@/lib/logging/api'
+import { createOpsEvent, createApprovalItem } from '@/lib/ops/events'
 
 const MAX_BODY_BYTES = 64 * 1024
 
@@ -81,6 +82,45 @@ export async function POST(request: NextRequest) {
         content:      JSON.stringify(output, null, 2).slice(0, 10000),
         status:       'pending_review',
       }).catch(() => undefined)
+
+      // Create approval item for agent output review
+      void createApprovalItem({
+        business_id:   runRow.business_id,
+        approval_type: 'agent_output',
+        title:         'Agent output ready for review',
+        description:   'A Relevance AI agent run completed with output. Review before approving.',
+        requested_by:  'relevance',
+        related_table: 'agent_runs',
+        related_id:    runRow.id,
+        priority:      'normal',
+        source_table:  'agent_runs',
+        source_id:     runRow.id,
+        metadata:      {},
+      })
+
+      void createOpsEvent({
+        business_id:   runRow.business_id,
+        source:        'relevance',
+        event_type:    'agent_output_ready',
+        severity:      'info',
+        title:         'Agent output ready for approval',
+        related_table: 'agent_runs',
+        related_id:    runRow.id,
+      })
+    }
+
+    // Create ops event for failed runs
+    if (newStatus === 'failed') {
+      void createOpsEvent({
+        business_id:   runRow.business_id,
+        source:        'relevance',
+        event_type:    'agent_run_failed',
+        severity:      'error',
+        title:         'Relevance AI agent run failed',
+        description:   errMsg ?? undefined,
+        related_table: 'agent_runs',
+        related_id:    runRow.id,
+      })
     }
 
     // Save log

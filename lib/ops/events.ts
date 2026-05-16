@@ -21,13 +21,9 @@ export interface OpsEventInput {
 
 type DbClient = ReturnType<typeof createServiceRoleClient>
 
-// ── Shared db getter ──────────────────────────────────────────────
+function getDb(): DbClient { return createServiceRoleClient() }
 
-function getDb(): DbClient {
-  return createServiceRoleClient()
-}
-
-// ── Create ops event ──────────────────────────────────────────────
+// ── Create ops event + trigger automation ─────────────────────────
 
 export async function createOpsEvent(
   input: OpsEventInput,
@@ -35,7 +31,7 @@ export async function createOpsEvent(
 ): Promise<void> {
   try {
     const client = db ?? getDb()
-    await client.from('ops_events').insert({
+    const { data } = await client.from('ops_events').insert({
       business_id:   input.business_id ?? null,
       source:        input.source,
       event_type:    input.event_type,
@@ -45,7 +41,15 @@ export async function createOpsEvent(
       related_table: input.related_table ?? null,
       related_id:    input.related_id ?? null,
       metadata:      input.metadata ?? {},
-    })
+    }).select('id').single()
+
+    const eventId = (data as { id: string } | null)?.id
+    if (eventId) {
+      // Fire-and-forget automation — dynamic import avoids circular dependency
+      import('@/lib/ops/automation')
+        .then(({ processOpsEvent }) => processOpsEvent(eventId, client))
+        .catch(() => undefined)
+    }
   } catch {
     // Silently swallow — ops logging must never affect main flow
   }
@@ -111,6 +115,9 @@ export async function createApprovalItem(
       requested_by:  input.requested_by ?? null,
       related_table: input.related_table ?? null,
       related_id:    input.related_id ?? null,
+      priority:      input.priority ?? 'normal',
+      source_table:  (input as { source_table?: string }).source_table ?? null,
+      source_id:     (input as { source_id?: string }).source_id ?? null,
       metadata:      input.metadata ?? {},
     })
   } catch { /* silent */ }
