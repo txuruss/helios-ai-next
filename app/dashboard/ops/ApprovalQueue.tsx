@@ -28,6 +28,15 @@ function relTime(ts: string) {
   return h < 24 ? `${h}h ago` : `${Math.floor(h / 24)}d ago`
 }
 
+function SlaBadge({ slaDueAt, status, escalationLevel }: { slaDueAt: string | null; status: string; escalationLevel: number }) {
+  if (!slaDueAt || ['approved','rejected','expired'].includes(status)) return null
+  if (escalationLevel > 0) return <span className="text-[9.5px] px-1.5 py-0.5 rounded-full bg-[#c084fc]/10 text-[#c084fc] font-medium">ESC {escalationLevel}</span>
+  const rem = new Date(slaDueAt).getTime() - Date.now()
+  if (rem < 0) return <span className="text-[9.5px] px-1.5 py-0.5 rounded-full bg-[#ff8a7a]/10 text-[#ff8a7a] font-medium">SLA Breached</span>
+  if (rem < 15 * 60000) return <span className="text-[9.5px] px-1.5 py-0.5 rounded-full bg-[#ff7a18]/10 text-[#ff7a18] font-medium">Due Soon</span>
+  return null
+}
+
 export default function ApprovalQueue({ items, members, onRefresh }: Props) {
   const [filter,      setFilter]      = useState('pending')
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
@@ -116,6 +125,7 @@ export default function ApprovalQueue({ items, members, onRefresh }: Props) {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <p className="text-[13px] font-semibold text-white">{item.title}</p>
+                    <SlaBadge slaDueAt={item.sla_due_at ?? null} status={item.status} escalationLevel={item.escalation_level ?? 0} />
                     <span className={`text-[10px] font-medium px-2 py-0.5 rounded-full capitalize ${STATUS_BADGE[item.status] ?? STATUS_BADGE.pending}`}>
                       {item.status}
                     </span>

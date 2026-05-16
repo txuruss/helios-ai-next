@@ -29,73 +29,104 @@ async function requireAuth(): Promise<
 // ── Shared types ──────────────────────────────────────────────────
 
 export interface OpsEvent {
-  id:            string
-  business_id:   string | null
-  source:        string
-  event_type:    string
-  severity:      string
-  title:         string
-  description:   string | null
-  status:        string
-  related_table: string | null
-  related_id:    string | null
-  metadata:      Record<string, unknown>
-  created_at:    string
-  resolved_at:   string | null
+  id:                 string
+  business_id:        string | null
+  source:             string
+  event_type:         string
+  severity:           string
+  title:              string
+  description:        string | null
+  status:             string
+  related_table:      string | null
+  related_id:         string | null
+  metadata:           Record<string, unknown>
+  created_at:         string
+  resolved_at:        string | null
+  // Phase 14 SLA fields
+  sla_due_at:         string | null
+  escalation_level:   number
+  escalated_at:       string | null
+  notified_at:        string | null
+  notification_status: string | null
+  assigned_user_name: string | null
+  assigned_to:        string | null
 }
 
 export interface OpsTask {
-  id:            string
-  business_id:   string | null
-  title:         string
-  description:   string | null
-  task_type:     string
-  priority:      string
-  status:        string
-  related_table: string | null
-  related_id:    string | null
-  assigned_to:   string | null
-  due_at:        string | null
-  metadata:      Record<string, unknown>
-  created_at:    string
-  completed_at:  string | null
+  id:                 string
+  business_id:        string | null
+  title:              string
+  description:        string | null
+  task_type:          string
+  priority:           string
+  status:             string
+  related_table:      string | null
+  related_id:         string | null
+  assigned_to:        string | null
+  due_at:             string | null
+  metadata:           Record<string, unknown>
+  created_at:         string
+  completed_at:       string | null
+  // Phase 14 SLA fields
+  sla_due_at:          string | null
+  overdue_at:          string | null
+  escalation_level:    number
+  escalated_at:        string | null
+  notified_at:         string | null
+  notification_status: string | null
+  assigned_user_name:  string | null
 }
 
 export interface OpsAlert {
-  id:              string
-  business_id:     string | null
-  alert_type:      string
-  severity:        string
-  title:           string
-  message:         string | null
-  status:          string
-  related_table:   string | null
-  related_id:      string | null
-  metadata:        Record<string, unknown>
-  created_at:      string
-  acknowledged_at: string | null
-  resolved_at:     string | null
+  id:                  string
+  business_id:         string | null
+  alert_type:          string
+  severity:            string
+  title:               string
+  message:             string | null
+  status:              string
+  related_table:       string | null
+  related_id:          string | null
+  metadata:            Record<string, unknown>
+  created_at:          string
+  acknowledged_at:     string | null
+  resolved_at:         string | null
+  // Phase 14 SLA fields
+  sla_due_at:          string | null
+  escalation_level:    number
+  escalated_at:        string | null
+  notified_at:         string | null
+  notification_status: string | null
+  assigned_to:         string | null
+  assigned_user_name:  string | null
 }
 
 export interface ApprovalItem {
-  id:            string
-  business_id:   string | null
-  approval_type: string
-  title:         string
-  description:   string | null
-  content:       string | null
-  status:        string
-  requested_by:  string | null
-  reviewed_by:   string | null
-  related_table: string | null
-  related_id:    string | null
-  priority:      string
-  assigned_to:   string | null
-  source_table:  string | null
-  source_id:     string | null
-  metadata:      Record<string, unknown>
-  created_at:    string
-  reviewed_at:   string | null
+  id:                  string
+  business_id:         string | null
+  approval_type:       string
+  title:               string
+  description:         string | null
+  content:             string | null
+  status:              string
+  requested_by:        string | null
+  reviewed_by:         string | null
+  related_table:       string | null
+  related_id:          string | null
+  priority:            string
+  assigned_to:         string | null
+  source_table:        string | null
+  source_id:           string | null
+  metadata:            Record<string, unknown>
+  created_at:          string
+  reviewed_at:         string | null
+  // Phase 14 SLA fields
+  sla_due_at:          string | null
+  escalation_level:    number
+  escalated_at:        string | null
+  notified_at:         string | null
+  notification_status: string | null
+  assigned_user_name:  string | null
 }
 
 export interface OpsOverviewMetrics {
@@ -661,7 +692,32 @@ export async function assignOpsItem(
   if (!auth.ok) return { error: auth.error }
   const db = createServiceRoleClient()
   try {
-    await db.from(table).update({ assigned_to: assignedTo }).eq('id', id).eq('business_id', auth.businessId)
+    // Resolve assigned user name for display
+    let assignedUserName: string | null = null
+    if (assignedTo) {
+      const { data: profile } = await db
+        .from('profiles').select('email, full_name').eq('id', assignedTo).single()
+      const p = profile as { email?: string; full_name?: string } | null
+      assignedUserName = p?.full_name ?? p?.email ?? null
+    }
+
+    await db.from(table).update({
+      assigned_to:        assignedTo,
+      assigned_user_name: assignedUserName,
+    }).eq('id', id).eq('business_id', auth.businessId)
+
+    // Audit trail (fire-and-forget)
+    void import('@/lib/ops/audit').then(({ auditAssignmentChange }) =>
+      auditAssignmentChange({ businessId: auth.businessId, userId: auth.userId, table, targetId: id, beforeUserId: null, afterUserId: assignedTo, db })
+    ).catch(() => undefined)
+
+    // Notify assigned user (fire-and-forget)
+    if (assignedTo) {
+      void import('@/lib/ops/notifications').then(({ notifyAssignedUser }) =>
+        notifyAssignedUser({ userId: assignedTo, title: 'A conversation item was assigned to you', description: null, section: 'activity', businessId: auth.businessId, db })
+      ).catch(() => undefined)
+    }
+
     return { success: assignedTo ? 'Item assigned.' : 'Assignment removed.' }
   } catch (err) {
     captureApiError(err, { route: 'actions/ops', error_type: 'assign_item_error', business_id: auth.businessId })
@@ -729,4 +785,155 @@ export async function logOpsExport(
       row_count:    rowCount,
     })
   } catch { /* silent */ }
+}
+
+// ── Phase 14: SLA policies ────────────────────────────────────────
+
+import type { SlaPolicy, SlaSummary, SlaCheckResult } from '@/lib/ops/sla'
+export type { SlaPolicy, SlaSummary, SlaCheckResult }
+
+export async function getSlaPolicies(): Promise<{
+  policies: SlaPolicy[]
+  error:    string | null
+}> {
+  const auth = await requireAuth()
+  if (!auth.ok) return { policies: [], error: auth.error }
+  const db = createServiceRoleClient()
+  try {
+    const { data, error } = await db
+      .from('ops_sla_policies').select('*')
+      .or(`business_id.eq.${auth.businessId},business_id.is.null`)
+      .order('created_at', { ascending: true })
+    if (error) throw error
+    return { policies: (data ?? []) as SlaPolicy[], error: null }
+  } catch (err) {
+    captureApiError(err, { route: 'actions/ops', error_type: 'get_sla_policies_error', business_id: auth.businessId })
+    return { policies: [], error: 'Could not load SLA policies.' }
+  }
+}
+
+export async function toggleSlaPolicy(id: string, isEnabled: boolean): Promise<{ success?: string; error?: string }> {
+  const auth = await requireAuth()
+  if (!auth.ok) return { error: auth.error }
+  const db = createServiceRoleClient()
+  try {
+    await db.from('ops_sla_policies').update({ is_enabled: isEnabled }).eq('id', id).eq('business_id', auth.businessId)
+    return { success: `SLA policy ${isEnabled ? 'enabled' : 'disabled'}.` }
+  } catch (err) {
+    captureApiError(err, { route: 'actions/ops', error_type: 'toggle_sla_error', business_id: auth.businessId })
+    return { error: 'Could not update SLA policy.' }
+  }
+}
+
+export async function seedDefaultSlaPoliciesAction(): Promise<{ seeded: number; error?: string }> {
+  const auth = await requireAuth()
+  if (!auth.ok) return { seeded: 0, error: auth.error }
+  const db = createServiceRoleClient()
+  const { seedDefaultSlaPolicies } = await import('@/lib/ops/sla')
+  const result = await seedDefaultSlaPolicies(auth.businessId, db)
+  return { seeded: result.seeded, error: result.error ?? undefined }
+}
+
+// ── Phase 14: Notification rules ──────────────────────────────────
+
+import type { NotificationRule } from '@/lib/ops/notifications'
+export type { NotificationRule }
+
+export async function getNotificationRules(): Promise<{
+  rules: NotificationRule[]
+  error: string | null
+}> {
+  const auth = await requireAuth()
+  if (!auth.ok) return { rules: [], error: auth.error }
+  const db = createServiceRoleClient()
+  try {
+    const { data, error } = await db
+      .from('ops_notification_rules').select('*')
+      .or(`business_id.eq.${auth.businessId},business_id.is.null`)
+      .order('created_at', { ascending: true })
+    if (error) throw error
+    return { rules: (data ?? []) as NotificationRule[], error: null }
+  } catch (err) {
+    captureApiError(err, { route: 'actions/ops', error_type: 'get_notification_rules_error', business_id: auth.businessId })
+    return { rules: [], error: 'Could not load notification rules.' }
+  }
+}
+
+export async function toggleNotificationRule(id: string, isEnabled: boolean): Promise<{ success?: string; error?: string }> {
+  const auth = await requireAuth()
+  if (!auth.ok) return { error: auth.error }
+  const db = createServiceRoleClient()
+  try {
+    await db.from('ops_notification_rules').update({ is_enabled: isEnabled }).eq('id', id).eq('business_id', auth.businessId)
+    return { success: `Notification rule ${isEnabled ? 'enabled' : 'disabled'}.` }
+  } catch (err) {
+    captureApiError(err, { route: 'actions/ops', error_type: 'toggle_notification_error', business_id: auth.businessId })
+    return { error: 'Could not update notification rule.' }
+  }
+}
+
+export async function seedDefaultNotificationRulesAction(): Promise<{ seeded: number; error?: string }> {
+  const auth = await requireAuth()
+  if (!auth.ok) return { seeded: 0, error: auth.error }
+  const db = createServiceRoleClient()
+  const { seedDefaultNotificationRules } = await import('@/lib/ops/notifications')
+  const result = await seedDefaultNotificationRules(auth.businessId, db)
+  return { seeded: result.seeded, error: result.error ?? undefined }
+}
+
+// ── Phase 14: Audit trail ─────────────────────────────────────────
+
+import type { AuditTrailRow } from '@/lib/ops/audit'
+export type { AuditTrailRow }
+
+export async function getOpsAuditTrailAction(limit = 50): Promise<{
+  rows:  AuditTrailRow[]
+  error: string | null
+}> {
+  const auth = await requireAuth()
+  if (!auth.ok) return { rows: [], error: auth.error }
+  const db = createServiceRoleClient()
+  try {
+    const { getOpsAuditTrail } = await import('@/lib/ops/audit')
+    const rows = await getOpsAuditTrail({ businessId: auth.businessId, limit, db })
+    return { rows, error: null }
+  } catch (err) {
+    captureApiError(err, { route: 'actions/ops', error_type: 'audit_trail_error', business_id: auth.businessId })
+    return { rows: [], error: 'Could not load audit trail.' }
+  }
+}
+
+// ── Phase 14: SLA check + escalation ─────────────────────────────
+
+export async function runSlaCheckNow(): Promise<{
+  checked: number; breached: number; escalated: number; notified: number; error?: string
+}> {
+  const auth = await requireAuth()
+  if (!auth.ok) return { checked: 0, breached: 0, escalated: 0, notified: 0, error: auth.error }
+  const db = createServiceRoleClient()
+  try {
+    const { processSlaBreaches } = await import('@/lib/ops/sla')
+    const result = await processSlaBreaches(auth.businessId, db)
+    return result
+  } catch (err) {
+    captureApiError(err, { route: 'actions/ops', error_type: 'sla_check_error', business_id: auth.businessId })
+    return { checked: 0, breached: 0, escalated: 0, notified: 0, error: 'SLA check failed.' }
+  }
+}
+
+export async function getSlaDashboardSummary(): Promise<{
+  summary: SlaSummary
+  error:   string | null
+}> {
+  const auth = await requireAuth()
+  if (!auth.ok) return { summary: { breached: 0, due_soon: 0, escalated: 0, on_track: 0 }, error: auth.error }
+  const db = createServiceRoleClient()
+  try {
+    const { getSlaSummary } = await import('@/lib/ops/sla')
+    const summary = await getSlaSummary(auth.businessId, db)
+    return { summary, error: null }
+  } catch (err) {
+    captureApiError(err, { route: 'actions/ops', error_type: 'sla_summary_error', business_id: auth.businessId })
+    return { summary: { breached: 0, due_soon: 0, escalated: 0, on_track: 0 }, error: null }
+  }
 }

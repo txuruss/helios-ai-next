@@ -7,11 +7,13 @@ import {
   getOpsOverview, getOpsEvents, getOpsTasks, getOpsAlerts,
   getApprovalItems, getSystemHealthSummary, getClientSystemsSummary,
   getAutomationRules, getBusinessMembersForAssignment,
+  getSlaPolicies, getNotificationRules, getOpsAuditTrailAction, getSlaDashboardSummary,
 } from '@/lib/actions/ops'
 import type {
   OpsOverviewMetrics, OpsEvent, OpsTask, OpsAlert,
   ApprovalItem, SystemHealthItem, ClientSystem,
   AutomationRule, BusinessMember,
+  SlaPolicy, NotificationRule, AuditTrailRow, SlaSummary,
 } from '@/lib/actions/ops'
 import OpsOverview        from './OpsOverview'
 import OpsEventFeed       from './OpsEventFeed'
@@ -21,8 +23,9 @@ import ApprovalQueue      from './ApprovalQueue'
 import SystemHealthPanel  from './SystemHealthPanel'
 import ClientSystemsPanel from './ClientSystemsPanel'
 import AutomationRulesPanel from './AutomationRulesPanel'
+import SlaRoutingPanel      from './SlaRoutingPanel'
 
-export type OpsTab = 'overview' | 'activity' | 'alerts' | 'tasks' | 'approvals' | 'health' | 'clients' | 'automation'
+export type OpsTab = 'overview' | 'activity' | 'alerts' | 'tasks' | 'approvals' | 'health' | 'clients' | 'automation' | 'sla'
 
 const TABS: Array<{ id: OpsTab; label: string }> = [
   { id: 'overview',    label: 'Overview'          },
@@ -33,6 +36,7 @@ const TABS: Array<{ id: OpsTab; label: string }> = [
   { id: 'health',     label: 'System Health'      },
   { id: 'clients',    label: 'Client Systems'     },
   { id: 'automation', label: 'Automation Rules'   },
+  { id: 'sla',        label: 'SLA & Routing'      },
 ]
 
 interface Props {
@@ -45,13 +49,19 @@ interface Props {
   initialHealth:    SystemHealthItem[]
   initialSystems:   ClientSystem[]
   initialRules:     AutomationRule[]
+  initialPolicies:  SlaPolicy[]
+  initialNotifRules: NotificationRule[]
+  initialAudit:     AuditTrailRow[]
+  initialSlaSummary: SlaSummary
   businessId:       string | null
   plan:             string
 }
 
 export default function OpsCenterClient({
   initialTab, initialMetrics, initialEvents, initialAlerts, initialTasks,
-  initialApprovals, initialHealth, initialSystems, initialRules, businessId, plan,
+  initialApprovals, initialHealth, initialSystems, initialRules,
+  initialPolicies, initialNotifRules, initialAudit, initialSlaSummary,
+  businessId, plan,
 }: Props) {
   const [tab,       setTab]       = useState<OpsTab>(initialTab)
   const [metrics,   setMetrics]   = useState(initialMetrics)
@@ -61,8 +71,12 @@ export default function OpsCenterClient({
   const [approvals, setApprovals] = useState(initialApprovals)
   const [health,    setHealth]    = useState(initialHealth)
   const [systems,   setSystems]   = useState(initialSystems)
-  const [rules,     setRules]     = useState(initialRules)
-  const [members,   setMembers]   = useState<BusinessMember[]>([])
+  const [rules,       setRules]      = useState(initialRules)
+  const [policies,    setPolicies]   = useState(initialPolicies)
+  const [notifRules,  setNotifRules] = useState(initialNotifRules)
+  const [audit,       setAudit]      = useState(initialAudit)
+  const [slaSummary,  setSlaSummary] = useState(initialSlaSummary)
+  const [members,     setMembers]    = useState<BusinessMember[]>([])
   const [rtConnected, setRtConnected] = useState(false)
   const [lastLive,    setLastLive]    = useState<string | null>(null)
 
@@ -170,7 +184,7 @@ export default function OpsCenterClient({
   // ── Full refresh ──────────────────────────────────────────────────
   const refresh = useCallback(() => {
     startTransition(async () => {
-      const [m, ev, al, tk, ap, he, sy, ru] = await Promise.all([
+      const [m, ev, al, tk, ap, he, sy, ru, po, nr, aud, sla] = await Promise.all([
         getOpsOverview(),
         getOpsEvents(50),
         getOpsAlerts(50),
@@ -179,15 +193,23 @@ export default function OpsCenterClient({
         getSystemHealthSummary(),
         getClientSystemsSummary(),
         getAutomationRules(),
+        getSlaPolicies(),
+        getNotificationRules(),
+        getOpsAuditTrailAction(30),
+        getSlaDashboardSummary(),
       ])
-      if (!m.error)  setMetrics(m.metrics)
-      if (!ev.error) setEvents(ev.events)
-      if (!al.error) setAlerts(al.alerts)
-      if (!tk.error) setTasks(tk.tasks)
-      if (!ap.error) setApprovals(ap.items)
-      if (!he.error) setHealth(he.items)
-      if (!sy.error) setSystems(sy.systems)
-      if (!ru.error) setRules(ru.rules)
+      if (!m.error)   setMetrics(m.metrics)
+      if (!ev.error)  setEvents(ev.events)
+      if (!al.error)  setAlerts(al.alerts)
+      if (!tk.error)  setTasks(tk.tasks)
+      if (!ap.error)  setApprovals(ap.items)
+      if (!he.error)  setHealth(he.items)
+      if (!sy.error)  setSystems(sy.systems)
+      if (!ru.error)  setRules(ru.rules)
+      if (!po.error)  setPolicies(po.policies)
+      if (!nr.error)  setNotifRules(nr.rules)
+      if (!aud.error) setAudit(aud.rows)
+      if (!sla.error) setSlaSummary(sla.summary)
     })
   }, [])
 
@@ -202,6 +224,7 @@ export default function OpsCenterClient({
       health:     'ops_events',
       clients:    'ops_events',
       automation: 'ops_events',
+      sla:        'ops_events',
     }
     const exportType = typeMap[tab] ?? 'ops_events'
     capture('ops_export_created', { export_type: exportType, format })
@@ -291,6 +314,15 @@ export default function OpsCenterClient({
       {tab === 'health'     && <SystemHealthPanel items={health} />}
       {tab === 'clients'    && <ClientSystemsPanel systems={systems} />}
       {tab === 'automation' && <AutomationRulesPanel rules={rules} onRefresh={refresh} />}
+      {tab === 'sla'        && (
+        <SlaRoutingPanel
+          initialPolicies={policies}
+          initialRules={notifRules}
+          initialAudit={audit}
+          initialSummary={slaSummary}
+          onRefresh={refresh}
+        />
+      )}
     </div>
   )
 }

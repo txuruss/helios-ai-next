@@ -28,6 +28,17 @@ function relTime(ts: string) {
   return h < 24 ? `${h}h ago` : `${Math.floor(h / 24)}d ago`
 }
 
+function SlaBadge({ slaDueAt, status, escalationLevel }: { slaDueAt: string | null; status: string; escalationLevel: number }) {
+  if (!slaDueAt) return null
+  const resolved = ['resolved','acknowledged']
+  if (resolved.includes(status)) return null
+  if (escalationLevel > 0) return <span className="text-[9.5px] px-1.5 py-0.5 rounded-full bg-[#c084fc]/10 text-[#c084fc] font-medium">ESC {escalationLevel}</span>
+  const rem = new Date(slaDueAt).getTime() - Date.now()
+  if (rem < 0) return <span className="text-[9.5px] px-1.5 py-0.5 rounded-full bg-[#ff8a7a]/10 text-[#ff8a7a] font-medium">SLA Breached</span>
+  if (rem < 15 * 60000) return <span className="text-[9.5px] px-1.5 py-0.5 rounded-full bg-[#ff7a18]/10 text-[#ff7a18] font-medium">Due Soon</span>
+  return null
+}
+
 export default function OpsAlertPanel({ alerts, members, onRefresh }: Props) {
   const [filter,      setFilter]      = useState('active')
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
@@ -109,7 +120,10 @@ export default function OpsAlertPanel({ alerts, members, onRefresh }: Props) {
                   className="mt-0.5 w-3.5 h-3.5 accent-[#ff7a18] cursor-pointer shrink-0" />
                 <span className="text-[16px] mt-0.5">{cfg.icon}</span>
                 <div className="flex-1 min-w-0">
-                  <p className={`text-[13px] font-semibold ${cfg.text}`}>{alert.title}</p>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <p className={`text-[13px] font-semibold ${cfg.text}`}>{alert.title}</p>
+                    <SlaBadge slaDueAt={alert.sla_due_at ?? null} status={alert.status} escalationLevel={alert.escalation_level ?? 0} />
+                  </div>
                   {alert.message && <p className="text-[12px] text-[#9a9a9d] mt-0.5">{alert.message}</p>}
                   <p className="text-[10.5px] text-[#6a6a6e] mt-1 capitalize">{alert.alert_type} · {relTime(alert.created_at)}</p>
                 </div>

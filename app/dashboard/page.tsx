@@ -3,7 +3,7 @@ import Link from 'next/link'
 import PageHeader from '@/components/dashboard/PageHeader'
 import { getBusinessPlan, getBusinessUsage } from '@/lib/billing/limits'
 import { getPlanLimits } from '@/lib/billing/plans'
-import { getOpsOverview, getOpsEvents, getOpsAlerts, getOpsTasks, getSystemHealthSummary } from '@/lib/actions/ops'
+import { getOpsOverview, getOpsEvents, getOpsAlerts, getOpsTasks, getSystemHealthSummary, getSlaDashboardSummary } from '@/lib/actions/ops'
 import KpiCard                from './mission-control/KpiCard'
 import AttentionRequiredPanel from './mission-control/AttentionRequiredPanel'
 import LiveActivityFeed       from './mission-control/LiveActivityFeed'
@@ -120,12 +120,14 @@ export default async function DashboardPage() {
     { alerts },
     { tasks },
     { items: healthItems },
+    { summary: slaSummary },
   ] = await Promise.all([
     getOpsOverview(),
     getOpsEvents(8),
     getOpsAlerts(6),
     getOpsTasks(6),
     getSystemHealthSummary(),
+    getSlaDashboardSummary(),
   ])
 
   return (
@@ -176,6 +178,21 @@ export default async function DashboardPage() {
           delta={metrics.pendingApprovals > 0 ? 'needs review' : 'all clear'}
           deltaDir={metrics.pendingApprovals > 0 ? 'warn' : 'neutral'} icon="✅" />
         <KpiCard label="Agent Runs"       value={totalRuns}  sub="all time" icon="🤖" />
+        <KpiCard
+          label="SLA Breached" value={slaSummary.breached}
+          delta={slaSummary.breached > 0 ? 'needs attention' : 'all on track'}
+          deltaDir={slaSummary.breached > 0 ? 'down' : 'neutral'}
+          variant={slaSummary.breached > 0 ? 'danger' : 'default'} icon="⏱" />
+        <KpiCard
+          label="Due Soon" value={slaSummary.due_soon}
+          delta={slaSummary.due_soon > 0 ? 'within 1 hour' : 'none'}
+          deltaDir={slaSummary.due_soon > 0 ? 'warn' : 'neutral'}
+          variant={slaSummary.due_soon > 0 ? 'warn' : 'default'} icon="⏰" />
+        <KpiCard
+          label="Escalated" value={slaSummary.escalated}
+          delta={slaSummary.escalated > 0 ? 'escalated' : 'none'}
+          deltaDir={slaSummary.escalated > 0 ? 'down' : 'neutral'}
+          variant={slaSummary.escalated > 0 ? 'danger' : 'default'} icon="🔺" />
         <KpiCard
           label="Plan" value={planId.charAt(0).toUpperCase() + planId.slice(1)}
           sub={`${planLimits.ai_conversations_month.toLocaleString()} convos/mo`}

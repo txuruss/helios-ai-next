@@ -142,11 +142,88 @@ export const bulkApprovalItemsSchema = z.object({
   assigned_to: z.string().uuid().optional(),
 })
 
+// ── Phase 14 schemas ──────────────────────────────────────────────
+
+const TRIGGER_TYPE = z.enum([
+  'alert_created','task_created','approval_created','item_assigned',
+  'sla_warning','sla_breached','escalation_created','automation_failed',
+  'payment_failed','booking_failed','handoff_requested',
+])
+
+const CHANNEL        = z.enum(['email','dashboard','none'])
+const RECIPIENT_TYPE = z.enum(['owner','assigned_user','all_admins','custom_email'])
+const TARGET_TYPE    = z.enum(['event','alert','task','approval','conversation'])
+
+export const opsNotificationRuleSchema = z.object({
+  business_id:       z.string().uuid().optional(),
+  name:              z.string().min(1).max(128),
+  description:       z.string().max(2000).optional(),
+  trigger_type:      TRIGGER_TYPE,
+  source:            z.string().max(64).optional(),
+  severity:          SEVERITY.optional(),
+  priority:          PRIORITY.optional(),
+  status:            z.string().max(32).optional(),
+  channel:           CHANNEL.default('email'),
+  recipient_type:    RECIPIENT_TYPE.default('owner'),
+  recipient_user_id: z.string().uuid().optional(),
+  recipient_email:   z.string().email().max(256).optional(),
+  delay_minutes:     z.number().int().min(0).max(10080).default(0),
+  is_enabled:        z.boolean().default(true),
+  metadata:          z.record(z.unknown()).optional().default({}),
+})
+
+export const toggleNotificationRuleSchema = z.object({
+  id:         z.string().uuid(),
+  is_enabled: z.boolean(),
+})
+
+export const opsSlaPolicySchema = z.object({
+  business_id:        z.string().uuid().optional(),
+  name:               z.string().min(1).max(128),
+  target_type:        TARGET_TYPE,
+  source:             z.string().max(64).optional(),
+  severity:           SEVERITY.optional(),
+  priority:           PRIORITY.optional(),
+  response_minutes:   z.number().int().min(1).max(43200),
+  escalation_minutes: z.number().int().min(1).max(43200).optional(),
+  is_enabled:         z.boolean().default(true),
+  metadata:           z.record(z.unknown()).optional().default({}),
+})
+
+export const toggleSlaPolicySchema = z.object({
+  id:         z.string().uuid(),
+  is_enabled: z.boolean(),
+})
+
+export const runSlaCheckSchema = z.object({
+  limit: z.number().int().min(1).max(200).default(100),
+})
+
+export const escalateOpsItemSchema = z.object({
+  table: z.enum(['ops_events','ops_alerts','ops_tasks','approval_items']),
+  id:    z.string().uuid(),
+  level: z.number().int().min(1).max(5).default(1),
+})
+
+export const snoozeOpsItemSchema = z.object({
+  table:        z.enum(['ops_events','ops_alerts','ops_tasks','approval_items']),
+  id:           z.string().uuid(),
+  snooze_until: z.string().datetime(),
+})
+
+export const opsAuditQuerySchema = z.object({
+  limit:        z.number().int().min(1).max(200).default(50),
+  target_table: z.string().max(64).optional(),
+  target_id:    z.string().uuid().optional(),
+})
+
 // ── Inferred types ────────────────────────────────────────────────
 
-export type OpsEventInput    = z.infer<typeof opsEventSchema>
-export type OpsTaskInput     = z.infer<typeof opsTaskSchema>
-export type OpsAlertInput    = z.infer<typeof opsAlertSchema>
-export type ApprovalInput    = z.infer<typeof approvalItemSchema>
-export type AutomationRuleInput = z.infer<typeof opsAutomationRuleSchema>
-export type ExportOpsInput   = z.infer<typeof exportOpsSchema>
+export type OpsEventInput        = z.infer<typeof opsEventSchema>
+export type OpsTaskInput         = z.infer<typeof opsTaskSchema>
+export type OpsAlertInput        = z.infer<typeof opsAlertSchema>
+export type ApprovalInput        = z.infer<typeof approvalItemSchema>
+export type AutomationRuleInput  = z.infer<typeof opsAutomationRuleSchema>
+export type ExportOpsInput       = z.infer<typeof exportOpsSchema>
+export type NotificationRuleInput = z.infer<typeof opsNotificationRuleSchema>
+export type SlaPolicyInput       = z.infer<typeof opsSlaPolicySchema>

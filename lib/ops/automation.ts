@@ -82,10 +82,11 @@ async function applyAutomationRule(
   if (rule.action_type === 'ignore') return
 
   if (rule.action_type === 'create_alert') {
-    await db.from('ops_alerts').insert({
+    const alertSeverity = event.severity === 'critical' ? 'critical' : event.severity === 'error' ? 'error' : 'warning'
+    const { data: alertRow } = await db.from('ops_alerts').insert({
       business_id:            event.business_id,
       alert_type:             event.event_type,
-      severity:               event.severity === 'critical' ? 'critical' : event.severity === 'error' ? 'error' : 'warning',
+      severity:               alertSeverity,
       title,
       message:                desc ?? event.description,
       related_table:          event.related_table,
@@ -93,12 +94,25 @@ async function applyAutomationRule(
       created_from_event_id:  event.id,
       auto_generated:         true,
       metadata:               { rule_id: rule.id, rule_name: rule.name },
-    })
+    }).select('id').single()
+
+    const alertId = (alertRow as { id: string } | null)?.id
+    if (alertId && event.business_id) {
+      // Apply SLA (fire-and-forget)
+      void import('./sla').then(({ applySlaToOpsItem }) =>
+        applySlaToOpsItem({ table: 'ops_alerts', id: alertId, target_type: 'alert', severity: alertSeverity, source: event.source, businessId: event.business_id, db })
+      ).catch(() => undefined)
+
+      // Route notification (fire-and-forget)
+      void import('./notifications').then(({ routeOpsNotification }) =>
+        routeOpsNotification({ trigger_type: 'alert_created', businessId: event.business_id!, title, severity: alertSeverity, source: event.source, description: desc, section: 'alerts', db })
+      ).catch(() => undefined)
+    }
     return
   }
 
   if (rule.action_type === 'create_task') {
-    await db.from('ops_tasks').insert({
+    const { data: taskRow } = await db.from('ops_tasks').insert({
       business_id:            event.business_id,
       title,
       description:            desc ?? event.description,
@@ -108,12 +122,23 @@ async function applyAutomationRule(
       related_id:             event.related_id,
       created_from_event_id:  event.id,
       metadata:               { rule_id: rule.id, rule_name: rule.name },
-    })
+    }).select('id').single()
+
+    const taskId = (taskRow as { id: string } | null)?.id
+    if (taskId && event.business_id) {
+      void import('./sla').then(({ applySlaToOpsItem }) =>
+        applySlaToOpsItem({ table: 'ops_tasks', id: taskId, target_type: 'task', priority: rule.priority, source: event.source, businessId: event.business_id, db })
+      ).catch(() => undefined)
+
+      void import('./notifications').then(({ routeOpsNotification }) =>
+        routeOpsNotification({ trigger_type: 'task_created', businessId: event.business_id!, title, source: event.source, description: desc, section: 'tasks', db })
+      ).catch(() => undefined)
+    }
     return
   }
 
   if (rule.action_type === 'create_approval') {
-    await db.from('approval_items').insert({
+    const { data: approvalRow } = await db.from('approval_items').insert({
       business_id:   event.business_id,
       approval_type: event.event_type,
       title,
@@ -122,7 +147,18 @@ async function applyAutomationRule(
       source_table:  event.related_table,
       source_id:     event.related_id,
       metadata:      { rule_id: rule.id, rule_name: rule.name, event_id: event.id },
-    })
+    }).select('id').single()
+
+    const approvalId = (approvalRow as { id: string } | null)?.id
+    if (approvalId && event.business_id) {
+      void import('./sla').then(({ applySlaToOpsItem }) =>
+        applySlaToOpsItem({ table: 'approval_items', id: approvalId, target_type: 'approval', priority: rule.priority, businessId: event.business_id, db })
+      ).catch(() => undefined)
+
+      void import('./notifications').then(({ routeOpsNotification }) =>
+        routeOpsNotification({ trigger_type: 'approval_created', businessId: event.business_id!, title, source: event.source, description: desc, section: 'approvals', db })
+      ).catch(() => undefined)
+    }
   }
 }
 

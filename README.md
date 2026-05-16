@@ -704,6 +704,103 @@ Each row in Activity, Alerts, Tasks, and Approvals shows an "Assign" dropdown wh
 
 ---
 
+## Phase 14 — SLA Timers, Notification Routing & Audit Trail
+
+### SLA Policy Behavior
+
+Each ops item (alert, task, approval) gets a `sla_due_at` timestamp set automatically when created via the automation engine.
+
+**Default SLA targets** (seeded via SLA & Routing tab):
+| Target | Response time |
+|---|---|
+| Critical alert | 15 minutes |
+| Error alert | 60 minutes |
+| Warning alert | 4 hours |
+| Urgent task | 30 minutes |
+| High-priority task | 2 hours |
+| Normal task | 24 hours |
+| Approval item | 24 hours |
+| WhatsApp handoff | 10 minutes |
+| Booking failed | 30 minutes |
+| Payment failed | 60 minutes |
+
+**SLA status** (computed client-side from `sla_due_at`):
+- `on_track` — more than 1 hour remaining
+- `warning` — under 1 hour
+- `due_soon` — under 15 minutes (orange badge)
+- `breached` — past `sla_due_at` (red badge)
+- `escalated` — `escalation_level > 0` (purple badge)
+- `resolved` — item is completed/resolved
+
+**Run SLA Check Now** (Ops Center → SLA & Routing tab): Finds all unescalated items past `sla_due_at`, increments `escalation_level`, sets `escalated_at`. Also available via `POST /api/ops/sla/run`.
+
+### Notification Routing Behavior
+
+When ops events are created or items assigned, the notification engine matches against `ops_notification_rules`:
+
+**Default rules** (seeded via SLA & Routing tab):
+| Trigger | Channel | Recipient |
+|---|---|---|
+| Critical alert created | Email | Owner |
+| Payment failed | Email | Owner |
+| Booking failed | Email | Owner |
+| Handoff requested | Email | Owner |
+| Item assigned | Email | Assigned user |
+| SLA breached | Email | Assigned user |
+| Escalation created | Email | Owner |
+| Approval created | Dashboard | Owner |
+
+Notification emails use the existing Resend setup. Safe content only — no customer messages, no raw phone numbers. Each email includes the item title, severity, source, and a direct link to the relevant Ops Center tab.
+
+### Escalation Behavior
+
+After `processSlaBreaches` runs (manually or via the SLA run button):
+1. Items with `sla_due_at < now` and `escalated_at IS NULL` have `escalation_level` incremented by 1
+2. `escalated_at` is set to the current time
+3. Purple "ESC 1" badge appears on the item in the UI
+
+### Assignment Notification Behavior
+
+When `assignOpsItem` is called (from the Assign dropdown in any tab):
+1. `assigned_to` and `assigned_user_name` are updated on the item
+2. Audit trail entry is created (`assigned` action)
+3. Fire-and-forget email sent to the assigned user's profile email
+4. Email includes: item title, type, dashboard link — no message content or phone numbers
+
+### Audit Trail Behavior
+
+`ops_audit_trail` records:
+- Status changes: `status_changed.{new_status}` with before/after state
+- Assignment changes: `assigned` or `unassigned` with before/after user IDs
+- Bulk actions: `bulk.{action}` with item count
+
+Audit records are written fire-and-forget — never block the primary action.
+
+### Mission Control SLA Widgets
+
+Three new KPI cards on the Mission Control dashboard:
+- **SLA Breached** — total alerts + tasks past their SLA due time
+- **Due Soon** — items due within 1 hour
+- **Escalated** — items that have been escalated (escalation_level > 0)
+
+### SLA & Routing Tab (Ops Center 9th tab)
+
+Shows:
+- SLA Summary Cards (Breached / Due Soon / Escalated / On Track)
+- SLA Policies table with per-policy enable/disable toggle
+- Notification Rules table with per-rule enable/disable toggle
+- Recent Audit Trail (last 30 entries)
+- Buttons: Seed Default SLA Policies, Seed Default Notifications, Run SLA Check Now
+
+### Privacy and Security Notes (Phase 14)
+
+- Notification emails contain only: item title, severity, source, and a dashboard URL — no customer messages, phone numbers, or full names
+- Audit trail records only: action type, table name, item ID, before/after status or assignment — no message content or API keys
+- SLA processing errors are stored in `processing_error` (max 500 chars) — no raw payloads
+- `sla_due_at` is a computed timestamp — not a customer-facing field
+
+---
+
 ## Security Notes
 
 - `SUPABASE_SERVICE_ROLE_KEY` bypasses RLS — only use server-side in server actions or API routes.
