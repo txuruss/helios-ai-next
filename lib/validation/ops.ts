@@ -227,7 +227,13 @@ export const createSlaPolicySchema = opsSlaPolicySchema.omit({ business_id: true
 export const updateSlaPolicySchema = createSlaPolicySchema.partial().extend({ id: z.string().uuid() })
 
 export const createNotificationRuleSchema = opsNotificationRuleSchema.omit({ business_id: true, metadata: true, recipient_user_id: true })
-  .extend({ recipient_user_id: z.string().uuid().optional() })
+  .extend({
+    recipient_user_id:     z.string().uuid().optional(),
+    recipient_user_ids:    z.array(z.string().uuid()).max(10).optional(),
+    recipient_emails:      z.array(z.string().email().max(256)).max(10).optional(),
+    email_subject_template: z.string().max(256).optional(),
+    email_body_template:   z.string().max(2000).optional(),
+  })
 export const updateNotificationRuleSchema = createNotificationRuleSchema.partial().extend({ id: z.string().uuid() })
 
 export const testNotificationRuleSchema = z.object({
@@ -307,6 +313,20 @@ export const SAFE_TEMPLATE_VARS = [
 
 export const launchCheckRunSchema = z.object({
   create_tasks_for_failures: z.boolean().default(false),
+})
+
+// ── Phase 17 schemas ──────────────────────────────────────────────
+
+export const getOpsCronRunsSchema = z.object({
+  page:     z.number().int().min(1).default(1),
+  pageSize: z.number().int().min(5).max(100).default(20),
+  status:   z.string().max(32).optional(),
+  date_from: z.string().datetime().optional(),
+  date_to:   z.string().datetime().optional(),
+})
+
+export const notificationDryRunSchema = z.object({
+  rule_id: z.string().uuid(),
 })
 
 // ── Inferred types ────────────────────────────────────────────────

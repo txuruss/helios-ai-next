@@ -249,12 +249,27 @@ export async function getOpsEvents(params: OpsSearchParams = {}): Promise<Pagina
     if (params.source)   query = query.eq('source', params.source)
     if (params.date_from) query = query.gte('created_at', params.date_from)
     if (params.date_to)   query = query.lte('created_at', params.date_to)
-    if (params.search)   query = query.ilike('title', `%${params.search}%`)
+    // FTS: use textSearch if search >= 3 chars and search_vector column exists; else ilike
+    if (params.search && params.search.length >= 3) {
+      query = (query as ReturnType<typeof db.from>).textSearch('search_vector', params.search.trim(), { type: 'websearch', config: 'english' }) as typeof query
+    } else if (params.search) {
+      query = query.ilike('title', `%${params.search}%`)
+    }
     if (!params.include_snoozed) {
       query = query.or(`snoozed_until.is.null,snoozed_until.lt.${new Date().toISOString()}`)
     }
 
-    const { data, count, error } = await query
+    let { data, count, error } = await query
+    // If FTS fails (column not yet migrated), fall back to ilike
+    if (error && params.search && params.search.length >= 3) {
+      let fallbackQuery = db.from('ops_events').select('*', { count: 'exact' })
+        .eq('business_id', auth.businessId)
+        .ilike('title', `%${params.search}%`)
+        .order('created_at', { ascending: false }).range(from, to)
+      if (params.status)   fallbackQuery = fallbackQuery.eq('status', params.status)
+      const fallback = await fallbackQuery
+      data = fallback.data; count = fallback.count; error = fallback.error
+    }
     if (error) throw error
     const total = count ?? 0
     return { rows: (data ?? []) as OpsEvent[], total_count: total, page: pg, pageSize: ps, has_next: from + ps < total, has_previous: pg > 1, error: null }
@@ -285,12 +300,22 @@ export async function getOpsTasks(params: OpsSearchParams = {}): Promise<Paginat
     if (params.priority) query = query.eq('priority', params.priority)
     if (params.date_from) query = query.gte('created_at', params.date_from)
     if (params.date_to)   query = query.lte('created_at', params.date_to)
-    if (params.search)   query = query.ilike('title', `%${params.search}%`)
+    if (params.search && params.search.length >= 3) {
+      query = (query as ReturnType<typeof db.from>).textSearch('search_vector', params.search.trim(), { type: 'websearch', config: 'english' }) as typeof query
+    } else if (params.search) {
+      query = query.ilike('title', `%${params.search}%`)
+    }
     if (!params.include_snoozed) {
       query = query.or(`snoozed_until.is.null,snoozed_until.lt.${new Date().toISOString()}`)
     }
 
-    const { data, count, error } = await query
+    let { data, count, error } = await query
+    if (error && params.search && params.search.length >= 3) {
+      const fb = await db.from('ops_tasks').select('*', { count: 'exact' })
+        .eq('business_id', auth.businessId).ilike('title', `%${params.search}%`)
+        .order('created_at', { ascending: false }).range(from, to)
+      data = fb.data; count = fb.count; error = fb.error
+    }
     if (error) throw error
     const total = count ?? 0
     return { rows: (data ?? []) as OpsTask[], total_count: total, page: pg, pageSize: ps, has_next: from + ps < total, has_previous: pg > 1, error: null }
@@ -321,12 +346,22 @@ export async function getOpsAlerts(params: OpsSearchParams = {}): Promise<Pagina
     if (params.severity) query = query.eq('severity', params.severity)
     if (params.date_from) query = query.gte('created_at', params.date_from)
     if (params.date_to)   query = query.lte('created_at', params.date_to)
-    if (params.search)   query = query.ilike('title', `%${params.search}%`)
+    if (params.search && params.search.length >= 3) {
+      query = (query as ReturnType<typeof db.from>).textSearch('search_vector', params.search.trim(), { type: 'websearch', config: 'english' }) as typeof query
+    } else if (params.search) {
+      query = query.ilike('title', `%${params.search}%`)
+    }
     if (!params.include_snoozed) {
       query = query.or(`snoozed_until.is.null,snoozed_until.lt.${new Date().toISOString()}`)
     }
 
-    const { data, count, error } = await query
+    let { data, count, error } = await query
+    if (error && params.search && params.search.length >= 3) {
+      const fb = await db.from('ops_alerts').select('*', { count: 'exact' })
+        .eq('business_id', auth.businessId).ilike('title', `%${params.search}%`)
+        .order('created_at', { ascending: false }).range(from, to)
+      data = fb.data; count = fb.count; error = fb.error
+    }
     if (error) throw error
     const total = count ?? 0
     return { rows: (data ?? []) as OpsAlert[], total_count: total, page: pg, pageSize: ps, has_next: from + ps < total, has_previous: pg > 1, error: null }
@@ -357,12 +392,22 @@ export async function getApprovalItems(params: OpsSearchParams = {}): Promise<Pa
     if (params.priority) query = query.eq('priority', params.priority)
     if (params.date_from) query = query.gte('created_at', params.date_from)
     if (params.date_to)   query = query.lte('created_at', params.date_to)
-    if (params.search)   query = query.ilike('title', `%${params.search}%`)
+    if (params.search && params.search.length >= 3) {
+      query = (query as ReturnType<typeof db.from>).textSearch('search_vector', params.search.trim(), { type: 'websearch', config: 'english' }) as typeof query
+    } else if (params.search) {
+      query = query.ilike('title', `%${params.search}%`)
+    }
     if (!params.include_snoozed) {
       query = query.or(`snoozed_until.is.null,snoozed_until.lt.${new Date().toISOString()}`)
     }
 
-    const { data, count, error } = await query
+    let { data, count, error } = await query
+    if (error && params.search && params.search.length >= 3) {
+      const fb = await db.from('approval_items').select('*', { count: 'exact' })
+        .eq('business_id', auth.businessId).ilike('title', `%${params.search}%`)
+        .order('created_at', { ascending: false }).range(from, to)
+      data = fb.data; count = fb.count; error = fb.error
+    }
     if (error) throw error
     const total = count ?? 0
     return { rows: (data ?? []) as ApprovalItem[], total_count: total, page: pg, pageSize: ps, has_next: from + ps < total, has_previous: pg > 1, error: null }
@@ -1612,4 +1657,153 @@ export async function bulkAssignOpsItems(
     captureApiError(err, { route: 'actions/ops', error_type: 'bulk_assign_error', business_id: auth.businessId })
     return { updated: 0, error: 'Bulk assignment failed.' }
   }
+}
+
+// ── Phase 17: Ops cron run history ────────────────────────────────
+
+export interface OpsCronRun {
+  id:                  string
+  business_id:         string | null
+  job_name:            string
+  status:              string
+  checked_count:       number
+  breached_count:      number
+  escalated_count:     number
+  notified_count:      number
+  failed_count:        number | null
+  skipped_count:       number | null
+  error_message:       string | null
+  duration_ms:         number | null
+  trigger_source:      string | null
+  cron_secret_type:    string | null
+  businesses_checked:  number
+  metadata:            Record<string, unknown>
+  started_at:          string
+  completed_at:        string | null
+}
+
+export async function getOpsCronRuns(params: {
+  page?:     number
+  pageSize?: number
+  status?:   string
+} = {}): Promise<{
+  rows:        OpsCronRun[]
+  total_count: number
+  error:       string | null
+}> {
+  const auth = await requireAuth()
+  if (!auth.ok) return { rows: [], total_count: 0, error: auth.error }
+  const db  = createServiceRoleClient()
+  const ps  = params.pageSize ?? 20
+  const pg  = params.page ?? 1
+  const from = (pg - 1) * ps
+  const to   = from + ps - 1
+
+  try {
+    let query = db.from('ops_cron_runs').select('*', { count: 'exact' })
+      .or(`business_id.eq.${auth.businessId},business_id.is.null`)
+      .order('started_at', { ascending: false })
+      .range(from, to)
+
+    if (params.status) query = query.eq('status', params.status)
+
+    const { data, count, error } = await query
+    if (error) throw error
+    return { rows: (data ?? []) as OpsCronRun[], total_count: count ?? 0, error: null }
+  } catch (err) {
+    captureApiError(err, { route: 'actions/ops', error_type: 'cron_history_error', business_id: auth.businessId })
+    return { rows: [], total_count: 0, error: 'Could not load cron history.' }
+  }
+}
+
+// ── Phase 17: Notification rule CRUD update for new fields ────────
+
+export async function updateNotificationRuleTemplates(
+  id:      string,
+  subject: string | null,
+  body:    string | null,
+): Promise<{ success?: string; error?: string }> {
+  const auth = await requireAuth()
+  if (!auth.ok) return { error: auth.error }
+
+  // Validate templates server-side
+  const { validateNotificationTemplate } = await import('@/lib/ops/notifications')
+  if (subject) {
+    const err = validateNotificationTemplate(subject, 256)
+    if (err) return { error: `Subject: ${err}` }
+  }
+  if (body) {
+    const err = validateNotificationTemplate(body, 2000)
+    if (err) return { error: `Body: ${err}` }
+  }
+
+  const db = createServiceRoleClient()
+  try {
+    await db.from('ops_notification_rules').update({
+      email_subject_template: subject ?? null,
+      email_body_template:    body    ?? null,
+      updated_by:             auth.userId,
+    }).eq('id', id).eq('business_id', auth.businessId)
+    return { success: 'Templates saved.' }
+  } catch (err) {
+    captureApiError(err, { route: 'actions/ops', error_type: 'template_save_error', business_id: auth.businessId })
+    return { error: 'Could not save templates.' }
+  }
+}
+
+export async function updateNotificationRuleRecipients(
+  id:              string,
+  recipientUserIds: string[],
+  recipientEmails: string[],
+): Promise<{ success?: string; error?: string }> {
+  const auth = await requireAuth()
+  if (!auth.ok) return { error: auth.error }
+
+  if (recipientUserIds.length + recipientEmails.length > 10) {
+    return { error: 'Maximum 10 recipients allowed.' }
+  }
+
+  // Validate all user IDs are business members
+  if (recipientUserIds.length > 0) {
+    const db = createServiceRoleClient()
+    const { data: members } = await db
+      .from('business_members').select('user_id')
+      .eq('business_id', auth.businessId)
+      .in('user_id', recipientUserIds)
+    const validIds = new Set(((members ?? []) as DbRow[]).map((m) => m.user_id as string))
+    const invalid = recipientUserIds.filter((id) => !validIds.has(id))
+    if (invalid.length > 0) return { error: 'Some selected users are not business members.' }
+  }
+
+  const db = createServiceRoleClient()
+  try {
+    await db.from('ops_notification_rules').update({
+      recipient_user_ids: recipientUserIds,
+      recipient_emails:   recipientEmails,
+      updated_by:         auth.userId,
+    }).eq('id', id).eq('business_id', auth.businessId)
+    return { success: 'Recipients updated.' }
+  } catch (err) {
+    captureApiError(err, { route: 'actions/ops', error_type: 'recipients_save_error', business_id: auth.businessId })
+    return { error: 'Could not update recipients.' }
+  }
+}
+
+// ── Phase 17: Mark notification as dry-run ────────────────────────
+
+export async function markNotificationDryRun(
+  ruleId: string,
+  status: 'success' | 'failed',
+  error?: string,
+): Promise<void> {
+  const auth = await requireAuth()
+  if (!auth.ok) return
+  const db = createServiceRoleClient()
+  try {
+    await db.from('ops_notification_rules').update({
+      last_dry_run_at:     new Date().toISOString(),
+      last_dry_run_status: status,
+      last_dry_run_error:  error ?? null,
+    }).eq('id', ruleId).eq('business_id', auth.businessId)
+  } catch { /* silent */ }
 }

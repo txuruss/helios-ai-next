@@ -4,7 +4,8 @@ import { useState, useTransition } from 'react'
 import { toggleNotificationRule, deleteNotificationRule } from '@/lib/actions/ops'
 import type { NotificationRule, BusinessMember } from '@/lib/actions/ops'
 import { capture } from '@/lib/analytics/posthog'
-import NotificationRuleDrawer from './NotificationRuleDrawer'
+import NotificationRuleDrawer    from './NotificationRuleDrawer'
+import NotificationPreviewDrawer from './NotificationPreviewDrawer'
 
 interface Props {
   rules:     NotificationRule[]
@@ -27,9 +28,10 @@ function relTime(ts: string | null): string {
 }
 
 export default function NotificationRulesTable({ rules, members, onRefresh }: Props) {
-  const [drawerOpen, setDrawerOpen] = useState(false)
-  const [editRule,   setEditRule]   = useState<NotificationRule | null>(null)
-  const [testMsg,    setTestMsg]    = useState<Record<string, string>>({})
+  const [drawerOpen,   setDrawerOpen]   = useState(false)
+  const [editRule,     setEditRule]     = useState<NotificationRule | null>(null)
+  const [previewRule,  setPreviewRule]  = useState<NotificationRule | null>(null)
+  const [testMsg,      setTestMsg]      = useState<Record<string, string>>({})
   const [error, setError] = useState<string | null>(null)
 
   const [togglePending, startToggle] = useTransition()
@@ -130,10 +132,16 @@ export default function NotificationRulesTable({ rules, members, onRefresh }: Pr
                     </div>
                     <div className="flex gap-1.5 shrink-0">
                       {r.channel === 'email' && (
-                        <button onClick={() => handleTest(r.id)} disabled={testPending}
-                          className="h-7 px-2.5 rounded-lg text-[11px] border border-[#3b9eff]/30 text-[#3b9eff] hover:bg-[#3b9eff]/10 transition-all disabled:opacity-40">
-                          Test
-                        </button>
+                        <>
+                          <button onClick={() => { capture('ops_notification_preview_opened', {}); setPreviewRule(r) }}
+                            className="h-7 px-2.5 rounded-lg text-[11px] border border-[#9a9a9d]/30 text-[#9a9a9d] hover:bg-white/[0.06] transition-all">
+                            Preview
+                          </button>
+                          <button onClick={() => handleTest(r.id)} disabled={testPending}
+                            className="h-7 px-2.5 rounded-lg text-[11px] border border-[#3b9eff]/30 text-[#3b9eff] hover:bg-[#3b9eff]/10 transition-all disabled:opacity-40">
+                            Test
+                          </button>
+                        </>
                       )}
                       <button onClick={() => openEdit(r)}
                         className="h-7 px-2.5 rounded-lg text-[11px] border border-white/[0.10] text-[#9a9a9d] hover:bg-white/[0.06] transition-all">
@@ -167,6 +175,15 @@ export default function NotificationRulesTable({ rules, members, onRefresh }: Pr
 
       {drawerOpen && (
         <NotificationRuleDrawer rule={editRule} members={members} onClose={closeDrawer} onSaved={() => { onRefresh(); closeDrawer() }} />
+      )}
+
+      {previewRule && (
+        <NotificationPreviewDrawer
+          ruleId={previewRule.id}
+          ruleName={previewRule.name}
+          triggerType={previewRule.trigger_type}
+          onClose={() => setPreviewRule(null)}
+        />
       )}
     </div>
   )

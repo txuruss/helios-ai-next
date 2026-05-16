@@ -14,10 +14,11 @@ import type {
   SlaPolicy, NotificationRule, AuditTrailRow, SlaSummary, BusinessMember,
 } from '@/lib/actions/ops'
 import { capture } from '@/lib/analytics/posthog'
-import SlaSummaryCards      from './SlaSummaryCards'
-import SlaPolicyTable       from './SlaPolicyTable'
+import SlaSummaryCards       from './SlaSummaryCards'
+import SlaPolicyTable        from './SlaPolicyTable'
 import NotificationRulesTable from './NotificationRulesTable'
-import OpsAuditTrail        from './OpsAuditTrail'
+import OpsAuditTrail         from './OpsAuditTrail'
+import OpsCronHistoryPanel   from './OpsCronHistoryPanel'
 
 interface Props {
   initialPolicies:  SlaPolicy[]
@@ -138,6 +139,7 @@ export default function SlaRoutingPanel({
       <div>
         <h3 className="text-[12px] font-semibold uppercase tracking-[0.12em] text-[#6a6a6e] mb-3">Recent Audit Trail</h3>
         <OpsAuditTrail initialRows={audit} initialTotal={audit.length} />
+        <OpsCronHistoryPanel />
       </div>
     </div>
   )

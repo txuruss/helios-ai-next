@@ -1013,6 +1013,110 @@ In the Activity tab, events with `automation_status = 'failed'` show a **Retry**
 
 ---
 
+## Phase 17 — Notification UI, FTS Search & Cron Hardening
+
+### Notification Preview Drawer
+
+The **Preview** button appears on every email-channel notification rule in the Notification Rules table and inside the rule edit drawer.
+
+Clicking Preview opens a drawer that:
+1. Calls `POST /api/ops/notifications/preview` with the rule ID
+2. Shows: subject preview, body text, recipients (masked), warning
+3. Stores a row in `ops_notification_previews`
+4. **Never sends a real email**
+
+The **Dry Run** button inside the drawer does the same plus records `last_dry_run_at` and `last_dry_run_status` on the rule.
+
+The **Test Email** button (separate, in the table row) sends a real email only when explicitly clicked.
+
+### Email Template Editor
+
+In the notification rule form (click Edit on a rule), expand **Email Template**:
+- `email_subject_template` — max 256 chars, uses `{{variable}}` syntax
+- `email_body_template` — max 2000 chars, plain text with variables
+
+**Allowed safe variables:**
+`{{title}}`, `{{severity}}`, `{{source}}`, `{{status}}`, `{{priority}}`, `{{dashboard_url}}`, `{{business_name}}`, `{{created_at}}`, `{{sla_due_at}}`
+
+Unknown variables are rejected with an error. Customer data variables (name, phone, email, message content) are never allowed. Leave templates empty to use the system default.
+
+### Multi-Recipient UI
+
+The notification rule form now shows a **Recipient Mode** dropdown:
+- **Owner** — business owner email
+- **Assigned User** — whoever the item is assigned to
+- **All Admins** — (future)
+- **Custom Email** — single email address
+- **Selected Users** — multi-select checkboxes from team members (max 10)
+- **Multiple Emails** — repeater input for custom emails (max 10)
+
+Selected user IDs are validated as business members server-side. All recipients are de-duplicated. Maximum 10 total.
+
+### Custom Snooze Picker
+
+The 💤 snooze button on every ops item now opens a `SnoozePicker` with:
+- **Presets**: 1 hour, 4 hours, 24 hours, 7 days
+- **Custom**: date + time inputs + optional reason field
+- Validation: past dates rejected, > 30 days rejected
+
+### CRON_SECRET Production Setup
+
+Phase 17 upgrades the cron endpoint to accept either `CRON_SECRET` (preferred) or `OPS_CRON_SECRET` (fallback).
+
+**Vercel native cron** (recommended):
+```
+# Add to Vercel environment variables:
+CRON_SECRET=your-strong-random-secret
+
+# vercel.json already configured:
+{ "crons": [{ "path": "/api/cron/ops/sla", "schedule": "*/10 * * * *" }] }
+```
+Vercel automatically sends `Authorization: Bearer ${CRON_SECRET}` from its cron system.
+
+**External scheduler** (GitHub Actions, Upstash, etc.):
+```bash
+curl -X POST https://your-domain.com/api/cron/ops/sla \
+  -H "Authorization: Bearer ${OPS_CRON_SECRET}"
+```
+
+**Local testing:**
+```bash
+# .env.local:
+CRON_SECRET=test-secret   # or OPS_CRON_SECRET=test-secret
+
+curl -X POST http://localhost:3001/api/cron/ops/sla \
+  -H "Authorization: Bearer test-secret"
+```
+
+The cron response now includes: `duration_ms`, `trigger_source`, `secret_type`, `skipped_count`, `businesses_checked`.
+
+### Ops Cron History Panel
+
+Located in the **SLA & Routing** tab, below the Audit Trail. Shows the last 15 cron runs with:
+- Status (completed/failed/started)
+- Checked/breached/escalated/failed counts
+- Duration (ms/s)
+- Trigger source (vercel_cron/external_scheduler/manual_dashboard)
+- CRON_SECRET type used
+- Started at (relative time)
+
+### Full-Text Search with to_tsvector
+
+After applying `db/add-ops-phase-17-fields.sql`, the ops tables get `search_vector` tsvector columns maintained by triggers. The search in Activity, Alerts, Tasks, and Approvals tabs uses:
+- `textSearch('search_vector', query, { type: 'websearch' })` when search is ≥ 3 chars
+- Falls back to `ilike` if the column is unavailable (graceful degradation)
+- `ilike` is used for < 3 char searches
+
+### Privacy and Security Notes (Phase 17)
+
+- Template variables validated against allowlist — unknown vars rejected server-side, `[removed]` in output
+- Preview drawer stores only safe subject + body text — no customer data
+- Cron logs record `cron_secret_type` (CRON_SECRET vs OPS_CRON_SECRET) — never the actual secret value
+- Multi-recipient user IDs validated as business members before saving
+- FTS search_vector built from safe columns only (title, description, message, type fields — never metadata)
+
+---
+
 ## Security Notes
 
 - `SUPABASE_SERVICE_ROLE_KEY` bypasses RLS — only use server-side in server actions or API routes.

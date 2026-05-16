@@ -356,6 +356,25 @@ export async function generateNotificationPreview(params: {
   }
 }
 
+// ── Template validation helpers ───────────────────────────────────
+
+export function validateNotificationTemplate(template: string, maxLength = 2000): string | null {
+  if (template.length > maxLength) return `Template exceeds ${maxLength} character limit.`
+  if (!isTemplateSafe(template)) {
+    const found = (template.match(/\{\{[^}]+\}\}/g) ?? []).filter((v) => !SAFE_VARS.includes(v as typeof SAFE_VARS[number]))
+    return `Unsafe template variables: ${found.join(', ')}. Allowed: ${SAFE_VARS.join(', ')}`
+  }
+  return null
+}
+
+export function extractTemplateVariables(template: string): string[] {
+  return (template.match(/\{\{[^}]+\}\}/g) ?? []).filter((v) => SAFE_VARS.includes(v as typeof SAFE_VARS[number]))
+}
+
+export function applySafeTemplateVariables(template: string, vars: Record<string, string>): string {
+  return applyTemplate(template, vars)
+}
+
 export { isTemplateSafe, applyTemplate, SAFE_VARS }
 
 // NotificationRule is the primary export of this module
