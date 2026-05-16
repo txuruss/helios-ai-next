@@ -801,6 +801,112 @@ Shows:
 
 ---
 
+## Phase 15 — Ops Center: Rule Editing, Search, Export & Cron
+
+### Custom Automation Rule Editing
+
+The Automation Rules tab (8th tab in Ops Center) now supports full CRUD:
+- **Create Rule** button opens a slide-in drawer with the full rule form
+- **Edit** button on each rule opens the same drawer pre-filled
+- **Copy** button duplicates the rule with "Copy of" prefix and disabled by default
+- **Del** button soft-deletes the rule (`deleted_at` set, never hard deleted)
+- **Toggle** switches enabled/disabled without deletion
+
+Form fields: name, description, trigger source, trigger event type (supports `*wildcard*`), trigger severity, action type, action title template, action description template, priority, enabled toggle.
+
+### SLA Policy Editing
+
+SLA & Routing tab now supports full CRUD for SLA policies:
+- **Create Policy** / **Edit** / **Delete** via drawer forms
+- Response minutes and escalation minutes are numeric inputs with validation
+- Soft delete: policies are hidden via `deleted_at`, not permanently removed
+
+### Notification Rule Editing and Test Button
+
+Notification rules in SLA & Routing tab support full CRUD plus a **Test** button:
+- **Test** button on any email-channel rule sends a safe test email to the configured recipient
+- Test email body: "This is a test notification from Helios AI Ops Center." — no customer content
+- `last_tested_at` and `last_test_status` updated after each test
+- API route: `POST /api/ops/notifications/test`
+- Fails safely when `RESEND_API_KEY` is not configured
+
+### Export History Behavior
+
+The Activity tab now shows an **Export History** panel below the event feed:
+- Lists the last 10 exports from `ops_exports` (type, format, row count, time)
+- **↓ Re-export** button re-triggers the same export with stored filters
+- Download is triggered in-browser via blob URL
+
+### Search and Pagination Behavior
+
+All 5 Ops Center data tabs (Activity, Alerts, Tasks, Approvals, Audit Trail) now have:
+- **Search bar** with real-time client-side filtering on title/description/message
+- **Pagination**: 25 items per page, Previous/Next controls, "X–Y of N" count display
+- Search resets to page 1 automatically
+
+### Cron-Ready SLA Endpoint
+
+**`POST /api/cron/ops/sla`** processes SLA breaches across all active businesses:
+
+```bash
+# Trigger from Vercel Cron or any scheduler:
+curl -X POST https://your-domain.com/api/cron/ops/sla \
+  -H "Authorization: Bearer ${OPS_CRON_SECRET}"
+```
+
+**`GET /api/cron/ops/sla`** — health check (does not run processing).
+
+**Vercel Cron setup** (add to `vercel.json`):
+```json
+{
+  "crons": [{
+    "path": "/api/cron/ops/sla",
+    "schedule": "*/10 * * * *"
+  }]
+}
+```
+
+**Required env var:**
+```
+OPS_CRON_SECRET=your-random-secret-string
+```
+- Never prefix with `NEXT_PUBLIC_`
+- If missing in production, the route returns `503 Not configured`
+- In development without the secret, the route allows through with a warning
+
+Each cron run creates an `ops_cron_runs` row with: job name, status, checked/breached/escalated counts, started/completed timestamps.
+
+### Bulk Team Assignment Behavior
+
+All 4 Ops Center tabs now support assigning multiple items to a specific team member:
+1. Select checkboxes on rows
+2. Choose a team member from the "Assign" dropdown in the bulk action bar
+3. Click **Assign** — `assigned_to` and `assigned_user_name` updated on all selected items
+4. Assignee is validated as a `business_members` record server-side
+5. Fire-and-forget email notification sent to the assignee
+
+### Audit Trail Behavior (Phase 15)
+
+New audit events recorded:
+- `automation_rule_created/updated/deleted`
+- `sla_policy_created/updated/deleted`
+- `notification_rule_created/updated/deleted`
+- `notification_test_sent`
+- `bulk.assigned` / `bulk.unassigned`
+- `cron_sla_run`
+
+Audit trail supports search and pagination (20 items/page). Click ▼ on any row to expand and see before/after state diff.
+
+### Privacy and Security Notes (Phase 15)
+
+- Test notification emails contain only static safe content — no customer data, no phone numbers
+- Cron endpoint requires `Authorization: Bearer ${OPS_CRON_SECRET}` — rejected with 401 if missing or wrong
+- Bulk assignment validates assignee is a `business_members` record (not just any UUID)
+- Soft delete preserves all rule/policy history — no data is permanently deleted
+- Export history shows only safe metadata — no exported file content stored in DB
+
+---
+
 ## Security Notes
 
 - `SUPABASE_SERVICE_ROLE_KEY` bypasses RLS — only use server-side in server actions or API routes.

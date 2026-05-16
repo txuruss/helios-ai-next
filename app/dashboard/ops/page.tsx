@@ -2,7 +2,7 @@ import {
   getOpsOverview, getOpsEvents, getOpsTasks, getOpsAlerts,
   getApprovalItems, getSystemHealthSummary, getClientSystemsSummary,
   getAutomationRules, getSlaPolicies, getNotificationRules,
-  getOpsAuditTrailAction, getSlaDashboardSummary,
+  getOpsAuditTrailAction, getSlaDashboardSummary, getOpsExports,
 } from '@/lib/actions/ops'
 import { createClient, createServiceRoleClient } from '@/lib/supabase/server'
 import { getBusinessPlan } from '@/lib/billing/limits'
@@ -51,6 +51,7 @@ export default async function OpsCenterPage({
     { rules: notifRules },
     { rows: auditRows },
     { summary: slaSummary },
+    { exports: opsExports },
   ] = await Promise.all([
     getOpsOverview(),
     getOpsEvents(50),
@@ -64,6 +65,7 @@ export default async function OpsCenterPage({
     getNotificationRules(),
     getOpsAuditTrailAction(30),
     getSlaDashboardSummary(),
+    getOpsExports(20),
   ])
 
   return (
@@ -81,6 +83,7 @@ export default async function OpsCenterPage({
       initialNotifRules={notifRules}
       initialAudit={auditRows}
       initialSlaSummary={slaSummary}
+      initialExports={opsExports}
       businessId={businessId}
       plan={plan}
     />

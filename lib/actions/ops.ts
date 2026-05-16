@@ -544,6 +544,7 @@ export async function getAutomationRules(): Promise<{
       .from('ops_automation_rules')
       .select('*')
       .or(`business_id.eq.${auth.businessId},business_id.is.null`)
+      .is('deleted_at', null)
       .order('created_at', { ascending: true })
     if (error) throw error
     return { rules: (data ?? []) as AutomationRule[], error: null }
@@ -803,6 +804,7 @@ export async function getSlaPolicies(): Promise<{
     const { data, error } = await db
       .from('ops_sla_policies').select('*')
       .or(`business_id.eq.${auth.businessId},business_id.is.null`)
+      .is('deleted_at', null)
       .order('created_at', { ascending: true })
     if (error) throw error
     return { policies: (data ?? []) as SlaPolicy[], error: null }
@@ -850,6 +852,7 @@ export async function getNotificationRules(): Promise<{
     const { data, error } = await db
       .from('ops_notification_rules').select('*')
       .or(`business_id.eq.${auth.businessId},business_id.is.null`)
+      .is('deleted_at', null)
       .order('created_at', { ascending: true })
     if (error) throw error
     return { rules: (data ?? []) as NotificationRule[], error: null }
@@ -935,5 +938,354 @@ export async function getSlaDashboardSummary(): Promise<{
   } catch (err) {
     captureApiError(err, { route: 'actions/ops', error_type: 'sla_summary_error', business_id: auth.businessId })
     return { summary: { breached: 0, due_soon: 0, escalated: 0, on_track: 0 }, error: null }
+  }
+}
+
+// ── Phase 15: Automation Rule CRUD ────────────────────────────────
+
+export async function createAutomationRule(
+  data: import('@/lib/validation/ops').CreateAutomationRuleInput,
+): Promise<{ id?: string; error?: string }> {
+  const auth = await requireAuth()
+  if (!auth.ok) return { error: auth.error }
+  const db = createServiceRoleClient()
+  try {
+    const { data: row, error } = await db.from('ops_automation_rules').insert({
+      business_id:                auth.businessId,
+      created_by:                 auth.userId,
+      name:                       data.name,
+      description:                data.description ?? null,
+      trigger_source:             data.trigger_source ?? null,
+      trigger_event_type:         data.trigger_event_type ?? null,
+      trigger_severity:           data.trigger_severity ?? null,
+      action_type:                data.action_type,
+      action_title_template:      data.action_title_template,
+      action_description_template: data.action_description_template ?? null,
+      priority:                   data.priority ?? 'normal',
+      is_enabled:                 data.is_enabled ?? true,
+      metadata:                   {},
+    }).select('id').single()
+    if (error) throw error
+    const id = (row as { id: string }).id
+    void import('@/lib/ops/audit').then(({ createOpsAuditLog }) =>
+      createOpsAuditLog({ businessId: auth.businessId, actorUserId: auth.userId, action: 'automation_rule_created', targetTable: 'ops_automation_rules', targetId: id, afterState: { name: data.name } }, db)
+    ).catch(() => undefined)
+    return { id }
+  } catch (err) {
+    captureApiError(err, { route: 'actions/ops', error_type: 'create_rule_error', business_id: auth.businessId })
+    return { error: 'Could not create automation rule.' }
+  }
+}
+
+export async function updateAutomationRule(
+  id: string,
+  data: Partial<import('@/lib/validation/ops').CreateAutomationRuleInput>,
+): Promise<{ success?: string; error?: string }> {
+  const auth = await requireAuth()
+  if (!auth.ok) return { error: auth.error }
+  const db = createServiceRoleClient()
+  try {
+    const { error } = await db.from('ops_automation_rules')
+      .update({ ...data, updated_by: auth.userId })
+      .eq('id', id).eq('business_id', auth.businessId).is('deleted_at', null)
+    if (error) throw error
+    void import('@/lib/ops/audit').then(({ createOpsAuditLog }) =>
+      createOpsAuditLog({ businessId: auth.businessId, actorUserId: auth.userId, action: 'automation_rule_updated', targetTable: 'ops_automation_rules', targetId: id }, db)
+    ).catch(() => undefined)
+    return { success: 'Rule updated.' }
+  } catch (err) {
+    captureApiError(err, { route: 'actions/ops', error_type: 'update_rule_error', business_id: auth.businessId })
+    return { error: 'Could not update automation rule.' }
+  }
+}
+
+export async function deleteAutomationRule(id: string): Promise<{ success?: string; error?: string }> {
+  const auth = await requireAuth()
+  if (!auth.ok) return { error: auth.error }
+  const db = createServiceRoleClient()
+  try {
+    await db.from('ops_automation_rules')
+      .update({ deleted_at: new Date().toISOString(), updated_by: auth.userId })
+      .eq('id', id).eq('business_id', auth.businessId)
+    void import('@/lib/ops/audit').then(({ createOpsAuditLog }) =>
+      createOpsAuditLog({ businessId: auth.businessId, actorUserId: auth.userId, action: 'automation_rule_deleted', targetTable: 'ops_automation_rules', targetId: id }, db)
+    ).catch(() => undefined)
+    return { success: 'Rule deleted.' }
+  } catch (err) {
+    captureApiError(err, { route: 'actions/ops', error_type: 'delete_rule_error', business_id: auth.businessId })
+    return { error: 'Could not delete automation rule.' }
+  }
+}
+
+export async function duplicateAutomationRule(id: string): Promise<{ newId?: string; error?: string }> {
+  const auth = await requireAuth()
+  if (!auth.ok) return { error: auth.error }
+  const db = createServiceRoleClient()
+  try {
+    const { data: orig } = await db.from('ops_automation_rules').select('*').eq('id', id).eq('business_id', auth.businessId).single()
+    if (!orig) return { error: 'Rule not found.' }
+    const r = orig as DbRow
+    const { data: row, error } = await db.from('ops_automation_rules').insert({
+      business_id:                auth.businessId,
+      created_by:                 auth.userId,
+      name:                       `Copy of ${r.name as string}`,
+      description:                r.description,
+      trigger_source:             r.trigger_source,
+      trigger_event_type:         r.trigger_event_type,
+      trigger_severity:           r.trigger_severity,
+      action_type:                r.action_type,
+      action_title_template:      r.action_title_template,
+      action_description_template: r.action_description_template,
+      priority:                   r.priority,
+      is_enabled:                 false,
+      metadata:                   {},
+    }).select('id').single()
+    if (error) throw error
+    return { newId: (row as { id: string }).id }
+  } catch (err) {
+    captureApiError(err, { route: 'actions/ops', error_type: 'duplicate_rule_error', business_id: auth.businessId })
+    return { error: 'Could not duplicate rule.' }
+  }
+}
+
+// ── Phase 15: SLA Policy CRUD ─────────────────────────────────────
+
+export async function createSlaPolicy(
+  data: import('@/lib/validation/ops').CreateSlaPolicyInput,
+): Promise<{ id?: string; error?: string }> {
+  const auth = await requireAuth()
+  if (!auth.ok) return { error: auth.error }
+  const db = createServiceRoleClient()
+  try {
+    const { data: row, error } = await db.from('ops_sla_policies').insert({
+      business_id:        auth.businessId,
+      created_by:         auth.userId,
+      name:               data.name,
+      target_type:        data.target_type,
+      source:             data.source ?? null,
+      severity:           data.severity ?? null,
+      priority:           data.priority ?? null,
+      response_minutes:   data.response_minutes,
+      escalation_minutes: data.escalation_minutes ?? null,
+      is_enabled:         data.is_enabled ?? true,
+      metadata:           {},
+    }).select('id').single()
+    if (error) throw error
+    const id = (row as { id: string }).id
+    void import('@/lib/ops/audit').then(({ createOpsAuditLog }) =>
+      createOpsAuditLog({ businessId: auth.businessId, actorUserId: auth.userId, action: 'sla_policy_created', targetTable: 'ops_sla_policies', targetId: id, afterState: { name: data.name } }, db)
+    ).catch(() => undefined)
+    return { id }
+  } catch (err) {
+    captureApiError(err, { route: 'actions/ops', error_type: 'create_sla_error', business_id: auth.businessId })
+    return { error: 'Could not create SLA policy.' }
+  }
+}
+
+export async function updateSlaPolicy(
+  id: string,
+  data: Partial<import('@/lib/validation/ops').CreateSlaPolicyInput>,
+): Promise<{ success?: string; error?: string }> {
+  const auth = await requireAuth()
+  if (!auth.ok) return { error: auth.error }
+  const db = createServiceRoleClient()
+  try {
+    await db.from('ops_sla_policies')
+      .update({ ...data, updated_by: auth.userId })
+      .eq('id', id).eq('business_id', auth.businessId).is('deleted_at', null)
+    void import('@/lib/ops/audit').then(({ createOpsAuditLog }) =>
+      createOpsAuditLog({ businessId: auth.businessId, actorUserId: auth.userId, action: 'sla_policy_updated', targetTable: 'ops_sla_policies', targetId: id }, db)
+    ).catch(() => undefined)
+    return { success: 'SLA policy updated.' }
+  } catch (err) {
+    captureApiError(err, { route: 'actions/ops', error_type: 'update_sla_error', business_id: auth.businessId })
+    return { error: 'Could not update SLA policy.' }
+  }
+}
+
+export async function deleteSlaPolicy(id: string): Promise<{ success?: string; error?: string }> {
+  const auth = await requireAuth()
+  if (!auth.ok) return { error: auth.error }
+  const db = createServiceRoleClient()
+  try {
+    await db.from('ops_sla_policies')
+      .update({ deleted_at: new Date().toISOString(), updated_by: auth.userId })
+      .eq('id', id).eq('business_id', auth.businessId)
+    void import('@/lib/ops/audit').then(({ createOpsAuditLog }) =>
+      createOpsAuditLog({ businessId: auth.businessId, actorUserId: auth.userId, action: 'sla_policy_deleted', targetTable: 'ops_sla_policies', targetId: id }, db)
+    ).catch(() => undefined)
+    return { success: 'SLA policy deleted.' }
+  } catch (err) {
+    captureApiError(err, { route: 'actions/ops', error_type: 'delete_sla_error', business_id: auth.businessId })
+    return { error: 'Could not delete SLA policy.' }
+  }
+}
+
+// ── Phase 15: Notification Rule CRUD ─────────────────────────────
+
+export async function createNotificationRule(
+  data: import('@/lib/validation/ops').CreateNotificationRuleInput,
+): Promise<{ id?: string; error?: string }> {
+  const auth = await requireAuth()
+  if (!auth.ok) return { error: auth.error }
+  const db = createServiceRoleClient()
+  try {
+    const { data: row, error } = await db.from('ops_notification_rules').insert({
+      business_id:       auth.businessId,
+      created_by:        auth.userId,
+      name:              data.name,
+      description:       data.description ?? null,
+      trigger_type:      data.trigger_type,
+      source:            data.source ?? null,
+      severity:          data.severity ?? null,
+      priority:          data.priority ?? null,
+      channel:           data.channel ?? 'email',
+      recipient_type:    data.recipient_type ?? 'owner',
+      recipient_user_id: data.recipient_user_id ?? null,
+      recipient_email:   data.recipient_email ?? null,
+      delay_minutes:     data.delay_minutes ?? 0,
+      is_enabled:        data.is_enabled ?? true,
+      metadata:          {},
+    }).select('id').single()
+    if (error) throw error
+    const id = (row as { id: string }).id
+    void import('@/lib/ops/audit').then(({ createOpsAuditLog }) =>
+      createOpsAuditLog({ businessId: auth.businessId, actorUserId: auth.userId, action: 'notification_rule_created', targetTable: 'ops_notification_rules', targetId: id, afterState: { name: data.name } }, db)
+    ).catch(() => undefined)
+    return { id }
+  } catch (err) {
+    captureApiError(err, { route: 'actions/ops', error_type: 'create_notif_rule_error', business_id: auth.businessId })
+    return { error: 'Could not create notification rule.' }
+  }
+}
+
+export async function updateNotificationRule(
+  id: string,
+  data: Partial<import('@/lib/validation/ops').CreateNotificationRuleInput>,
+): Promise<{ success?: string; error?: string }> {
+  const auth = await requireAuth()
+  if (!auth.ok) return { error: auth.error }
+  const db = createServiceRoleClient()
+  try {
+    await db.from('ops_notification_rules')
+      .update({ ...data, updated_by: auth.userId })
+      .eq('id', id).eq('business_id', auth.businessId).is('deleted_at', null)
+    void import('@/lib/ops/audit').then(({ createOpsAuditLog }) =>
+      createOpsAuditLog({ businessId: auth.businessId, actorUserId: auth.userId, action: 'notification_rule_updated', targetTable: 'ops_notification_rules', targetId: id }, db)
+    ).catch(() => undefined)
+    return { success: 'Notification rule updated.' }
+  } catch (err) {
+    captureApiError(err, { route: 'actions/ops', error_type: 'update_notif_rule_error', business_id: auth.businessId })
+    return { error: 'Could not update notification rule.' }
+  }
+}
+
+export async function deleteNotificationRule(id: string): Promise<{ success?: string; error?: string }> {
+  const auth = await requireAuth()
+  if (!auth.ok) return { error: auth.error }
+  const db = createServiceRoleClient()
+  try {
+    await db.from('ops_notification_rules')
+      .update({ deleted_at: new Date().toISOString(), updated_by: auth.userId })
+      .eq('id', id).eq('business_id', auth.businessId)
+    void import('@/lib/ops/audit').then(({ createOpsAuditLog }) =>
+      createOpsAuditLog({ businessId: auth.businessId, actorUserId: auth.userId, action: 'notification_rule_deleted', targetTable: 'ops_notification_rules', targetId: id }, db)
+    ).catch(() => undefined)
+    return { success: 'Notification rule deleted.' }
+  } catch (err) {
+    captureApiError(err, { route: 'actions/ops', error_type: 'delete_notif_rule_error', business_id: auth.businessId })
+    return { error: 'Could not delete notification rule.' }
+  }
+}
+
+// ── Phase 15: Export history ──────────────────────────────────────
+
+export interface OpsExportRow {
+  id:                string
+  business_id:       string
+  export_type:       string
+  format:            string
+  status:            string
+  requested_by:      string | null
+  filters:           Record<string, unknown>
+  sanitized_filters: Record<string, unknown>
+  row_count:         number
+  created_at:        string
+  completed_at:      string | null
+}
+
+export async function getOpsExports(limit = 20): Promise<{
+  exports: OpsExportRow[]
+  error:   string | null
+}> {
+  const auth = await requireAuth()
+  if (!auth.ok) return { exports: [], error: auth.error }
+  const db = createServiceRoleClient()
+  try {
+    const { data, error } = await db
+      .from('ops_exports').select('*')
+      .eq('business_id', auth.businessId)
+      .order('created_at', { ascending: false }).limit(limit)
+    if (error) throw error
+    return { exports: (data ?? []) as OpsExportRow[], error: null }
+  } catch (err) {
+    captureApiError(err, { route: 'actions/ops', error_type: 'get_exports_error', business_id: auth.businessId })
+    return { exports: [], error: 'Could not load export history.' }
+  }
+}
+
+// ── Phase 15: Bulk assignment to team member ──────────────────────
+
+export async function bulkAssignOpsItems(
+  table:      'ops_events' | 'ops_tasks' | 'ops_alerts' | 'approval_items',
+  ids:        string[],
+  assignedTo: string | null,
+): Promise<{ updated: number; error?: string }> {
+  if (!ids.length || ids.length > 50) return { updated: 0, error: 'Select 1–50 items.' }
+  if (!ids.every((id) => UUID_RE.test(id))) return { updated: 0, error: 'Invalid IDs.' }
+  if (assignedTo && !UUID_RE.test(assignedTo)) return { updated: 0, error: 'Invalid assignee.' }
+
+  const auth = await requireAuth()
+  if (!auth.ok) return { updated: 0, error: auth.error }
+
+  const db = createServiceRoleClient()
+
+  // Validate assignee is a business member (if assigning)
+  if (assignedTo) {
+    const { data: membership } = await db
+      .from('business_members').select('user_id')
+      .eq('business_id', auth.businessId).eq('user_id', assignedTo).single()
+    if (!membership) return { updated: 0, error: 'Assignee is not a member of this business.' }
+  }
+
+  try {
+    let assignedUserName: string | null = null
+    if (assignedTo) {
+      const { data: profile } = await db.from('profiles').select('email, full_name').eq('id', assignedTo).single()
+      const p = profile as { email?: string; full_name?: string } | null
+      assignedUserName = p?.full_name ?? p?.email ?? null
+    }
+
+    const { data, error } = await db.from(table)
+      .update({ assigned_to: assignedTo, assigned_user_name: assignedUserName })
+      .in('id', ids).eq('business_id', auth.businessId).select('id')
+    if (error) throw error
+
+    // Audit
+    void import('@/lib/ops/audit').then(({ auditBulkAction }) =>
+      auditBulkAction({ businessId: auth.businessId, userId: auth.userId, table, action: assignedTo ? 'bulk_assigned' : 'bulk_unassigned', count: (data ?? []).length, db })
+    ).catch(() => undefined)
+
+    // Notify assigned user (fire-and-forget)
+    if (assignedTo) {
+      void import('@/lib/ops/notifications').then(({ notifyAssignedUser }) =>
+        notifyAssignedUser({ userId: assignedTo, title: `${ids.length} item${ids.length !== 1 ? 's' : ''} assigned to you`, description: null, section: 'activity', businessId: auth.businessId, db })
+      ).catch(() => undefined)
+    }
+
+    return { updated: (data ?? []).length }
+  } catch (err) {
+    captureApiError(err, { route: 'actions/ops', error_type: 'bulk_assign_error', business_id: auth.businessId })
+    return { updated: 0, error: 'Bulk assignment failed.' }
   }
 }

@@ -1,9 +1,12 @@
 'use client'
 
-import { useState, useTransition } from 'react'
-import { updateOpsTaskStatus, bulkUpdateOpsTasks, assignOpsItem } from '@/lib/actions/ops'
+import { useState, useTransition, useMemo } from 'react'
+import { updateOpsTaskStatus, bulkUpdateOpsTasks, bulkAssignOpsItems, assignOpsItem } from '@/lib/actions/ops'
 import type { OpsTask, BusinessMember } from '@/lib/actions/ops'
 import { capture } from '@/lib/analytics/posthog'
+import SearchPaginationBar from './SearchPaginationBar'
+
+const PAGE_SIZE = 25
 
 interface Props {
   tasks:      OpsTask[]
@@ -44,12 +47,22 @@ function SlaBadge({ slaDueAt, status, escalationLevel }: { slaDueAt: string | nu
 }
 
 export default function OpsTaskBoard({ tasks, members, onRefresh }: Props) {
-  const [filter,      setFilter]      = useState('pending')
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
-  const [pending,     startTransition] = useTransition()
-  const [bulkPending, startBulk]      = useTransition()
+  const [filter,       setFilter]      = useState('pending')
+  const [search,       setSearch]      = useState('')
+  const [page,         setPage]        = useState(1)
+  const [selectedIds,  setSelectedIds] = useState<Set<string>>(new Set())
+  const [bulkAssignTo, setBulkAssignTo]= useState('')
+  const [pending,      startTransition]= useTransition()
+  const [bulkPending,  startBulk]     = useTransition()
 
-  const filtered = filter === 'all' ? tasks : tasks.filter((t) => t.status === filter)
+  const filtered = useMemo(() => {
+    let list = filter === 'all' ? tasks : tasks.filter((t) => t.status === filter)
+    if (search) list = list.filter((t) => t.title.toLowerCase().includes(search.toLowerCase()))
+    return list
+  }, [tasks, filter, search])
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE))
+  const paginated  = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE)
 
   const toggleSelect = (id: string) => {
     setSelectedIds((prev) => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n })
@@ -60,8 +73,15 @@ export default function OpsTaskBoard({ tasks, members, onRefresh }: Props) {
     startBulk(async () => {
       await bulkUpdateOpsTasks(Array.from(selectedIds), action)
       if (action === 'complete') capture('ops_task_bulk_completed', { count: selectedIds.size })
-      setSelectedIds(new Set())
-      onRefresh()
+      setSelectedIds(new Set()); onRefresh()
+    })
+  }
+  const handleBulkAssign = () => {
+    if (!selectedIds.size) return
+    startBulk(async () => {
+      await bulkAssignOpsItems('ops_tasks', Array.from(selectedIds), bulkAssignTo || null)
+      capture('ops_bulk_assigned', { count: selectedIds.size, table: 'ops_tasks' })
+      setSelectedIds(new Set()); onRefresh()
     })
   }
 
@@ -89,36 +109,35 @@ export default function OpsTaskBoard({ tasks, members, onRefresh }: Props) {
         ))}
       </div>
 
+      <SearchPaginationBar search={search} onSearch={(s) => { setSearch(s); setPage(1) }} page={page} totalPages={totalPages} total={filtered.length} pageSize={PAGE_SIZE} onPage={setPage} placeholder="Search tasks…" />
+
       {selectedIds.size > 0 && (
-        <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-white/[0.08] bg-white/[0.04]">
+        <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl border border-white/[0.08] bg-white/[0.04] flex-wrap">
           <span className="text-[12px] text-[#9a9a9d]">{selectedIds.size} selected</span>
-          <button onClick={() => bulk('start')} disabled={bulkPending}
-            className="h-7 px-3 rounded-lg text-[11.5px] border border-[#3b9eff]/30 text-[#3b9eff] hover:bg-[#3b9eff]/10 transition-all disabled:opacity-40">
-            Start
-          </button>
-          <button onClick={() => bulk('complete')} disabled={bulkPending}
-            className="h-7 px-3 rounded-lg text-[11.5px] border border-[#22d093]/30 text-[#22d093] hover:bg-[#22d093]/10 transition-all disabled:opacity-40">
-            Complete
-          </button>
-          <button onClick={() => bulk('dismiss')} disabled={bulkPending}
-            className="h-7 px-3 rounded-lg text-[11.5px] border border-white/[0.10] text-[#9a9a9d] hover:bg-white/[0.08] transition-all disabled:opacity-40">
-            Dismiss
-          </button>
-          <button onClick={() => setSelectedIds(new Set())}
-            className="h-7 px-3 rounded-lg text-[11.5px] text-[#6a6a6e] hover:text-[#9a9a9d] transition-all">
-            Clear
-          </button>
+          <button onClick={() => bulk('start')} disabled={bulkPending} className="h-7 px-3 rounded-lg text-[11.5px] border border-[#3b9eff]/30 text-[#3b9eff] hover:bg-[#3b9eff]/10 transition-all disabled:opacity-40">Start</button>
+          <button onClick={() => bulk('complete')} disabled={bulkPending} className="h-7 px-3 rounded-lg text-[11.5px] border border-[#22d093]/30 text-[#22d093] hover:bg-[#22d093]/10 transition-all disabled:opacity-40">Complete</button>
+          <button onClick={() => bulk('dismiss')} disabled={bulkPending} className="h-7 px-3 rounded-lg text-[11.5px] border border-white/[0.10] text-[#9a9a9d] hover:bg-white/[0.08] transition-all disabled:opacity-40">Dismiss</button>
+          {members.length > 0 && (
+            <>
+              <select value={bulkAssignTo} onChange={(e) => setBulkAssignTo(e.target.value)} className="h-7 px-2 rounded-lg border border-white/[0.10] bg-[#0a0b0d] text-[11.5px] text-[#9a9a9d]">
+                <option value="">Unassign</option>
+                {members.map((m) => <option key={m.user_id} value={m.user_id}>{m.full_name ?? m.email}</option>)}
+              </select>
+              <button onClick={handleBulkAssign} disabled={bulkPending} className="h-7 px-3 rounded-lg text-[11.5px] border border-[#3b9eff]/30 text-[#3b9eff] hover:bg-[#3b9eff]/10 transition-all disabled:opacity-40">Assign</button>
+            </>
+          )}
+          <button onClick={() => setSelectedIds(new Set())} className="h-7 px-3 rounded-lg text-[11.5px] text-[#6a6a6e] hover:text-[#9a9a9d] transition-all">Clear</button>
         </div>
       )}
 
-      {filtered.length === 0 ? (
+      {paginated.length === 0 ? (
         <div className="flex flex-col items-center gap-3 py-12 text-center rounded-2xl border border-white/[0.07] bg-[#0f1012]">
           <span className="text-[24px]">📋</span>
           <p className="text-[13px] font-medium text-white">No tasks</p>
         </div>
       ) : (
         <div className="flex flex-col divide-y divide-white/[0.04] rounded-2xl border border-white/[0.07] bg-[#0f1012] overflow-hidden">
-          {filtered.map((task) => {
+          {paginated.map((task) => {
             const sCfg = STATUS_CFG[task.status] ?? STATUS_CFG.pending
             return (
               <div key={task.id} className={`flex items-start gap-3 px-5 py-3.5 ${selectedIds.has(task.id) ? 'bg-white/[0.04]' : ''}`}>

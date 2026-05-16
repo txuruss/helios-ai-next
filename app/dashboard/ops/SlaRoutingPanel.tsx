@@ -11,7 +11,7 @@ import {
   getOpsAuditTrailAction,
 } from '@/lib/actions/ops'
 import type {
-  SlaPolicy, NotificationRule, AuditTrailRow, SlaSummary,
+  SlaPolicy, NotificationRule, AuditTrailRow, SlaSummary, BusinessMember,
 } from '@/lib/actions/ops'
 import { capture } from '@/lib/analytics/posthog'
 import SlaSummaryCards      from './SlaSummaryCards'
@@ -24,11 +24,12 @@ interface Props {
   initialRules:     NotificationRule[]
   initialAudit:     AuditTrailRow[]
   initialSummary:   SlaSummary
+  members:          BusinessMember[]
   onRefresh:        () => void
 }
 
 export default function SlaRoutingPanel({
-  initialPolicies, initialRules, initialAudit, initialSummary, onRefresh,
+  initialPolicies, initialRules, initialAudit, initialSummary, members, onRefresh,
 }: Props) {
   const [policies,  setPolicies]  = useState(initialPolicies)
   const [rules,     setRules]     = useState(initialRules)
@@ -131,7 +132,7 @@ export default function SlaRoutingPanel({
       <SlaPolicyTable policies={policies} onRefresh={handleRefresh} />
 
       {/* Notification rules */}
-      <NotificationRulesTable rules={rules} onRefresh={handleRefresh} />
+      <NotificationRulesTable rules={rules} members={members} onRefresh={handleRefresh} />
 
       {/* Audit trail */}
       <div>

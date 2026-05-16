@@ -217,13 +217,55 @@ export const opsAuditQuerySchema = z.object({
   target_id:    z.string().uuid().optional(),
 })
 
+// ── Phase 15: CRUD schemas ────────────────────────────────────────
+
+export const createAutomationRuleSchema = opsAutomationRuleSchema.omit({ business_id: true, metadata: true })
+export const updateAutomationRuleSchema = createAutomationRuleSchema.partial().extend({ id: z.string().uuid() })
+export const deleteRuleSchema           = z.object({ id: z.string().uuid() })
+
+export const createSlaPolicySchema = opsSlaPolicySchema.omit({ business_id: true, metadata: true })
+export const updateSlaPolicySchema = createSlaPolicySchema.partial().extend({ id: z.string().uuid() })
+
+export const createNotificationRuleSchema = opsNotificationRuleSchema.omit({ business_id: true, metadata: true, recipient_user_id: true })
+  .extend({ recipient_user_id: z.string().uuid().optional() })
+export const updateNotificationRuleSchema = createNotificationRuleSchema.partial().extend({ id: z.string().uuid() })
+
+export const testNotificationRuleSchema = z.object({
+  rule_id: z.string().uuid().optional(),
+  to:      z.string().email().max(256).optional(),
+})
+
+export const opsSearchSchema = z.object({
+  search:   z.string().max(256).optional(),
+  status:   z.string().max(32).optional(),
+  severity: z.string().max(32).optional(),
+  source:   z.string().max(64).optional(),
+  priority: z.string().max(32).optional(),
+  page:     z.number().int().min(1).default(1),
+  pageSize: z.number().int().min(5).max(100).default(25),
+})
+
+export const bulkAssignSchema = z.object({
+  table:       z.enum(['ops_events','ops_tasks','ops_alerts','approval_items']),
+  ids:         z.array(z.string().uuid()).min(1).max(50),
+  assigned_to: z.string().uuid().nullable(),
+})
+
+export const rerunExportSchema = z.object({
+  export_id: z.string().uuid(),
+})
+
 // ── Inferred types ────────────────────────────────────────────────
 
-export type OpsEventInput        = z.infer<typeof opsEventSchema>
-export type OpsTaskInput         = z.infer<typeof opsTaskSchema>
-export type OpsAlertInput        = z.infer<typeof opsAlertSchema>
-export type ApprovalInput        = z.infer<typeof approvalItemSchema>
-export type AutomationRuleInput  = z.infer<typeof opsAutomationRuleSchema>
-export type ExportOpsInput       = z.infer<typeof exportOpsSchema>
-export type NotificationRuleInput = z.infer<typeof opsNotificationRuleSchema>
-export type SlaPolicyInput       = z.infer<typeof opsSlaPolicySchema>
+export type OpsEventInput            = z.infer<typeof opsEventSchema>
+export type OpsTaskInput             = z.infer<typeof opsTaskSchema>
+export type OpsAlertInput            = z.infer<typeof opsAlertSchema>
+export type ApprovalInput            = z.infer<typeof approvalItemSchema>
+export type AutomationRuleInput      = z.infer<typeof opsAutomationRuleSchema>
+export type ExportOpsInput           = z.infer<typeof exportOpsSchema>
+export type NotificationRuleInput    = z.infer<typeof opsNotificationRuleSchema>
+export type SlaPolicyInput           = z.infer<typeof opsSlaPolicySchema>
+export type CreateAutomationRuleInput = z.infer<typeof createAutomationRuleSchema>
+export type CreateSlaPolicyInput     = z.infer<typeof createSlaPolicySchema>
+export type CreateNotificationRuleInput = z.infer<typeof createNotificationRuleSchema>
+export type OpsSearchInput           = z.infer<typeof opsSearchSchema>

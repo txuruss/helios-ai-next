@@ -8,13 +8,15 @@ import {
   getApprovalItems, getSystemHealthSummary, getClientSystemsSummary,
   getAutomationRules, getBusinessMembersForAssignment,
   getSlaPolicies, getNotificationRules, getOpsAuditTrailAction, getSlaDashboardSummary,
+  getOpsExports,
 } from '@/lib/actions/ops'
 import type {
   OpsOverviewMetrics, OpsEvent, OpsTask, OpsAlert,
   ApprovalItem, SystemHealthItem, ClientSystem,
   AutomationRule, BusinessMember,
-  SlaPolicy, NotificationRule, AuditTrailRow, SlaSummary,
+  SlaPolicy, NotificationRule, AuditTrailRow, SlaSummary, OpsExportRow,
 } from '@/lib/actions/ops'
+import ExportHistoryPanel from './ExportHistoryPanel'
 import OpsOverview        from './OpsOverview'
 import OpsEventFeed       from './OpsEventFeed'
 import OpsAlertPanel      from './OpsAlertPanel'
@@ -53,6 +55,7 @@ interface Props {
   initialNotifRules: NotificationRule[]
   initialAudit:     AuditTrailRow[]
   initialSlaSummary: SlaSummary
+  initialExports:   OpsExportRow[]
   businessId:       string | null
   plan:             string
 }
@@ -60,7 +63,7 @@ interface Props {
 export default function OpsCenterClient({
   initialTab, initialMetrics, initialEvents, initialAlerts, initialTasks,
   initialApprovals, initialHealth, initialSystems, initialRules,
-  initialPolicies, initialNotifRules, initialAudit, initialSlaSummary,
+  initialPolicies, initialNotifRules, initialAudit, initialSlaSummary, initialExports,
   businessId, plan,
 }: Props) {
   const [tab,       setTab]       = useState<OpsTab>(initialTab)
@@ -76,6 +79,7 @@ export default function OpsCenterClient({
   const [notifRules,  setNotifRules] = useState(initialNotifRules)
   const [audit,       setAudit]      = useState(initialAudit)
   const [slaSummary,  setSlaSummary] = useState(initialSlaSummary)
+  const [opsExports,  setOpsExports] = useState(initialExports)
   const [members,     setMembers]    = useState<BusinessMember[]>([])
   const [rtConnected, setRtConnected] = useState(false)
   const [lastLive,    setLastLive]    = useState<string | null>(null)
@@ -184,7 +188,7 @@ export default function OpsCenterClient({
   // ── Full refresh ──────────────────────────────────────────────────
   const refresh = useCallback(() => {
     startTransition(async () => {
-      const [m, ev, al, tk, ap, he, sy, ru, po, nr, aud, sla] = await Promise.all([
+      const [m, ev, al, tk, ap, he, sy, ru, po, nr, aud, sla, exp] = await Promise.all([
         getOpsOverview(),
         getOpsEvents(50),
         getOpsAlerts(50),
@@ -197,6 +201,7 @@ export default function OpsCenterClient({
         getNotificationRules(),
         getOpsAuditTrailAction(30),
         getSlaDashboardSummary(),
+        getOpsExports(20),
       ])
       if (!m.error)   setMetrics(m.metrics)
       if (!ev.error)  setEvents(ev.events)
@@ -210,6 +215,7 @@ export default function OpsCenterClient({
       if (!nr.error)  setNotifRules(nr.rules)
       if (!aud.error) setAudit(aud.rows)
       if (!sla.error) setSlaSummary(sla.summary)
+      if (!exp.error) setOpsExports(exp.exports)
     })
   }, [])
 
@@ -307,7 +313,12 @@ export default function OpsCenterClient({
 
       {/* Tab content */}
       {tab === 'overview'   && <OpsOverview metrics={metrics} events={events.slice(0, 5)} alerts={alerts.slice(0, 5)} tasks={tasks.slice(0, 5)} />}
-      {tab === 'activity'   && <OpsEventFeed events={events} members={members} businessId={businessId} onRefresh={refresh} />}
+      {tab === 'activity'   && (
+        <>
+          <OpsEventFeed events={events} members={members} businessId={businessId} onRefresh={refresh} />
+          <ExportHistoryPanel exports={opsExports} onRefresh={refresh} />
+        </>
+      )}
       {tab === 'alerts'     && <OpsAlertPanel alerts={alerts} members={members} businessId={businessId} onRefresh={refresh} />}
       {tab === 'tasks'      && <OpsTaskBoard tasks={tasks} members={members} businessId={businessId} onRefresh={refresh} />}
       {tab === 'approvals'  && <ApprovalQueue items={approvals} members={members} businessId={businessId} onRefresh={refresh} />}
@@ -320,6 +331,7 @@ export default function OpsCenterClient({
           initialRules={notifRules}
           initialAudit={audit}
           initialSummary={slaSummary}
+          members={members}
           onRefresh={refresh}
         />
       )}
