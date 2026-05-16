@@ -5,6 +5,7 @@ import { getBusinessPlan } from '@/lib/billing/limits'
 import { whatsappManualReplySchema } from '@/lib/validation/whatsapp'
 import { captureApiError } from '@/lib/logging/api'
 import { captureServerEvent } from '@/lib/analytics/server'
+import { createOpsEvent } from '@/lib/ops/events'
 
 const PLAN_ORDER: Record<string, number> = { starter: 0, pro: 1, scale: 2 }
 
@@ -87,8 +88,10 @@ export async function POST(request: NextRequest) {
     captureApiError(new Error(sendResult.error ?? 'send failed'), {
       route: '/api/whatsapp/send', error_type: 'manual_send_failed', business_id: businessId,
     })
+    void createOpsEvent({ source: 'whatsapp', event_type: 'manual_reply_failed', severity: 'error', title: 'WhatsApp manual reply failed', business_id: businessId })
     return NextResponse.json({ error: 'Failed to send WhatsApp message.' }, { status: 500 })
   }
+  void createOpsEvent({ source: 'whatsapp', event_type: 'manual_reply_sent', severity: 'info', title: 'WhatsApp manual reply sent', business_id: businessId })
 
   // 8. Save outbound message row
   const summary = message.length > 200 ? `${message.slice(0, 200)}…` : message

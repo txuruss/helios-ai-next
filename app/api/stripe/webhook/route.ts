@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { getStripe } from '@/lib/stripe/client'
 import { createServiceRoleClient } from '@/lib/supabase/server'
 import { getPlanFromPriceId } from '@/lib/billing/plans'
+import { createOpsEvent } from '@/lib/ops/events'
 
 const MAX_BODY_BYTES = 64 * 1024
 
@@ -153,6 +154,9 @@ export async function POST(request: NextRequest) {
         const subId = (obj.subscription ?? obj.subscription_id) as string | null
         if (!subId) break
         await db.from('subscriptions').update({ status: 'past_due' }).eq('stripe_subscription_id', subId)
+        // Lookup business_id to scope the alert
+        const { data: subRow } = await db.from('subscriptions').select('business_id').eq('stripe_subscription_id', subId).single().catch(() => ({ data: null }))
+        void createOpsEvent({ source: 'stripe', event_type: 'payment_failed', severity: 'error', title: 'Stripe invoice payment failed', business_id: (subRow as { business_id?: string } | null)?.business_id ?? undefined })
         break
       }
 

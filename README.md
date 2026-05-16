@@ -529,6 +529,85 @@ When a conversation is assigned:
 
 ---
 
+## Phase 12 — Mission Control + Ops Center
+
+### Mission Control (`/dashboard`)
+
+The dashboard homepage is now a full Mission Control page showing:
+- **System status pill** — green when all healthy, red when critical alerts exist
+- **KPI cards** — New Leads, Bookings, AI Conversations, WhatsApp Messages, Open Alerts, Pending Approvals, Agent Runs, Plan
+- **Attention Required** — critical alerts and urgent tasks at a glance
+- **Plan & Usage** — progress bars for AI conversations, leads, bookings this month
+- **Live Activity** — latest ops events auto-logged from all integrations
+- **Agent Runs** — recent agent runs with status
+- **System Health** — status of all 8 integrations (Widget, Anthropic, Cal.com, WhatsApp, Stripe, Relevance AI, PostHog, Sentry)
+- **Ops Center button** — quick link to the full Ops Center
+
+The existing business setup screen is fully preserved for users without a business profile.
+
+### Ops Center (`/dashboard/ops`)
+
+A dedicated operations management page with 7 tabs:
+
+| Tab | Content |
+|---|---|
+| Overview | Metric cards + recent events + top open items |
+| Activity | Full event feed with severity/status filters + resolve button |
+| Alerts | Alert panel with acknowledge/resolve actions |
+| Tasks | Task board with start/complete actions |
+| Approvals | Approval queue with approve/reject decisions |
+| System Health | Integration health grid |
+| Client Systems | Widget, WhatsApp, Cal.com status table |
+
+### Ops Events
+
+Events are automatically logged (fire-and-forget) from:
+- **Chat**: lead created, AI error, plan limit reached
+- **WhatsApp**: manual reply sent/failed
+- **Cal.com**: booking created/failed
+- **Stripe**: payment failed
+- **Relevance AI**: agent run started/failed
+
+Events contain: source, event_type, severity (info/warning/error/critical), title, and optional description. No phone numbers, message content, or API keys are stored.
+
+### Alerts
+
+Ops alerts can be: active → acknowledged → resolved. Resolved at timestamp recorded. Critical alerts appear in the Mission Control attention panel and system status pill.
+
+### Tasks
+
+Ops tasks have priority (low/normal/high/urgent) and status (pending → in_progress → completed). Tasks appear in the Mission Control attention panel when urgent or high priority.
+
+### Approvals
+
+Approval items can be approved or rejected by authenticated dashboard users. Reviewed_by and reviewed_at are recorded. Content field stores a safe truncated summary (max 10,000 chars).
+
+### System Health
+
+Health is determined server-side by checking:
+- Env var presence (ANTHROPIC_API_KEY, CALCOM_API_KEY, META_ACCESS_TOKEN, etc.)
+- DB connection rows (calcom_connections, whatsapp_connections, subscriptions)
+
+Status values: `healthy`, `degraded`, `unconfigured`, `unknown`. No API keys are returned to the browser — only the status label and a safe detail string.
+
+### Client Systems
+
+Shows Widget, WhatsApp, and Cal.com activation status with last-updated timestamps. Status is derived from `widget_settings.is_enabled`, `whatsapp_connections.is_enabled`, and `calcom_connections.is_connected`.
+
+### Realtime Behavior
+
+Ops Center subscribes to Supabase Realtime on `ops_events`, `ops_alerts`, and `ops_tasks` tables. The refresh button triggers a full reload of all tabs. A "Live" indicator is planned for Phase 13 (not yet wired in the Ops Center tabs).
+
+### Privacy Protections (Phase 12)
+
+- No phone numbers stored in ops events
+- No message content stored in ops events
+- No API keys or tokens in ops events
+- System health responses contain only status labels, not raw env values
+- Approval content is truncated to 500 chars in the UI
+
+---
+
 ## Security Notes
 
 - `SUPABASE_SERVICE_ROLE_KEY` bypasses RLS — only use server-side in server actions or API routes.

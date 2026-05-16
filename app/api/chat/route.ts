@@ -5,6 +5,7 @@ import { generateAIReply } from '@/lib/ai/respond'
 import { isOriginAllowed, getCorsHeaders, type CorsHeaders } from '@/lib/cors'
 import { checkChatRateLimit } from '@/lib/rate-limit/chat'
 import { logApiEvent, hashIp, type ApiLogEvent } from '@/lib/logging/api'
+import { createOpsEvent } from '@/lib/ops/events'
 
 // ── Constants ─────────────────────────────────────────────────────
 
@@ -157,6 +158,7 @@ export async function POST(request: NextRequest) {
   if (!result.ok) {
     const errCode = result.errorCode
     if (errCode === 'plan_limit') {
+      void createOpsEvent({ source: 'chat', event_type: 'plan_limit_reached', severity: 'warning', title: 'Chat plan limit reached', business_id: business_id })
       finish(402, 'plan_limit_ai')
       return respond({ error: result.error ?? 'Plan limit reached.' }, 402, cors)
     }
@@ -168,12 +170,18 @@ export async function POST(request: NextRequest) {
       finish(403, 'widget_disabled')
       return respond({ error: 'Chat is currently disabled.' }, 403, cors)
     }
-    if (errCode === 'ai_empty') {
-      finish(500, 'empty_ai_response')
-      return respond({ error: 'No response generated. Please try again.' }, 500, cors)
+    if (errCode === 'ai_empty' || errCode === 'anthropic_error') {
+      void createOpsEvent({ source: 'chat', event_type: 'ai_error', severity: 'error', title: 'Chat AI response error', business_id: business_id, metadata: { code: errCode } })
+      finish(500, errCode === 'ai_empty' ? 'empty_ai_response' : 'anthropic_error')
+      return respond({ error: result.error ?? 'Failed to generate a response.' }, 500, cors)
     }
     finish(500, 'anthropic_error')
     return respond({ error: result.error ?? 'Failed to generate a response.' }, 500, cors)
+  }
+
+  // Log new lead creation
+  if (result.leadCreated && result.leadId) {
+    void createOpsEvent({ source: 'chat', event_type: 'lead_created', severity: 'info', title: 'New lead captured via chat', business_id, related_table: 'leads', related_id: result.leadId })
   }
 
   if (result.sessionId) log.session_id  = result.sessionId

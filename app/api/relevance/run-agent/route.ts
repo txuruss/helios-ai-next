@@ -4,6 +4,7 @@ import { isRelevanceConfigured, runAgent } from '@/lib/relevance/client'
 import { relevanceAgentRunSchema } from '@/lib/validation/relevance'
 import { getBusinessPlan } from '@/lib/billing/limits'
 import { captureApiError } from '@/lib/logging/api'
+import { createOpsEvent } from '@/lib/ops/events'
 
 const PLAN_ORDER: Record<string, number> = { starter: 0, pro: 1, scale: 2 }
 
@@ -64,10 +65,12 @@ export async function POST(request: NextRequest) {
   }
 
   await db.from('agent_runs').update({ status: 'running' }).eq('id', runId)
+  void createOpsEvent({ source: 'relevance', event_type: 'agent_run_started', severity: 'info', title: `Agent started: ${agent.name}`, business_id: businessId, related_table: 'agent_runs', related_id: runId })
   try {
     const result = await runAgent({ agentId: agent.relevance_agent_id, message: parsed.data.input_summary ?? `Run ${agent.name}` })
     if (!result.ok) {
       await db.from('agent_runs').update({ status: 'failed', error_message: 'Provider error.', completed_at: new Date().toISOString() }).eq('id', runId)
+      void createOpsEvent({ source: 'relevance', event_type: 'agent_run_failed', severity: 'error', title: `Agent run failed: ${agent.name}`, business_id: businessId, related_table: 'agent_runs', related_id: runId })
       return NextResponse.json({ error: 'Agent run failed.' }, { status: 500 })
     }
     await db.from('agent_runs').update({ provider_run_id: result.data.job_id }).eq('id', runId)
@@ -75,6 +78,7 @@ export async function POST(request: NextRequest) {
   } catch (err) {
     captureApiError(err, { route: '/api/relevance/run-agent', error_type: 'relevance_run_error', business_id: businessId })
     await db.from('agent_runs').update({ status: 'failed', completed_at: new Date().toISOString() }).eq('id', runId)
+    void createOpsEvent({ source: 'relevance', event_type: 'agent_run_failed', severity: 'error', title: `Agent run error: ${agent.name}`, business_id: businessId, related_table: 'agent_runs', related_id: runId })
     return NextResponse.json({ error: 'Agent run failed.' }, { status: 500 })
   }
 }

@@ -5,6 +5,7 @@ import { bookingRequestSchema } from '@/lib/validation/calcom'
 import { checkChatRateLimit } from '@/lib/rate-limit/chat'
 import { sendBookingNotification } from '@/lib/notifications/owner'
 import { checkLimit, trackUsage } from '@/lib/billing/limits'
+import { createOpsEvent } from '@/lib/ops/events'
 
 const MAX_BODY_BYTES = 16 * 1024
 
@@ -99,6 +100,7 @@ export async function POST(request: NextRequest) {
 
   if (!calResult.ok) {
     console.error('[POST /api/calcom/book]', calResult.error)
+    void createOpsEvent({ source: 'calcom', event_type: 'booking_failed', severity: 'error', title: 'Cal.com booking failed', business_id })
     return NextResponse.json({ error: 'Booking could not be created. Please try again.' }, { status: 500 })
   }
 
@@ -146,6 +148,8 @@ export async function POST(request: NextRequest) {
       .eq('id', lead_id)
       .eq('business_id', business_id)
   }
+
+  void createOpsEvent({ source: 'calcom', event_type: 'booking_created', severity: 'info', title: 'Booking confirmed', business_id, related_table: 'bookings', related_id: booking?.id })
 
   // Audit
   await db.from('audit_logs').insert({

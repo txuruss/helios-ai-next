@@ -16,6 +16,7 @@ export const NAV_LINKS = [
 
 export const DASHBOARD_NAV = [
   { id: 'overview',    label: 'Overview',       href: '/dashboard',             icon: 'LayoutDashboard' },
+  { id: 'ops',         label: 'Ops Center',     href: '/dashboard/ops',         icon: 'Activity'        },
   { id: 'inbox',       label: 'Inbox',          href: '/dashboard/inbox',       icon: 'Inbox'           },
   { id: 'agents',      label: 'AI Agents',      href: '/dashboard/agents',      icon: 'Bot'             },
   { id: 'leads',       label: 'Leads',          href: '/dashboard/leads',       icon: 'Users'           },
