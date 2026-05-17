@@ -8,14 +8,14 @@ import { cn } from '@/components/ui/cn'
 import {
   LayoutDashboard, Activity, Inbox, Bot, Users, Calendar, Briefcase,
   Building2, Link2, MessageSquare, MessageCircle, Settings, LogOut, X,
-  ClipboardList, CheckSquare,
+  ClipboardList, CheckSquare, BarChart2,
 } from 'lucide-react'
 import InboxUnreadBadge from '@/app/dashboard/inbox/InboxUnreadBadge'
 
 const ICON_MAP: Record<string, React.ComponentType<{ size?: number; className?: string }>> = {
   LayoutDashboard, Activity, Inbox, Bot, Users, Calendar, Briefcase,
   Building2, Link: Link2, MessageSquare, MessageCircle, Settings,
-  ClipboardList, CheckSquare,
+  ClipboardList, CheckSquare, BarChart2,
 }
 
 const GROUP_LABELS: Record<string, string> = {

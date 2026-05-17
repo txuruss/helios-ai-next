@@ -6,6 +6,7 @@ import { capture } from '@/lib/analytics/posthog'
 import {
   DEMO_BUSINESS, DEMO_SERVICES, DEMO_FAQS, DEMO_LEADS,
   DEMO_BOOKING, DEMO_OPS_EVENTS,
+  DEMO_AUDIT, DEMO_AUDIT_FINDINGS, DEMO_AUDIT_RECOMMENDATION,
 } from '@/lib/demo/demo-data'
 
 type DbRow = Record<string, unknown>
@@ -121,6 +122,26 @@ export async function loadDemoData(confirm: true): Promise<{ ok?: boolean; error
       }).catch(() => undefined)
     }
 
+    // Insert demo audit + findings + recommendation
+    const { data: auditRow } = await db.from('business_audits').insert({
+      business_id: auth.businessId,
+      ...DEMO_AUDIT,
+      created_by:  auth.userId,
+      completed_at: new Date().toISOString(),
+    }).select('id').single().catch(() => ({ data: null }))
+
+    if (auditRow) {
+      const auditId = (auditRow as { id: string }).id
+      await db.from('business_audit_findings').insert(
+        DEMO_AUDIT_FINDINGS.map((f) => ({ ...f, business_id: auth.businessId, audit_id: auditId }))
+      ).catch(() => undefined)
+      await db.from('business_audit_recommendations').insert({
+        ...DEMO_AUDIT_RECOMMENDATION,
+        business_id: auth.businessId,
+        audit_id:    auditId,
+      }).catch(() => undefined)
+    }
+
     capture('demo_mode_loaded', { demo_business: DEMO_BUSINESS.name })
     capture('demo_business_loaded', {})
 
@@ -147,6 +168,7 @@ export async function resetDemoData(): Promise<{ ok?: boolean; error?: string }>
       db.from('leads').delete().eq('business_id', auth.businessId).contains('metadata', { demo: true }).catch(() => undefined),
       db.from('bookings').delete().eq('business_id', auth.businessId).contains('metadata', { demo: true }).catch(() => undefined),
       db.from('ops_events').delete().eq('business_id', auth.businessId).contains('metadata', { demo: true }).catch(() => undefined),
+      db.from('business_audits').delete().eq('business_id', auth.businessId).contains('metadata', { demo: true }).catch(() => undefined),
     ])
 
     // Unmark demo mode

@@ -15,6 +15,7 @@ import DemoModeCard           from './mission-control/DemoModeCard'
 import AiReviewCard           from './mission-control/AiReviewCard'
 import LaunchReadinessCard    from './mission-control/LaunchReadinessCard'
 import ClientOnboardingCard   from './mission-control/ClientOnboardingCard'
+import DeploymentScoreCard   from './mission-control/DeploymentScoreCard'
 
 export const metadata = { title: 'Mission Control — Helios AI' }
 
@@ -131,6 +132,25 @@ export default async function DashboardPage() {
     aiApprovalCount = reviewApprovalRes.count ?? 0
   }
 
+  // Load latest audit summary
+  let auditScore:   number | null = null
+  let auditPlan:    string | null = null
+  let auditCritical = 0
+  let hasAudit      = false
+
+  if (hasServiceRole && businessId) {
+    try {
+      const { getLatestAuditSummary } = await import('@/lib/actions/audits')
+      const auditSummary = await getLatestAuditSummary()
+      if (auditSummary.audit) {
+        auditScore   = auditSummary.audit.overall_score
+        auditPlan    = auditSummary.audit.recommended_plan
+        auditCritical = auditSummary.criticalCount
+        hasAudit     = true
+      }
+    } catch { /* non-fatal */ }
+  }
+
   // Load onboarding + delivery data
   let onboardingStatus: 'not_started' | 'draft' | 'submitted' | 'in_review' | 'approved' | 'needs_changes' = 'not_started'
   let deliveryProgressData = { total: 0, completed: 0, blocked: 0, in_progress: 0, pending: 0, skipped: 0, percent: 0, launchReady: false }
@@ -242,12 +262,22 @@ export default async function DashboardPage() {
         <DemoModeCard />
       </div>
 
-      {/* Client Onboarding + Launch Readiness */}
+      {/* Deployment Score + Client Onboarding */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-5">
+        <DeploymentScoreCard
+          score={auditScore}
+          recommendedPlan={auditPlan}
+          criticalCount={auditCritical}
+          hasAudit={hasAudit}
+        />
         <ClientOnboardingCard
           intakeStatus={onboardingStatus}
           deliveryProgress={deliveryProgressData}
         />
+      </div>
+
+      {/* Launch Readiness */}
+      <div className="mb-5">
         <LaunchReadinessCard />
       </div>
 

@@ -23,6 +23,7 @@ export const DASHBOARD_NAV = [
   { id: 'inbox',     label: 'Inbox',           href: '/dashboard/inbox',    icon: 'Inbox',           group: 'Core'       },
   { id: 'bookings',  label: 'Bookings',        href: '/dashboard/bookings', icon: 'Calendar',        group: 'Core'       },
   { id: 'leads',     label: 'Leads',           href: '/dashboard/leads',    icon: 'Users',           group: 'Core'       },
+  { id: 'audits',    label: 'Audits',          href: '/dashboard/audits',   icon: 'BarChart2',       group: 'Core'       },
   // Automation — advanced features
   { id: 'ops',       label: 'Ops Center',      href: '/dashboard/ops',      icon: 'Activity',        group: 'Automation' },
   { id: 'agents',    label: 'AI Agents',       href: '/dashboard/agents',   icon: 'Bot',             group: 'Automation' },

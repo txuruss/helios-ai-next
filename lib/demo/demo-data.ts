@@ -119,6 +119,41 @@ export const DEMO_OPS_EVENTS = [
   },
 ]
 
+// Demo audit for Elite Cuts Barbershop (pre-set scores, tagged as demo)
+export const DEMO_AUDIT = {
+  audit_name:                 'Elite Cuts — Deployment Audit',
+  business_name:              'Elite Cuts Barbershop',
+  business_type:              'Barbershop',
+  source:                     'demo',
+  status:                     'completed',
+  overall_score:              74,
+  response_score:             80,
+  booking_score:              70,
+  lead_capture_score:         75,
+  trust_score:                65,
+  automation_score:           70,
+  recommended_plan:           'pro',
+  estimated_revenue_risk:     '$300 – $800 per month in missed WhatsApp booking requests',
+  summary:                    'Demo Ready (74/100). 1 critical gap found. Recommended: Booking OS.',
+  metadata:                   { demo: true },
+}
+
+export const DEMO_AUDIT_FINDINGS = [
+  { category: 'whatsapp',    severity: 'high',   title: 'WhatsApp booking flow needs automation',      description: 'Customers message on WhatsApp but replies require manual effort.', recommendation: 'Connect WhatsApp to Helios AI for automated replies and booking routing.', sort_order: 0 },
+  { category: 'booking_flow', severity: 'medium', title: 'Booking confirmation needs owner review',    description: 'Bookings are created but owner must manually confirm each one.', recommendation: 'Enable owner review controls in the booking confirmation flow.', sort_order: 1 },
+  { category: 'follow_up',   severity: 'medium', title: 'Lead follow-up should be tracked',           description: '4 leads captured but no systematic follow-up flow exists.', recommendation: 'Use the Inbox and Mission Control to track and respond to every lead.', sort_order: 2 },
+  { category: 'response_speed', severity: 'low', title: 'After-hours response is limited',           description: 'Website chat is active but response times after 7pm may be slow.', recommendation: 'The AI assistant handles after-hours questions automatically.', sort_order: 3 },
+]
+
+export const DEMO_AUDIT_RECOMMENDATION = {
+  recommended_plan:  'pro',
+  setup_fee:         '$2,500 setup',
+  monthly_fee:       '$399/mo',
+  reason:            'Elite Cuts needs a full website + WhatsApp AI assistant with booking flow and owner notifications. Booking OS covers everything.',
+  included_features: ['Website AI chat assistant', 'WhatsApp assistant', 'Cal.com booking flow', 'Lead capture', 'Owner notifications', 'Monthly optimization'],
+  next_steps:        ['Complete onboarding intake', 'Connect WhatsApp Business', 'Connect Cal.com', 'Add services and FAQs', 'Test booking flow end-to-end'],
+}
+
 // Demo recording script for 2-minute demo
 export const DEMO_RECORDING_SCRIPT = [
   { step: 1, title: 'Landing page',        note: 'Show the problem statement and Book a Demo CTA at /' },
