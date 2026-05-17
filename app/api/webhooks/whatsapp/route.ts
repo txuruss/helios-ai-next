@@ -338,6 +338,67 @@ async function processInboundMessage(inbound: InboundMessage): Promise<void> {
       return
     }
 
+    // Phase 22: AI pause enforcement (business-level + conversation-level)
+    const { data: bizPause } = await db
+      .from('businesses').select('ai_paused').eq('id', businessId).single()
+    const businessAiPaused = (bizPause as { ai_paused?: boolean } | null)?.ai_paused ?? false
+
+    let convAiPaused = false
+    if (sessionId) {
+      const { data: sessRow } = await db
+        .from('chat_sessions').select('ai_paused').eq('id', sessionId).single()
+      convAiPaused = (sessRow as { ai_paused?: boolean } | null)?.ai_paused ?? false
+    }
+
+    if (businessAiPaused || convAiPaused) {
+      const pauseMsg = 'Automated replies are paused for this conversation. A team member will follow up soon.'
+      // Only send the fallback once — check if we already sent it for this session recently
+      const { count: recentPauseMsgCount } = await db
+        .from('whatsapp_messages')
+        .select('id', { count: 'exact', head: true })
+        .eq('business_id', businessId)
+        .eq('chat_session_id', sessionId ?? '')
+        .contains('metadata', { ai_pause_fallback: true })
+
+      if ((recentPauseMsgCount ?? 0) === 0 && sessionId) {
+        // Send one-time fallback
+        const pauseSend = await sendWhatsAppTextMessage(inbound.fromPhone, pauseMsg)
+        await db.from('whatsapp_messages').insert({
+          business_id:         businessId,
+          chat_session_id:     sessionId,
+          whatsapp_message_id: pauseSend.messageId ?? `out_pause_${Date.now()}`,
+          from_phone:          inbound.toPhone,
+          to_phone:            inbound.fromPhone,
+          direction:           'outbound',
+          message_type:        'text',
+          content_summary:     pauseMsg,
+          status:              pauseSend.ok ? 'sent' : 'failed',
+          metadata:            { ai_pause_fallback: true },
+        }).catch(() => undefined)
+      }
+
+      void captureServerEvent('whatsapp_ai_reply_skipped_paused', {
+        business_id:   businessId.slice(0, 8),
+        reason:        businessAiPaused ? 'business_paused' : 'conversation_paused',
+      })
+
+      void import('@/lib/ops/events').then(({ createOpsEvent }) =>
+        createOpsEvent({
+          business_id: businessId,
+          source:      'whatsapp',
+          event_type:  'whatsapp_ai_reply_skipped_paused',
+          severity:    'info',
+          title:       'WhatsApp AI reply skipped — AI paused',
+          metadata:    { session_id: sessionId },
+        }, db)
+      ).catch(() => undefined)
+
+      if (savedMsgId && sessionId) {
+        await db.from('whatsapp_messages').update({ chat_session_id: sessionId }).eq('id', savedMsgId)
+      }
+      return
+    }
+
     // 11. Normal AI flow — load history and generate reply
     let history: Array<{ role: 'user' | 'assistant'; content: string }> = []
 
@@ -418,6 +479,31 @@ async function processInboundMessage(inbound: InboundMessage): Promise<void> {
         last_message_preview:     outSummary,
         last_message_direction:   'outbound',
       }).eq('id', resolvedSessionId)
+    }
+
+    // Phase 22: Store AI confidence (fire-and-forget)
+    if (resolvedSessionId) {
+      void import('@/lib/ai/confidence').then(({ calculateAiConfidence }) => {
+        const conf = calculateAiConfidence({
+          userMessage:         userText,
+          hasFaqMatch:         false,
+          hasServiceMatch:     false,
+          hasBookingDetails:   !!(aiResult.calcomBookingUid),
+          isHandoffActive:     false,
+          isBusinessPaused:    false,
+          isConvPaused:        false,
+          missingBusinessData: false,
+        })
+        void import('@/lib/ai/confidence-server').then(({ storeAiConfidence }) =>
+          storeAiConfidence({
+            sessionId:      resolvedSessionId,
+            businessId,
+            confidence:     conf.confidence,
+            reason:         conf.reason,
+            requiresReview: conf.requiresReview,
+          })
+        )
+      }).catch(() => undefined)
     }
 
     // 15. Analytics

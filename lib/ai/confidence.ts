@@ -145,3 +145,6 @@ export function getConfidenceColor(confidence: AiConfidence): string {
 export function shouldRequireAiReview(confidence: AiConfidence): boolean {
   return confidence === 'needs_review'
 }
+
+// storeAiConfidence and createAiReviewApproval are in lib/ai/confidence-server.ts
+// (server-only — not imported from this client-safe file)

@@ -212,6 +212,32 @@ export async function POST(request: NextRequest) {
     void createOpsEvent({ source: 'chat', event_type: 'lead_created', severity: 'info', title: 'New lead captured via chat', business_id, related_table: 'leads', related_id: result.leadId })
   }
 
+  // Phase 22: Store AI confidence (fire-and-forget)
+  if (result.sessionId) {
+    const lastUserMsg = messages[messages.length - 1]?.content ?? ''
+    void import('@/lib/ai/confidence').then(({ calculateAiConfidence }) => {
+      const conf = calculateAiConfidence({
+        userMessage:        lastUserMsg,
+        hasFaqMatch:        false, // heuristic fallback — no FAQ signal from chat engine
+        hasServiceMatch:    false,
+        hasBookingDetails:  !!(result.calcomBookingUid),
+        isHandoffActive:    false,
+        isBusinessPaused:   false,
+        isConvPaused:       false,
+        missingBusinessData: false,
+      })
+      void import('@/lib/ai/confidence-server').then(({ storeAiConfidence }) =>
+        storeAiConfidence({
+          sessionId:      result.sessionId!,
+          businessId:     business_id,
+          confidence:     conf.confidence,
+          reason:         conf.reason,
+          requiresReview: conf.requiresReview,
+        })
+      )
+    }).catch(() => undefined)
+  }
+
   if (result.sessionId) log.session_id  = result.sessionId
   log.output_chars = result.reply?.length ?? 0
   finish(200)

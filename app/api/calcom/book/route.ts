@@ -6,7 +6,7 @@ import { checkChatRateLimit } from '@/lib/rate-limit/chat'
 import { sendBookingNotification } from '@/lib/notifications/owner'
 import { checkLimit, trackUsage } from '@/lib/billing/limits'
 import { createOpsEvent } from '@/lib/ops/events'
-import { createBookingConfirmation } from '@/lib/bookings/confirmation'
+import { createBookingConfirmation, sendBookingConfirmationEmail } from '@/lib/bookings/confirmation'
 
 const MAX_BODY_BYTES = 16 * 1024
 
@@ -141,7 +141,7 @@ export async function POST(request: NextRequest) {
     // Return success since Cal.com booking was created, just flag the save issue
   }
 
-  // Phase 21: Create booking confirmation portal link (fire-and-forget — non-blocking)
+  // Phase 21/22: Create booking confirmation portal + send customer email
   let portalUrl: string | null = null
   if (booking?.id) {
     const confirmation = await createBookingConfirmation({
@@ -150,7 +150,27 @@ export async function POST(request: NextRequest) {
       expiresInHours: 48,
       db,
     })
-    if (!confirmation.error) portalUrl = confirmation.portalUrl
+    if (!confirmation.error) {
+      portalUrl = confirmation.portalUrl
+
+      // Phase 22: Send confirmation email to customer (fire-and-forget)
+      if (email && confirmation.portalUrl) {
+        const serviceName = svc?.name as string | null ?? null
+        const { data: bizData2 } = await db.from('businesses').select('name').eq('id', business_id).single()
+        const bizName = (bizData2 as { name?: string } | null)?.name ?? 'Your Business'
+
+        void sendBookingConfirmationEmail({
+          bookingId:     booking.id,
+          businessId:    business_id,
+          businessName:  bizName,
+          serviceName,
+          scheduledAt:   selected_time,
+          customerEmail: email,
+          portalUrl:     confirmation.portalUrl,
+          db,
+        }).catch(() => undefined)
+      }
+    }
   }
 
   // Update lead status if lead_id provided

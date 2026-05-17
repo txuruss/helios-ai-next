@@ -1,6 +1,7 @@
 import { createClient } from '@/lib/supabase/server'
 import PageHeader from '@/components/dashboard/PageHeader'
 import type { Booking } from '@/types'
+import BookingActionsClient from './BookingActionsClient'
 
 const STATUS_PILL: Record<string, string> = {
   pending:   'pill pill-amber',
@@ -124,10 +125,12 @@ export default async function BookingsPage() {
                         </div>
                       </td>
                       <td>
-                        <button className="h-7 px-3 rounded-lg text-[12px] border border-white/10 bg-white/[0.02]
-                                            text-[#9a9a9d] hover:text-white hover:border-white/[0.18] transition-all">
-                          View
-                        </button>
+                        <BookingActionsClient
+                          bookingId={b.id}
+                          confirmationStatus={confStatus}
+                          portalToken={bExt.customer_portal_token ?? null}
+                          portalUrl={portalUrl}
+                        />
                       </td>
                     </tr>
                   )

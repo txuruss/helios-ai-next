@@ -1,6 +1,7 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
 import DemoFlowClient from './DemoFlowClient'
+import DemoWidgetSandbox from './widget/DemoWidgetSandbox'
 
 export const metadata: Metadata = {
   title: 'See Helios AI in Action — Demo',
@@ -42,6 +43,20 @@ export default function DemoPage() {
 
         {/* Demo Flow */}
         <DemoFlowClient />
+
+        {/* Embedded widget sandbox */}
+        <div className="mt-16 max-w-[640px] mx-auto">
+          <div className="flex items-center justify-between mb-4">
+            <p className="text-[13px] font-semibold text-white">Try the AI Chat Widget</p>
+            <span className="text-[10.5px] px-2.5 py-1 rounded-full border border-[#3b9eff]/30 bg-[#3b9eff]/[0.06] text-[#3b9eff]">
+              Demo sandbox
+            </span>
+          </div>
+          <DemoWidgetSandbox />
+          <p className="text-center text-[11.5px] text-[#6a6a6e] mt-3">
+            Demo sandbox — no real messages, bookings, emails, or payments are sent.
+          </p>
+        </div>
 
         {/* Static preview cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-5 mt-16">
