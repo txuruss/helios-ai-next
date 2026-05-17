@@ -144,8 +144,20 @@ export async function POST(request: NextRequest) {
   }
   log.rate_limit = rlResult.limit > 0 ? 'allowed' : 'skipped'
 
-  // 7. Run shared AI engine
-  const db     = createServiceRoleClient()
+  // 7. Check AI pause state
+  const db = createServiceRoleClient()
+  const { data: bizPauseRow } = await db
+    .from('businesses').select('ai_paused').eq('id', business_id).single()
+  if ((bizPauseRow as { ai_paused?: boolean } | null)?.ai_paused) {
+    finish(200, undefined)
+    return respond({
+      ok:    true,
+      reply: 'The team has paused automated replies. Someone will follow up soon.',
+      paused: true,
+    }, 200, cors)
+  }
+
+  // 8. Run shared AI engine
   const result = await generateAIReply({
     businessId:        business_id,
     channel:           'widget',

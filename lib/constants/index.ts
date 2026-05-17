@@ -1,8 +1,10 @@
 // ── App ───────────────────────────────────────────────────────────
 export const APP_NAME = 'Helios AI'
-export const APP_TAGLINE = 'AI systems that turn missed leads into booked customers.'
+export const APP_TAGLINE = 'Stop Missing Customers While You\'re Busy Working.'
 export const APP_DESCRIPTION =
-  'Helios AI builds AI booking systems, lead capture flows, WhatsApp automations, and operations dashboards for local service businesses.'
+  'Helios AI replies to customers, answers FAQs, captures leads, books appointments, and alerts you instantly through website chat and WhatsApp.'
+export const APP_POSITIONING =
+  'Built for barbershops, salons, spas, clinics, repair shops, and appointment-based local businesses.'
 
 // ── Navigation ────────────────────────────────────────────────────
 export const NAV_LINKS = [
@@ -14,20 +16,28 @@ export const NAV_LINKS = [
   { label: 'Contact',     href: '/#contact'    },
 ]
 
+// Nav items with group support for sidebar grouping
 export const DASHBOARD_NAV = [
-  { id: 'overview',    label: 'Overview',       href: '/dashboard',             icon: 'LayoutDashboard' },
-  { id: 'ops',         label: 'Ops Center',     href: '/dashboard/ops',         icon: 'Activity'        },
-  { id: 'inbox',       label: 'Inbox',          href: '/dashboard/inbox',       icon: 'Inbox'           },
-  { id: 'agents',      label: 'AI Agents',      href: '/dashboard/agents',      icon: 'Bot'             },
-  { id: 'leads',       label: 'Leads',          href: '/dashboard/leads',       icon: 'Users'           },
-  { id: 'bookings',    label: 'Bookings',       href: '/dashboard/bookings',    icon: 'Calendar'        },
-  { id: 'services',    label: 'Services',       href: '/dashboard/services',    icon: 'Briefcase'       },
-  { id: 'business',    label: 'Business',       href: '/dashboard/business',    icon: 'Building2'       },
-  { id: 'calcom',      label: 'Cal.com',        href: '/dashboard/calcom',      icon: 'Link'            },
-  { id: 'whatsapp',   label: 'WhatsApp',       href: '/dashboard/whatsapp',    icon: 'MessageCircle'   },
-  { id: 'widget',      label: 'Widget',         href: '/dashboard/widget',      icon: 'MessageSquare'   },
-  { id: 'settings',    label: 'Settings',       href: '/dashboard/settings',    icon: 'Settings'        },
+  // Core — primary workflow
+  { id: 'overview',  label: 'Mission Control', href: '/dashboard',          icon: 'LayoutDashboard', group: 'Core'       },
+  { id: 'inbox',     label: 'Inbox',           href: '/dashboard/inbox',    icon: 'Inbox',           group: 'Core'       },
+  { id: 'bookings',  label: 'Bookings',        href: '/dashboard/bookings', icon: 'Calendar',        group: 'Core'       },
+  { id: 'leads',     label: 'Leads',           href: '/dashboard/leads',    icon: 'Users',           group: 'Core'       },
+  // Automation — advanced features
+  { id: 'ops',       label: 'Ops Center',      href: '/dashboard/ops',      icon: 'Activity',        group: 'Automation' },
+  { id: 'agents',    label: 'AI Agents',       href: '/dashboard/agents',   icon: 'Bot',             group: 'Automation' },
+  // Setup — configuration
+  { id: 'business',  label: 'Business',        href: '/dashboard/business', icon: 'Building2',       group: 'Setup'      },
+  { id: 'services',  label: 'Services',        href: '/dashboard/services', icon: 'Briefcase',       group: 'Setup'      },
+  { id: 'calcom',    label: 'Cal.com',         href: '/dashboard/calcom',   icon: 'Link',            group: 'Setup'      },
+  { id: 'whatsapp',  label: 'WhatsApp',        href: '/dashboard/whatsapp', icon: 'MessageCircle',   group: 'Setup'      },
+  { id: 'widget',    label: 'Widget',          href: '/dashboard/widget',   icon: 'MessageSquare',   group: 'Setup'      },
+  // System
+  { id: 'settings',  label: 'Settings',        href: '/dashboard/settings', icon: 'Settings',        group: 'System'     },
 ] as const
+
+export const NAV_GROUPS = ['Core', 'Automation', 'Setup', 'System'] as const
+export type NavGroup = typeof NAV_GROUPS[number]
 
 // ── Business types ────────────────────────────────────────────────
 export const BUSINESS_TYPES = [
@@ -46,57 +56,76 @@ export const LEAD_STATUSES = ['new', 'qualified', 'contacted', 'proposal', 'won'
 export const BOOKING_STATUSES = ['pending', 'confirmed', 'cancelled', 'completed', 'no_show'] as const
 
 // ── Pricing ───────────────────────────────────────────────────────
+// Internal plan IDs stay starter/pro/scale to match Stripe.
+// Public labels map: starter→Starter, pro→Booking OS, scale→Ops Center.
+export const PLAN_LABEL_MAP: Record<string, string> = {
+  starter: 'Starter',
+  pro:     'Booking OS',
+  scale:   'Ops Center',
+  free:    'Free',
+}
+
 export const PRICING_TIERS = [
   {
     id: 'starter',
-    name: 'Starter System',
-    tagline: 'For businesses that need lead capture and faster replies.',
-    outcome: 'Stop missing inquiries and reply 24/7.',
+    name: 'Starter',
+    internalPlan: 'starter',
+    tagline: 'Website chat + lead capture for appointment-based businesses.',
+    outcome: 'Stop missing inquiries. Reply 24/7.',
+    bestFor: 'Barbershops, salons, and repair shops getting started with AI.',
+    setupRange: '$497 – $1,500',
+    monthlyRange: '$99 – $299',
     features: [
-      'AI opportunity audit',
-      'Lead capture form',
-      'Basic AI assistant',
-      'Website embed',
-      'Email notifications',
+      'Website chat assistant',
+      'FAQ handling',
+      'Lead capture',
+      'Owner email notifications',
       'Basic dashboard',
     ],
-    cta: 'Start with Starter',
+    cta: 'Get Started',
     featured: false,
   },
   {
     id: 'growth',
-    name: 'Growth System',
-    tagline: 'For businesses that want AI booking, calendar sync, and client tracking.',
-    outcome: 'Turn your website into a 24/7 booking engine.',
-    badge: 'Most Popular',
+    name: 'Booking OS',
+    internalPlan: 'pro',
+    tagline: 'Website + WhatsApp + Cal.com booking — the full client acquisition system.',
+    outcome: 'Turn every conversation into a booked appointment.',
+    bestFor: 'Spas, clinics, and studios doing 30+ bookings per month.',
+    setupRange: '$1,500 – $3,500',
+    monthlyRange: '$299 – $750',
+    badge: 'Recommended',
     features: [
-      'Everything in Starter',
-      'AI booking assistant',
-      'Calendar integration',
-      'Service mapping',
-      'Lead qualification',
-      'Client dashboard',
-      'Monthly performance report',
+      'Website chat assistant',
+      'WhatsApp assistant',
+      'Cal.com booking flow',
+      'Lead capture + qualification',
+      'Inbox with human handoff',
+      'Owner notifications',
+      'Monthly optimization',
     ],
-    cta: 'Book Growth Call',
+    cta: 'Book a Demo',
     featured: true,
   },
   {
     id: 'command',
-    name: 'Command Center',
-    tagline: 'For businesses that want a full AI operations dashboard.',
-    outcome: 'Manage leads, clients, bookings, agents, and reports from one system.',
+    name: 'Ops Center',
+    internalPlan: 'scale',
+    tagline: 'Full AI operations layer for higher-volume service businesses.',
+    outcome: 'Manage every conversation, booking, and alert from one system.',
+    bestFor: 'Multi-location or high-volume businesses needing team tools.',
+    setupRange: '$3,500 – $8,000',
+    monthlyRange: '$750 – $2,000+',
     features: [
-      'Everything in Growth',
+      'Everything in Booking OS',
       'Mission Control dashboard',
-      'AI Agent Hub',
-      'WhatsApp automation',
-      'Client onboarding system',
-      'Advanced analytics',
-      'Priority support',
-      'Monthly optimization',
+      'Ops Center + SLA tracking',
+      'Team assignment',
+      'AI agent activity',
+      'Automation monitoring',
+      'Advanced reporting',
     ],
-    cta: 'Build My Command Center',
+    cta: 'Talk to Sales',
     featured: false,
   },
 ] as const

@@ -10,6 +10,8 @@ import LiveActivityFeed       from './mission-control/LiveActivityFeed'
 import ClientSystemHealth     from './mission-control/ClientSystemHealth'
 import AgentWorkforceSnapshot from './mission-control/AgentWorkforceSnapshot'
 import PlanUsageCard          from './mission-control/PlanUsageCard'
+import SetupProgressCard      from './mission-control/SetupProgressCard'
+import DemoModeCard           from './mission-control/DemoModeCard'
 
 export const metadata = { title: 'Mission Control — Helios AI' }
 
@@ -76,7 +78,7 @@ export default async function DashboardPage() {
   }
 
   // ── Business exists → Mission Control ────────────────────────────
-  const businessId     = membership.business_id as string
+  const businessId     = (membership as { business_id: string }).business_id
   const hasServiceRole = !!process.env.SUPABASE_SERVICE_ROLE_KEY
 
   let usage      = { ai_conversations: 0, leads: 0, bookings: 0 }
@@ -198,6 +200,12 @@ export default async function DashboardPage() {
           sub={`${planLimits.ai_conversations_month.toLocaleString()} convos/mo`}
           delta="active" deltaDir="up" variant="success" icon="💎"
         />
+      </div>
+
+      {/* Setup Progress + Demo Mode */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-5">
+        <SetupProgressCard />
+        <DemoModeCard />
       </div>
 
       {/* Attention + Plan Usage */}

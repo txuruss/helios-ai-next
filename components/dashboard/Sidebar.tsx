@@ -3,7 +3,7 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { logout } from '@/lib/auth/actions'
-import { DASHBOARD_NAV } from '@/lib/constants'
+import { DASHBOARD_NAV, NAV_GROUPS } from '@/lib/constants'
 import { cn } from '@/components/ui/cn'
 import {
   LayoutDashboard, Activity, Inbox, Bot, Users, Calendar, Briefcase,
@@ -16,6 +16,13 @@ const ICON_MAP: Record<string, React.ComponentType<{ size?: number; className?: 
   Building2, Link: Link2, MessageSquare, MessageCircle, Settings,
 }
 
+const GROUP_LABELS: Record<string, string> = {
+  Core:       'Core',
+  Automation: 'Automation',
+  Setup:      'Setup',
+  System:     'System',
+}
+
 interface SidebarProps {
   open: boolean
   onClose: () => void
@@ -26,7 +33,6 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
 
   return (
     <>
-      {/* Mobile overlay */}
       {open && (
         <div
           className="fixed inset-0 bg-black/55 backdrop-blur-sm z-30 lg:hidden"
@@ -61,53 +67,86 @@ export default function Sidebar({ open, onClose }: SidebarProps) {
           </button>
         </div>
 
-        {/* Nav */}
+        {/* Nav — grouped */}
         <div className="flex-1 overflow-y-auto py-2 px-2.5">
-          <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#6a6a6e] px-2 py-3">
-            Navigation
-          </div>
-          <nav className="flex flex-col gap-0.5">
-            {DASHBOARD_NAV.map((item) => {
-              const IconComponent = ICON_MAP[item.icon]
-              const isActive =
-                item.href === '/dashboard'
-                  ? pathname === '/dashboard'
-                  : pathname.startsWith(item.href)
+          {NAV_GROUPS.filter((g) => g !== 'System').map((group) => {
+            const items = DASHBOARD_NAV.filter((item) => item.group === group)
+            if (!items.length) return null
+            return (
+              <div key={group} className="mb-1">
+                <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#6a6a6e] px-2 py-2.5">
+                  {GROUP_LABELS[group]}
+                </div>
+                <nav className="flex flex-col gap-0.5">
+                  {items.map((item) => {
+                    const IconComponent = ICON_MAP[item.icon]
+                    const isActive =
+                      item.href === '/dashboard'
+                        ? pathname === '/dashboard'
+                        : pathname.startsWith(item.href)
 
-              return (
-                <Link
-                  key={item.id}
-                  href={item.href}
-                  onClick={onClose}
-                  className={cn(
-                    'flex items-center gap-2.5 px-2.5 py-2.5 rounded-[10px]',
-                    'text-[13.5px] transition-all duration-150',
-                    isActive
-                      ? 'bg-gradient-to-r from-[#ff7a18]/14 to-[#ff7a18]/[0.04] text-white border border-[#ff7a18]/20'
-                      : 'text-[#9a9a9d] hover:bg-white/[0.04] hover:text-white',
-                  )}
-                >
-                  {IconComponent && (
-                    <span className={cn(
-                      'w-5 h-5 flex items-center justify-center shrink-0 transition-colors',
-                      isActive ? 'text-[#ffae3c]' : 'text-[#6a6a6e]',
-                    )}>
-                      <IconComponent size={15} />
-                    </span>
-                  )}
-                  <span className="flex-1">{item.label}</span>
-                  {item.id === 'inbox' && <InboxUnreadBadge />}
-                </Link>
-              )
-            })}
-          </nav>
+                    return (
+                      <Link
+                        key={item.id}
+                        href={item.href}
+                        onClick={onClose}
+                        className={cn(
+                          'flex items-center gap-2.5 px-2.5 py-2.5 rounded-[10px]',
+                          'text-[13.5px] transition-all duration-150',
+                          isActive
+                            ? 'bg-gradient-to-r from-[#ff7a18]/14 to-[#ff7a18]/[0.04] text-white border border-[#ff7a18]/20'
+                            : 'text-[#9a9a9d] hover:bg-white/[0.04] hover:text-white',
+                        )}
+                      >
+                        {IconComponent && (
+                          <span className={cn(
+                            'w-5 h-5 flex items-center justify-center shrink-0 transition-colors',
+                            isActive ? 'text-[#ffae3c]' : 'text-[#6a6a6e]',
+                          )}>
+                            <IconComponent size={15} />
+                          </span>
+                        )}
+                        <span className="flex-1">{item.label}</span>
+                        {item.id === 'inbox' && <InboxUnreadBadge />}
+                      </Link>
+                    )
+                  })}
+                </nav>
+              </div>
+            )
+          })}
         </div>
 
-        {/* Footer */}
+        {/* Settings + logout */}
         <div className="px-2.5 pb-4 pt-2 border-t border-white/[0.06]">
-          <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#6a6a6e] px-2 py-2">
-            System
-          </div>
+          {/* Settings link */}
+          {(() => {
+            const settings = DASHBOARD_NAV.find((i) => i.id === 'settings')
+            if (!settings) return null
+            const IconComponent = ICON_MAP[settings.icon]
+            const isActive = pathname.startsWith(settings.href)
+            return (
+              <Link
+                href={settings.href}
+                onClick={onClose}
+                className={cn(
+                  'flex items-center gap-2.5 px-2.5 py-2.5 rounded-[10px] mb-0.5',
+                  'text-[13.5px] transition-all duration-150',
+                  isActive
+                    ? 'bg-gradient-to-r from-[#ff7a18]/14 to-[#ff7a18]/[0.04] text-white border border-[#ff7a18]/20'
+                    : 'text-[#9a9a9d] hover:bg-white/[0.04] hover:text-white',
+                )}
+              >
+                {IconComponent && (
+                  <span className={cn('w-5 h-5 flex items-center justify-center shrink-0', isActive ? 'text-[#ffae3c]' : 'text-[#6a6a6e]')}>
+                    <IconComponent size={15} />
+                  </span>
+                )}
+                <span className="flex-1">{settings.label}</span>
+              </Link>
+            )
+          })()}
+
           <form action={logout}>
             <button
               type="submit"
