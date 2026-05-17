@@ -12,6 +12,7 @@ import { getBusinessPlan } from '@/lib/billing/limits'
 import { whatsappWebhookVerifySchema, whatsappWebhookPayloadSchema } from '@/lib/validation/whatsapp'
 import { captureApiError } from '@/lib/logging/api'
 import { captureServerEvent } from '@/lib/analytics/server'
+import { createWebhookDeliveryLog, markWebhookProcessed } from '@/lib/ops/webhook-logs'
 
 const MAX_BODY_BYTES = 64 * 1024
 const PLAN_ORDER: Record<string, number> = { starter: 0, pro: 1, scale: 2 }
@@ -62,6 +63,7 @@ export async function GET(request: NextRequest) {
 // ── POST — incoming WhatsApp messages ────────────────────────────
 
 export async function POST(request: NextRequest) {
+  const startMs = Date.now()
   let rawBody: string
   try { rawBody = await request.text() } catch {
     return NextResponse.json({ error: 'Could not read request body.' }, { status: 400 })
@@ -75,6 +77,7 @@ export async function POST(request: NextRequest) {
   if (!verifyMetaWebhookSignature(rawBody, sig)) {
     console.error('[whatsapp/webhook] Signature verification failed')
     captureApiError(new Error('Signature mismatch'), { route: '/api/webhooks/whatsapp', error_type: 'signature_failed' })
+    void createWebhookDeliveryLog({ provider: 'whatsapp', routePath: '/api/webhooks/whatsapp', verificationStatus: 'failed', safeSummary: 'Signature verification failed' })
     return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 })
   }
 
@@ -102,6 +105,17 @@ export async function POST(request: NextRequest) {
 
   // Track webhook receipt (safe — no phone number, no content)
   void captureServerEvent('whatsapp_webhook_received', { message_type: inbound.messageType })
+
+  // Log webhook (fire-and-forget — no raw content stored)
+  void createWebhookDeliveryLog({
+    provider:            'whatsapp',
+    routePath:           '/api/webhooks/whatsapp',
+    eventType:           inbound.messageType,
+    verificationStatus:  process.env.META_APP_SECRET ? 'verified' : 'skipped',
+    safeSummary:         `whatsapp ${inbound.messageType}`,
+  }).then((logId) => {
+    if (logId) void markWebhookProcessed({ logId, statusCode: 200, durationMs: Date.now() - startMs })
+  })
 
   // Respond 200 immediately; process asynchronously
   void processInboundMessage(inbound)

@@ -272,7 +272,35 @@ export async function routeOpsNotification(params: {
           const recipients = await resolveAllRecipients(rule, businessId, assignedTo, client)
           if (!recipients.length) continue
 
-          const r16 = rule as { email_subject_template?: string; email_body_template?: string }
+          const r16 = rule as {
+            email_subject_template?: string
+            email_body_template?:    string
+            delay_minutes?:          number
+            max_retry_attempts?:     number
+            retry_backoff_minutes?:  number
+            notify_on_failure?:      boolean
+          }
+
+          // If delay_minutes > 0, schedule instead of sending immediately
+          const delayMin = r16.delay_minutes ?? 0
+          if (delayMin > 0) {
+            void import('@/lib/ops/notification-delivery').then(async ({ scheduleNotificationDelivery }) => {
+              for (const to of recipients) {
+                await scheduleNotificationDelivery({
+                  businessId:    businessId,
+                  ruleId:        rule.id,
+                  subject:       `${title} — Helios AI Ops`,
+                  bodyText:      description ?? '',
+                  recipientType: rule.recipient_type,
+                  recipientEmail: to,
+                  delayMinutes:  delayMin,
+                  db:            client,
+                })
+              }
+            }).catch(() => undefined)
+            continue
+          }
+
           const templateVars = buildTemplateVars({ title, severity, source, dashUrl, section })
 
           const subjectLabel =
@@ -300,7 +328,36 @@ export async function routeOpsNotification(params: {
           }
 
           for (const to of recipients) {
-            await sendEmail({ to, subject, html, text })
+            void import('@/lib/ops/notification-delivery').then(async ({
+              createNotificationDeliveryLog, markNotificationSent, markNotificationFailed,
+            }) => {
+              const logId = await createNotificationDeliveryLog({
+                businessId:     businessId,
+                ruleId:         rule.id,
+                recipientType:  rule.recipient_type,
+                recipientEmail: to,
+                subject,
+                bodyText:       text,
+                db:             client,
+              })
+              const result = await sendEmail({ to, subject, html, text })
+              if (logId) {
+                if (result.ok) {
+                  await markNotificationSent(logId, null, client)
+                } else {
+                  await markNotificationFailed({
+                    logId,
+                    errorSummary:     'Resend returned an error.',
+                    businessId,
+                    ruleId:           rule.id,
+                    maxRetryAttempts: r16.max_retry_attempts,
+                    retryBackoffMin:  r16.retry_backoff_minutes,
+                    notifyOnFailure:  r16.notify_on_failure,
+                    db:               client,
+                  })
+                }
+              }
+            }).catch(() => undefined)
           }
 
         } else if (rule.channel === 'dashboard') {

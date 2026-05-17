@@ -1912,6 +1912,188 @@ export async function getNotificationPreviewHistory(params: {
 
 // ── Phase 18: Export history (searchable, paginated) ─────────────
 
+// ── Phase 19: Notification delivery logs ─────────────────────────
+
+export interface NotificationDeliveryLog {
+  id:                      string
+  business_id:             string | null
+  notification_rule_id:    string | null
+  recipient_type:          string | null
+  recipient_masked:        string | null
+  delivery_channel:        string
+  delivery_status:         string
+  provider:                string
+  provider_message_id:     string | null
+  attempt_count:           number
+  last_attempt_at:         string | null
+  next_retry_at:           string | null
+  scheduled_for:           string | null
+  sent_at:                 string | null
+  failed_at:               string | null
+  error_summary:           string | null
+  created_at:              string
+  updated_at:              string
+}
+
+export async function getNotificationDeliveryLogsAction(params: {
+  page?:            number
+  pageSize?:        number
+  delivery_status?: string
+  rule_id?:         string
+  search?:          string
+  date_from?:       string
+  date_to?:         string
+} = {}): Promise<PaginatedOpsResult<NotificationDeliveryLog>> {
+  const auth = await requireAuth()
+  if (!auth.ok) return emptyPage(auth.error)
+  const db  = createServiceRoleClient()
+  const ps  = params.pageSize ?? 15
+  const pg  = params.page ?? 1
+  const from = (pg - 1) * ps
+  const to   = from + ps - 1
+
+  try {
+    let query = db.from('notification_delivery_logs')
+      .select('id,business_id,notification_rule_id,recipient_type,recipient_masked,delivery_channel,delivery_status,provider,provider_message_id,attempt_count,last_attempt_at,next_retry_at,scheduled_for,sent_at,failed_at,error_summary,created_at,updated_at', { count: 'exact' })
+      .eq('business_id', auth.businessId)
+      .order('created_at', { ascending: false })
+      .range(from, to)
+
+    if (params.delivery_status) query = query.eq('delivery_status', params.delivery_status)
+    if (params.rule_id)         query = query.eq('notification_rule_id', params.rule_id)
+    if (params.date_from)       query = query.gte('created_at', params.date_from)
+    if (params.date_to)         query = query.lte('created_at', params.date_to)
+
+    if (params.search && params.search.length >= 3) {
+      query = (query as ReturnType<typeof db.from>).textSearch('search_vector', params.search.trim(), { type: 'websearch', config: 'english' }) as typeof query
+    } else if (params.search) {
+      query = query.ilike('delivery_status', `%${params.search}%`)
+    }
+
+    let { data, count, error } = await query
+    if (error && params.search && params.search.length >= 3) {
+      const fb = await db.from('notification_delivery_logs')
+        .select('id,business_id,notification_rule_id,recipient_type,recipient_masked,delivery_channel,delivery_status,provider,provider_message_id,attempt_count,last_attempt_at,next_retry_at,scheduled_for,sent_at,failed_at,error_summary,created_at,updated_at', { count: 'exact' })
+        .eq('business_id', auth.businessId)
+        .ilike('delivery_status', `%${params.search}%`)
+        .order('created_at', { ascending: false }).range(from, to)
+      data = fb.data; count = fb.count; error = fb.error
+    }
+    if (error) throw error
+    const total = count ?? 0
+    return { rows: (data ?? []) as NotificationDeliveryLog[], total_count: total, page: pg, pageSize: ps, has_next: from + ps < total, has_previous: pg > 1, error: null }
+  } catch (err) {
+    captureApiError(err, { route: 'actions/ops', error_type: 'delivery_logs_error', business_id: auth.businessId })
+    return emptyPage('Could not load delivery logs.')
+  }
+}
+
+export async function retryNotificationDeliveryAction(
+  deliveryLogId: string,
+): Promise<{ ok?: boolean; error?: string }> {
+  const auth = await requireAuth()
+  if (!auth.ok) return { error: auth.error }
+  const db = createServiceRoleClient()
+  try {
+    const { retryNotificationDelivery } = await import('@/lib/ops/notification-delivery')
+    const result = await retryNotificationDelivery({ logId: deliveryLogId, businessId: auth.businessId, db })
+    return result
+  } catch (err) {
+    captureApiError(err, { route: 'actions/ops', error_type: 'retry_delivery_error', business_id: auth.businessId })
+    return { error: 'Retry failed.' }
+  }
+}
+
+export async function processPendingNotificationsAction(): Promise<{
+  processed: number; sent: number; failed: number; skipped: number; error?: string
+}> {
+  const auth = await requireAuth()
+  if (!auth.ok) return { processed: 0, sent: 0, failed: 0, skipped: 0, error: auth.error }
+  const db = createServiceRoleClient()
+  try {
+    const { processPendingNotifications } = await import('@/lib/ops/notification-delivery')
+    return await processPendingNotifications(auth.businessId, db)
+  } catch (err) {
+    captureApiError(err, { route: 'actions/ops', error_type: 'process_pending_error', business_id: auth.businessId })
+    return { processed: 0, sent: 0, failed: 0, skipped: 0, error: 'Processing failed.' }
+  }
+}
+
+// ── Phase 19: Webhook delivery logs ──────────────────────────────
+
+export interface WebhookDeliveryLog {
+  id:                  string
+  business_id:         string | null
+  provider:            string
+  route_path:          string
+  event_type:          string | null
+  verification_status: string | null
+  processing_status:   string
+  status_code:         number | null
+  duration_ms:         number | null
+  request_id:          string | null
+  external_event_id:   string | null
+  error_summary:       string | null
+  safe_summary:        string | null
+  received_at:         string
+  processed_at:        string | null
+}
+
+export async function getWebhookDeliveryLogsAction(params: {
+  page?:                number
+  pageSize?:            number
+  provider?:            string
+  verification_status?: string
+  processing_status?:   string
+  search?:              string
+  date_from?:           string
+  date_to?:             string
+} = {}): Promise<PaginatedOpsResult<WebhookDeliveryLog>> {
+  const auth = await requireAuth()
+  if (!auth.ok) return emptyPage(auth.error)
+  const db  = createServiceRoleClient()
+  const ps  = params.pageSize ?? 20
+  const pg  = params.page ?? 1
+  const from = (pg - 1) * ps
+  const to   = from + ps - 1
+
+  try {
+    let query = db.from('webhook_delivery_logs')
+      .select('id,business_id,provider,route_path,event_type,verification_status,processing_status,status_code,duration_ms,request_id,external_event_id,error_summary,safe_summary,received_at,processed_at', { count: 'exact' })
+      .or(`business_id.eq.${auth.businessId},business_id.is.null`)
+      .order('received_at', { ascending: false })
+      .range(from, to)
+
+    if (params.provider)             query = query.eq('provider', params.provider)
+    if (params.verification_status)  query = query.eq('verification_status', params.verification_status)
+    if (params.processing_status)    query = query.eq('processing_status', params.processing_status)
+    if (params.date_from)            query = query.gte('received_at', params.date_from)
+    if (params.date_to)              query = query.lte('received_at', params.date_to)
+
+    if (params.search && params.search.length >= 3) {
+      query = (query as ReturnType<typeof db.from>).textSearch('search_vector', params.search.trim(), { type: 'websearch', config: 'english' }) as typeof query
+    } else if (params.search) {
+      query = query.ilike('provider', `%${params.search}%`)
+    }
+
+    let { data, count, error } = await query
+    if (error && params.search && params.search.length >= 3) {
+      const fb = await db.from('webhook_delivery_logs')
+        .select('id,business_id,provider,route_path,event_type,verification_status,processing_status,status_code,duration_ms,request_id,external_event_id,error_summary,safe_summary,received_at,processed_at', { count: 'exact' })
+        .or(`business_id.eq.${auth.businessId},business_id.is.null`)
+        .ilike('provider', `%${params.search}%`)
+        .order('received_at', { ascending: false }).range(from, to)
+      data = fb.data; count = fb.count; error = fb.error
+    }
+    if (error) throw error
+    const total = count ?? 0
+    return { rows: (data ?? []) as WebhookDeliveryLog[], total_count: total, page: pg, pageSize: ps, has_next: from + ps < total, has_previous: pg > 1, error: null }
+  } catch (err) {
+    captureApiError(err, { route: 'actions/ops', error_type: 'webhook_logs_error', business_id: auth.businessId })
+    return emptyPage('Could not load webhook logs.')
+  }
+}
+
 export async function getOpsExportHistory(params: {
   page?:     number
   pageSize?: number

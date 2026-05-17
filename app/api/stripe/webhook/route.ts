@@ -3,6 +3,7 @@ import { getStripe } from '@/lib/stripe/client'
 import { createServiceRoleClient } from '@/lib/supabase/server'
 import { getPlanFromPriceId } from '@/lib/billing/plans'
 import { createOpsEvent } from '@/lib/ops/events'
+import { createWebhookDeliveryLog, markWebhookProcessed, markWebhookFailed } from '@/lib/ops/webhook-logs'
 
 const MAX_BODY_BYTES = 64 * 1024
 
@@ -18,6 +19,7 @@ function toIso(val: unknown): string | null {
 }
 
 export async function POST(request: NextRequest) {
+  const startMs = Date.now()
   const rawBody = await request.text().catch(() => '')
   if (Buffer.byteLength(rawBody, 'utf8') > MAX_BODY_BYTES) {
     return NextResponse.json({ error: 'Payload too large.' }, { status: 413 })
@@ -36,20 +38,34 @@ export async function POST(request: NextRequest) {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let event: Record<string, any>
+  let verificationStatus: 'verified' | 'failed' | 'skipped' = 'skipped'
+
   try {
     const stripe = getStripe()
     if (secret && sig) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       event = stripe.webhooks.constructEvent(rawBody, sig, secret) as any
+      verificationStatus = 'verified'
     } else {
       event = JSON.parse(rawBody)
+      verificationStatus = 'skipped'
     }
   } catch (err) {
     console.error('[stripe/webhook] Signature failed:', err instanceof Error ? err.message : err)
+    void createWebhookDeliveryLog({ provider: 'stripe', routePath: '/api/stripe/webhook', verificationStatus: 'failed', safeSummary: 'Signature verification failed' })
     return NextResponse.json({ error: 'Webhook signature verification failed.' }, { status: 400 })
   }
 
   const db = createServiceRoleClient()
+  const logId = await createWebhookDeliveryLog({
+    provider:            'stripe',
+    routePath:           '/api/stripe/webhook',
+    eventType:           (event.type as string) ?? null,
+    verificationStatus,
+    externalEventId:     (event.id as string) ?? null,
+    safeSummary:         `stripe ${event.type as string}`,
+    db,
+  })
 
   try {
     const type = event.type as string
@@ -165,8 +181,10 @@ export async function POST(request: NextRequest) {
     }
   } catch (err) {
     console.error('[stripe/webhook] handler error:', err instanceof Error ? err.message : err)
+    if (logId) void markWebhookFailed({ logId, statusCode: 500, durationMs: Date.now() - startMs, errorSummary: err instanceof Error ? err.message.slice(0, 100) : 'Handler error', db })
     return NextResponse.json({ error: 'Webhook processing failed.' }, { status: 500 })
   }
 
+  if (logId) void markWebhookProcessed({ logId, statusCode: 200, durationMs: Date.now() - startMs, db })
   return NextResponse.json({ ok: true })
 }

@@ -373,6 +373,35 @@ export const validateRecipientUsersSchema = z.array(
   z.string().uuid()
 ).min(1).max(10)
 
+// ── Phase 19 schemas ──────────────────────────────────────────────
+
+export const DELIVERY_STATUSES = ['pending','scheduled','sent','failed','retrying','cancelled','skipped'] as const
+
+export const getNotificationDeliveryLogsSchema = z.object({
+  page:            z.number().int().min(1).default(1),
+  pageSize:        z.number().int().min(5).max(100).default(15),
+  delivery_status: z.string().max(32).optional(),
+  rule_id:         z.string().uuid().optional(),
+  search:          z.string().max(256).optional(),
+  date_from:       z.string().datetime().optional(),
+  date_to:         z.string().datetime().optional(),
+})
+
+export const retryNotificationDeliverySchema = z.object({
+  delivery_log_id: z.string().uuid(),
+})
+
+export const getWebhookDeliveryLogsSchema = z.object({
+  page:                z.number().int().min(1).default(1),
+  pageSize:            z.number().int().min(5).max(100).default(20),
+  provider:            z.string().max(32).optional(),
+  verification_status: z.string().max(32).optional(),
+  processing_status:   z.string().max(32).optional(),
+  search:              z.string().max(256).optional(),
+  date_from:           z.string().datetime().optional(),
+  date_to:             z.string().datetime().optional(),
+})
+
 // ── Inferred types ────────────────────────────────────────────────
 
 export type OpsEventInput            = z.infer<typeof opsEventSchema>

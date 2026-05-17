@@ -3,7 +3,8 @@
 import type { SystemHealthItem } from '@/lib/actions/ops'
 import { capture } from '@/lib/analytics/posthog'
 import { useEffect } from 'react'
-import ProductionLaunchChecklist from './ProductionLaunchChecklist'
+import ProductionLaunchChecklist   from './ProductionLaunchChecklist'
+import WebhookObservabilityPanel  from './WebhookObservabilityPanel'
 
 interface Props { items: SystemHealthItem[] }
 
@@ -70,6 +71,7 @@ export default function SystemHealthPanel({ items }: Props) {
       </div>
 
       <ProductionLaunchChecklist initialChecks={[]} />
+      <WebhookObservabilityPanel />
     </div>
   )
 }

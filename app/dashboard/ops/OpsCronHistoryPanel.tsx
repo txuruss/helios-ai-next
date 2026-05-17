@@ -30,21 +30,25 @@ function relTime(ts: string): string {
 const PAGE_SIZE = 15
 
 export default function OpsCronHistoryPanel() {
-  const [runs,    setRuns]    = useState<OpsCronRun[]>([])
-  const [total,   setTotal]   = useState(0)
-  const [page,    setPage]    = useState(1)
-  const [search,  setSearch]  = useState('')
-  const [status,  setStatus]  = useState('')
-  const [error,   setError]   = useState<string | null>(null)
-  const [pending, startLoad]  = useTransition()
+  const [runs,     setRuns]    = useState<OpsCronRun[]>([])
+  const [total,    setTotal]   = useState(0)
+  const [page,     setPage]    = useState(1)
+  const [search,   setSearch]  = useState('')
+  const [status,   setStatus]  = useState('')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo,   setDateTo]   = useState('')
+  const [error,    setError]   = useState<string | null>(null)
+  const [pending,  startLoad]  = useTransition()
 
-  const load = (pg = page, q = search, st = status) => {
+  const load = (pg = page, q = search, st = status, df = dateFrom, dt = dateTo) => {
     startLoad(async () => {
       const result = await getOpsCronRuns({
-        page:     pg,
-        pageSize: PAGE_SIZE,
-        search:   q || undefined,
-        status:   st || undefined,
+        page:      pg,
+        pageSize:  PAGE_SIZE,
+        search:    q || undefined,
+        status:    st || undefined,
+        date_from: df || undefined,
+        date_to:   dt || undefined,
       })
       if (result.error) { setError(result.error); return }
       setRuns(result.rows)
@@ -55,19 +59,24 @@ export default function OpsCronHistoryPanel() {
 
   useEffect(() => {
     capture('ops_cron_history_viewed', {})
-    load(1, '', '')
+    load(1, '', '', '', '')
   }, [])
 
-  const handleSearch = (q: string) => {
-    setSearch(q); setPage(1); load(1, q, status)
+  const handleSearch   = (q: string)  => { setSearch(q);   setPage(1); load(1, q, status, dateFrom, dateTo) }
+  const handleStatus   = (st: string) => { setStatus(st);  setPage(1); load(1, search, st, dateFrom, dateTo) }
+  const handleDateFrom = (df: string) => {
+    setDateFrom(df); setPage(1)
+    capture('cron_history_date_filter_used', { filter: 'date_from' })
+    load(1, search, status, df, dateTo)
   }
-
-  const handleStatus = (st: string) => {
-    setStatus(st); setPage(1); load(1, search, st)
+  const handleDateTo = (dt: string) => {
+    setDateTo(dt); setPage(1)
+    capture('cron_history_date_filter_used', { filter: 'date_to' })
+    load(1, search, status, dateFrom, dt)
   }
 
   const handlePage = (p: number) => {
-    setPage(p); load(p, search, status)
+    setPage(p); load(p, search, status, dateFrom, dateTo)
     capture('ops_cron_history_page_changed', { page: p, pageSize: PAGE_SIZE })
   }
 
@@ -89,22 +98,36 @@ export default function OpsCronHistoryPanel() {
 
       {/* Search + Status filter */}
       <div className="flex gap-2 flex-wrap">
-        <input
-          value={search}
-          onChange={(e) => handleSearch(e.target.value)}
+        <input value={search} onChange={(e) => handleSearch(e.target.value)}
           placeholder="Search by job name, status…"
-          className="flex-1 min-w-[160px] h-8 rounded-lg bg-white/[0.04] border border-white/[0.08] px-3 text-[12.5px] text-white placeholder-[#6a6a6e] outline-none focus:border-[#ff7a18]/40 transition-colors"
-        />
-        <select
-          value={status}
-          onChange={(e) => handleStatus(e.target.value)}
-          className="h-8 rounded-lg bg-white/[0.04] border border-white/[0.08] px-2 text-[12.5px] text-[#9a9a9d] outline-none"
-        >
+          className="flex-1 min-w-[160px] h-8 rounded-lg bg-white/[0.04] border border-white/[0.08] px-3 text-[12.5px] text-white placeholder-[#6a6a6e] outline-none focus:border-[#ff7a18]/40 transition-colors" />
+        <select value={status} onChange={(e) => handleStatus(e.target.value)}
+          className="h-8 rounded-lg bg-white/[0.04] border border-white/[0.08] px-2 text-[12.5px] text-[#9a9a9d] outline-none">
           <option value="">All statuses</option>
           <option value="completed">Completed</option>
           <option value="failed">Failed</option>
           <option value="started">Started</option>
         </select>
+      </div>
+
+      {/* Date range filters */}
+      <div className="flex gap-2 flex-wrap">
+        <div className="flex items-center gap-1.5">
+          <label className="text-[10.5px] text-[#6a6a6e] shrink-0">From</label>
+          <input type="date" value={dateFrom} onChange={(e) => handleDateFrom(e.target.value ? new Date(e.target.value).toISOString() : '')}
+            className="h-8 rounded-lg bg-white/[0.04] border border-white/[0.08] px-2 text-[12px] text-[#9a9a9d] outline-none" />
+        </div>
+        <div className="flex items-center gap-1.5">
+          <label className="text-[10.5px] text-[#6a6a6e] shrink-0">To</label>
+          <input type="date" value={dateTo} onChange={(e) => handleDateTo(e.target.value ? new Date(e.target.value).toISOString() : '')}
+            className="h-8 rounded-lg bg-white/[0.04] border border-white/[0.08] px-2 text-[12px] text-[#9a9a9d] outline-none" />
+        </div>
+        {(dateFrom || dateTo) && (
+          <button onClick={() => { setDateFrom(''); setDateTo(''); setPage(1); load(1, search, status, '', '') }}
+            className="h-8 px-2.5 rounded-lg text-[11px] border border-white/[0.10] text-[#6a6a6e] hover:text-white hover:bg-white/[0.06] transition-all">
+            Clear dates
+          </button>
+        )}
       </div>
 
       {error && <p className="text-[12px] text-[#ff8a7a]">{error}</p>}

@@ -1206,6 +1206,89 @@ All four use `textSearch('search_vector', ...)` for ≥ 3 char searches with `il
 
 ---
 
+## Phase 19 — Notification Delivery Logs, Webhook Observability, Retry Controls
+
+### Notification Delivery Logs (Phase 19)
+
+Every email send now creates a row in `notification_delivery_logs`. Fields tracked:
+- `delivery_status`: pending → sent / failed / retrying / scheduled / cancelled
+- `recipient_masked`: email masked to `jo***@example.com` — real address never stored
+- `attempt_count`: incremented on each retry
+- `next_retry_at`: exponential backoff (attempt × backoff_minutes)
+- `subject_hash` / `body_hash`: SHA-256 hash of content — content never stored
+- `provider_message_id`: Resend message ID when available
+
+The `NotificationDeliveryLogsPanel` in the SLA & Routing tab shows all logs with status filter, search, pagination, and Retry buttons for failed/retrying logs.
+
+### Test Email to All Resolved Recipients (Phase 19)
+
+`POST /api/ops/notifications/test` now:
+- Resolves all recipients via `resolveNotificationRecipients()` (owner, assigned, all_admins, selected_users, multiple_emails)
+- Sends to every valid resolved email (max 10)
+- Creates a delivery log per recipient
+- Returns `attempted_count`, `sent_count`, `failed_count`, `sent_to` (masked)
+
+### Notification Retry (Phase 19)
+
+`POST /api/ops/notifications/retry` retries a failed or retrying delivery log:
+- Validates log belongs to the authenticated business
+- Increments `attempt_count`, sets status to `retrying`, updates `next_retry_at`
+- Server action `retryNotificationDeliveryAction()` available for UI
+
+### Delay-Minute Scheduling (Phase 19)
+
+When `delay_minutes > 0` on a notification rule, `routeOpsNotification()` now:
+- Creates a `notification_delivery_logs` row with `delivery_status = 'scheduled'`
+- Sets `scheduled_for` and `next_retry_at` to `now + delay_minutes`
+- Does NOT send immediately
+- `POST /api/ops/notifications/process-pending` sends due scheduled notifications
+
+### Failed Notification Alerts (Phase 19)
+
+After `attempt_count >= max_retry_attempts` on a failed delivery:
+- Creates an `ops_alerts` row with `alert_type = 'notification_failed'`, severity `warning`
+- Deduplicated by `delivery_log_id` in metadata — no duplicate alerts
+- Controlled by `notify_on_failure` column on the notification rule (default `true`)
+
+### Webhook Observability (Phase 19)
+
+All four inbound webhook routes now create safe log rows in `webhook_delivery_logs`:
+- **Stripe** (`/api/stripe/webhook`): logs event type, verification status, duration
+- **Cal.com** (`/api/webhooks/calcom`): logs trigger event, booking UID, verification
+- **WhatsApp** (`/api/webhooks/whatsapp`): logs message type, verification status
+- **Relevance** (`/api/relevance/webhook`): logs run status, job_id, verification
+
+Rules: no raw body stored, no signatures, no tokens, no PII. Only `safe_summary`, `event_type`, `verification_status`, `processing_status`, `duration_ms`, and `external_event_id` are stored.
+
+`WebhookObservabilityPanel` in the System Health tab shows recent webhook logs with provider, verification, and processing status filters.
+
+### Cron Date Range Filters (Phase 19)
+
+`OpsCronHistoryPanel` now supports:
+- `date_from` / `date_to` date pickers
+- Clears via "Clear dates" button
+- Fires `cron_history_date_filter_used` analytics event
+
+### Export History in SLA & Routing (Phase 19)
+
+`SlaRoutingExportPanel` shows all past exports from `ops_exports` with search, pagination, and Re-run button to repeat any prior export.
+
+### Cron Verification Hardening (Phase 19)
+
+`lib/ops/cron.ts` now documents why true Vercel header-based cryptographic verification is not available: Vercel Cron sends `Authorization: Bearer ${CRON_SECRET}` — there is no HMAC signature to verify beyond the Bearer token. The `vercel_signature_unavailable` label is added to the `VerificationMethod` type to make this explicit.
+
+### Privacy and Security Notes (Phase 19)
+
+- Delivery log recipient emails masked to `jo***@domain.com` — real address never stored or returned
+- Subject and body are stored as SHA-256 hashes only — content never written to `notification_delivery_logs`
+- Webhook raw body, signatures, authorization headers, and provider secrets are never stored
+- Only safe summaries (`safe_summary`) of ≤ 200 chars are stored in webhook logs
+- Failed notification alerts never include full email addresses
+- `retry` endpoint validates log ownership via `business_id` before allowing retry
+- `process-pending` cron mode requires valid `CRON_SECRET` / `VERCEL_CRON_SECRET` / `OPS_CRON_SECRET`
+
+---
+
 ## Security Notes
 
 - `SUPABASE_SERVICE_ROLE_KEY` bypasses RLS — only use server-side in server actions or API routes.

@@ -14,6 +14,7 @@ export type VerificationMethod =
   | 'VERCEL_CRON_SECRET'
   | 'OPS_CRON_SECRET'
   | 'vercel_header'
+  | 'vercel_signature_unavailable'
   | 'missing'
   | 'invalid'
 
@@ -56,6 +57,13 @@ export function verifyCronRequest(request: NextRequest): CronVerificationResult 
   if (opsCronSecret && token === opsCronSecret) {
     return { valid: true, verificationMethod: 'OPS_CRON_SECRET', requestSource }
   }
+
+  // Note on Vercel platform signature: Vercel Cron does not currently provide a
+  // cryptographic HMAC signature in request headers beyond the Bearer token pattern.
+  // The x-vercel-deployment-url and x-vercel-id headers are informational only and
+  // must NOT be used as authentication. Bearer secret verification is the correct
+  // and Vercel-recommended approach. If true header-based verification becomes
+  // available, it would be added here with label 'vercel_header'.
 
   return { valid: false, verificationMethod: 'invalid', requestSource }
 }

@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from 'next/server'
 import { createHmac } from 'crypto'
 import { createServiceRoleClient } from '@/lib/supabase/server'
 import { calcomWebhookSchema } from '@/lib/validation/calcom'
+import { createWebhookDeliveryLog, markWebhookProcessed, markWebhookFailed } from '@/lib/ops/webhook-logs'
 
 const MAX_BODY_BYTES = 64 * 1024
 
@@ -30,6 +31,7 @@ function verifySignature(rawBody: string, signature: string | null): boolean {
 }
 
 export async function POST(request: NextRequest) {
+  const startMs = Date.now()
   const rawBody = await request.text().catch(() => '')
   if (Buffer.byteLength(rawBody, 'utf8') > MAX_BODY_BYTES) {
     return NextResponse.json({ error: 'Payload too large.' }, { status: 413 })
@@ -38,6 +40,7 @@ export async function POST(request: NextRequest) {
   const signature = request.headers.get('x-cal-signature-256')
   if (!verifySignature(rawBody, signature)) {
     console.error('[webhook/calcom] Signature verification failed')
+    void createWebhookDeliveryLog({ provider: 'calcom', routePath: '/api/webhooks/calcom', verificationStatus: 'failed', safeSummary: 'Signature verification failed' })
     return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 })
   }
 
@@ -54,7 +57,16 @@ export async function POST(request: NextRequest) {
   }
 
   const { triggerEvent, payload } = parsed.data
-  const db = createServiceRoleClient()
+  const db  = createServiceRoleClient()
+  const logId = await createWebhookDeliveryLog({
+    provider:            'calcom',
+    routePath:           '/api/webhooks/calcom',
+    eventType:           triggerEvent,
+    verificationStatus:  process.env.CALCOM_WEBHOOK_SECRET ? 'verified' : 'skipped',
+    externalEventId:     payload.uid ?? null,
+    safeSummary:         `calcom ${triggerEvent}`,
+    db,
+  })
 
   // Map Cal.com status → our booking status
   const STATUS_MAP: Record<string, string> = {
@@ -100,5 +112,6 @@ export async function POST(request: NextRequest) {
     }
   }
 
+  if (logId) void markWebhookProcessed({ logId, statusCode: 200, durationMs: Date.now() - startMs, db })
   return NextResponse.json({ ok: true })
 }

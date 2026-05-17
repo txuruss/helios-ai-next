@@ -19,7 +19,9 @@ import SlaPolicyTable        from './SlaPolicyTable'
 import NotificationRulesTable from './NotificationRulesTable'
 import OpsAuditTrail         from './OpsAuditTrail'
 import OpsCronHistoryPanel              from './OpsCronHistoryPanel'
-import NotificationPreviewHistoryPanel from './NotificationPreviewHistoryPanel'
+import NotificationPreviewHistoryPanel  from './NotificationPreviewHistoryPanel'
+import NotificationDeliveryLogsPanel   from './NotificationDeliveryLogsPanel'
+import SlaRoutingExportPanel            from './SlaRoutingExportPanel'
 
 interface Props {
   initialPolicies:  SlaPolicy[]
@@ -136,10 +138,22 @@ export default function SlaRoutingPanel({
       {/* Notification rules */}
       <NotificationRulesTable rules={rules} members={members} onRefresh={handleRefresh} />
 
+      {/* Notification delivery logs */}
+      <div>
+        <h3 className="text-[12px] font-semibold uppercase tracking-[0.12em] text-[#6a6a6e] mb-3">Notification Delivery</h3>
+        <NotificationDeliveryLogsPanel />
+      </div>
+
       {/* Notification preview history */}
       <div>
         <h3 className="text-[12px] font-semibold uppercase tracking-[0.12em] text-[#6a6a6e] mb-3">Notification Preview History</h3>
         <NotificationPreviewHistoryPanel />
+      </div>
+
+      {/* Export history */}
+      <div>
+        <h3 className="text-[12px] font-semibold uppercase tracking-[0.12em] text-[#6a6a6e] mb-3">Export History</h3>
+        <SlaRoutingExportPanel />
       </div>
 
       {/* Audit trail */}

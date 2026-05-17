@@ -4,6 +4,7 @@ import { createServiceRoleClient } from '@/lib/supabase/server'
 import { relevanceWebhookSchema } from '@/lib/validation/relevance'
 import { captureApiError } from '@/lib/logging/api'
 import { createOpsEvent, createApprovalItem } from '@/lib/ops/events'
+import { createWebhookDeliveryLog, markWebhookProcessed, markWebhookFailed } from '@/lib/ops/webhook-logs'
 
 const MAX_BODY_BYTES = 64 * 1024
 
@@ -25,6 +26,7 @@ function verifySignature(rawBody: string, signature: string | null): boolean {
 // Receives Relevance AI run completion callbacks.
 
 export async function POST(request: NextRequest) {
+  const startMs = Date.now()
   const rawBody = await request.text().catch(() => '')
   if (Buffer.byteLength(rawBody, 'utf8') > MAX_BODY_BYTES) {
     return NextResponse.json({ error: 'Payload too large.' }, { status: 413 })
@@ -33,6 +35,7 @@ export async function POST(request: NextRequest) {
   const sig = request.headers.get('x-relevance-signature') ?? request.headers.get('x-webhook-signature')
   if (!verifySignature(rawBody, sig)) {
     console.error('[relevance/webhook] Signature verification failed')
+    void createWebhookDeliveryLog({ provider: 'relevance', routePath: '/api/relevance/webhook', verificationStatus: 'failed', safeSummary: 'Signature verification failed' })
     return NextResponse.json({ error: 'Unauthorized.' }, { status: 401 })
   }
 
@@ -47,7 +50,16 @@ export async function POST(request: NextRequest) {
   }
 
   const { job_id, status, output, error: errMsg } = parsed.data
-  const db = createServiceRoleClient()
+  const db    = createServiceRoleClient()
+  const logId = await createWebhookDeliveryLog({
+    provider:            'relevance',
+    routePath:           '/api/relevance/webhook',
+    eventType:           `run.${status}`,
+    verificationStatus:  process.env.RELEVANCE_WEBHOOK_SECRET ? 'verified' : 'skipped',
+    externalEventId:     job_id ?? null,
+    safeSummary:         `relevance run ${status}`,
+    db,
+  })
 
   try {
     // Find the run by provider_run_id
@@ -143,8 +155,10 @@ export async function POST(request: NextRequest) {
     console.log(`[relevance/webhook] Run ${runRow.id} → ${newStatus}`)
   } catch (err) {
     captureApiError(err, { route: '/api/relevance/webhook', error_type: 'webhook_processing_error' })
+    if (logId) void markWebhookFailed({ logId, statusCode: 500, durationMs: Date.now() - startMs, errorSummary: err instanceof Error ? err.message.slice(0, 100) : 'Handler error', db })
     return NextResponse.json({ error: 'Webhook processing failed.' }, { status: 500 })
   }
 
+  if (logId) void markWebhookProcessed({ logId, statusCode: 200, durationMs: Date.now() - startMs, db })
   return NextResponse.json({ ok: true })
 }
