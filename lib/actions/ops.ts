@@ -1039,8 +1039,23 @@ export async function getOpsAuditTrailAction(
       .eq('business_id', auth.businessId)
       .order('created_at', { ascending: false })
       .range(from, to)
-    if (params.search) query = query.ilike('action', `%${params.search}%`)
-    const { data, count, error } = await query
+
+    if (params.search && params.search.length >= 3) {
+      query = (query as ReturnType<typeof db.from>).textSearch('search_vector', params.search.trim(), { type: 'websearch', config: 'english' }) as typeof query
+    } else if (params.search) {
+      query = query.ilike('action', `%${params.search}%`)
+    }
+
+    let { data, count, error } = await query
+    // Fallback to ilike if FTS column not yet migrated
+    if (error && params.search && params.search.length >= 3) {
+      const fb = await db.from('ops_audit_trail').select('*', { count: 'exact' })
+        .eq('business_id', auth.businessId)
+        .ilike('action', `%${params.search}%`)
+        .order('created_at', { ascending: false })
+        .range(from, to)
+      data = fb.data; count = fb.count; error = fb.error
+    }
     if (error) throw error
     return { rows: (data ?? []) as AuditTrailRow[], total_count: count ?? 0, error: null }
   } catch (err) {
@@ -1676,6 +1691,8 @@ export interface OpsCronRun {
   duration_ms:         number | null
   trigger_source:      string | null
   cron_secret_type:    string | null
+  verification_method: string | null
+  request_source:      string | null
   businesses_checked:  number
   metadata:            Record<string, unknown>
   started_at:          string
@@ -1683,18 +1700,17 @@ export interface OpsCronRun {
 }
 
 export async function getOpsCronRuns(params: {
-  page?:     number
-  pageSize?: number
-  status?:   string
-} = {}): Promise<{
-  rows:        OpsCronRun[]
-  total_count: number
-  error:       string | null
-}> {
+  page?:      number
+  pageSize?:  number
+  status?:    string
+  date_from?: string
+  date_to?:   string
+  search?:    string
+} = {}): Promise<PaginatedOpsResult<OpsCronRun>> {
   const auth = await requireAuth()
-  if (!auth.ok) return { rows: [], total_count: 0, error: auth.error }
+  if (!auth.ok) return emptyPage(auth.error)
   const db  = createServiceRoleClient()
-  const ps  = params.pageSize ?? 20
+  const ps  = params.pageSize ?? 15
   const pg  = params.page ?? 1
   const from = (pg - 1) * ps
   const to   = from + ps - 1
@@ -1705,14 +1721,30 @@ export async function getOpsCronRuns(params: {
       .order('started_at', { ascending: false })
       .range(from, to)
 
-    if (params.status) query = query.eq('status', params.status)
+    if (params.status)    query = query.eq('status', params.status)
+    if (params.date_from) query = query.gte('started_at', params.date_from)
+    if (params.date_to)   query = query.lte('started_at', params.date_to)
 
-    const { data, count, error } = await query
+    if (params.search && params.search.length >= 3) {
+      query = (query as ReturnType<typeof db.from>).textSearch('search_vector', params.search.trim(), { type: 'websearch', config: 'english' }) as typeof query
+    } else if (params.search) {
+      query = query.ilike('job_name', `%${params.search}%`)
+    }
+
+    let { data, count, error } = await query
+    if (error && params.search && params.search.length >= 3) {
+      const fb = await db.from('ops_cron_runs').select('*', { count: 'exact' })
+        .or(`business_id.eq.${auth.businessId},business_id.is.null`)
+        .ilike('job_name', `%${params.search}%`)
+        .order('started_at', { ascending: false }).range(from, to)
+      data = fb.data; count = fb.count; error = fb.error
+    }
     if (error) throw error
-    return { rows: (data ?? []) as OpsCronRun[], total_count: count ?? 0, error: null }
+    const total = count ?? 0
+    return { rows: (data ?? []) as OpsCronRun[], total_count: total, page: pg, pageSize: ps, has_next: from + ps < total, has_previous: pg > 1, error: null }
   } catch (err) {
     captureApiError(err, { route: 'actions/ops', error_type: 'cron_history_error', business_id: auth.businessId })
-    return { rows: [], total_count: 0, error: 'Could not load cron history.' }
+    return emptyPage('Could not load cron history.')
   }
 }
 
@@ -1806,4 +1838,125 @@ export async function markNotificationDryRun(
       last_dry_run_error:  error ?? null,
     }).eq('id', ruleId).eq('business_id', auth.businessId)
   } catch { /* silent */ }
+}
+
+// ── Phase 18: Notification preview history ────────────────────────
+
+export interface NotificationPreviewRow {
+  id:                     string
+  business_id:            string | null
+  notification_rule_id:   string | null
+  preview_type:           string
+  source_rule_name:       string | null
+  rendered_with_template: boolean
+  dry_run_status:         string | null
+  subject_preview:        string | null
+  recipient_preview:      string | null
+  created_at:             string
+  exported_at:            string | null
+  export_format:          string | null
+}
+
+export async function getNotificationPreviewHistory(params: {
+  page?:         number
+  pageSize?:     number
+  rule_id?:      string
+  preview_type?: string
+  date_from?:    string
+  date_to?:      string
+  search?:       string
+} = {}): Promise<PaginatedOpsResult<NotificationPreviewRow>> {
+  const auth = await requireAuth()
+  if (!auth.ok) return emptyPage(auth.error)
+  const db  = createServiceRoleClient()
+  const ps  = params.pageSize ?? 15
+  const pg  = params.page ?? 1
+  const from = (pg - 1) * ps
+  const to   = from + ps - 1
+
+  try {
+    let query = db.from('ops_notification_previews')
+      .select('id,business_id,notification_rule_id,preview_type,source_rule_name,rendered_with_template,dry_run_status,subject_preview,recipient_preview,created_at,exported_at,export_format', { count: 'exact' })
+      .eq('business_id', auth.businessId)
+      .order('created_at', { ascending: false })
+      .range(from, to)
+
+    if (params.rule_id)      query = query.eq('notification_rule_id', params.rule_id)
+    if (params.preview_type) query = query.eq('preview_type', params.preview_type)
+    if (params.date_from)    query = query.gte('created_at', params.date_from)
+    if (params.date_to)      query = query.lte('created_at', params.date_to)
+
+    if (params.search && params.search.length >= 3) {
+      query = (query as ReturnType<typeof db.from>).textSearch('search_vector', params.search.trim(), { type: 'websearch', config: 'english' }) as typeof query
+    } else if (params.search) {
+      query = query.ilike('source_rule_name', `%${params.search}%`)
+    }
+
+    let { data, count, error } = await query
+    if (error && params.search && params.search.length >= 3) {
+      const fb = await db.from('ops_notification_previews')
+        .select('id,business_id,notification_rule_id,preview_type,source_rule_name,rendered_with_template,dry_run_status,subject_preview,recipient_preview,created_at,exported_at,export_format', { count: 'exact' })
+        .eq('business_id', auth.businessId)
+        .ilike('source_rule_name', `%${params.search}%`)
+        .order('created_at', { ascending: false }).range(from, to)
+      data = fb.data; count = fb.count; error = fb.error
+    }
+    if (error) throw error
+    const total = count ?? 0
+    return { rows: (data ?? []) as NotificationPreviewRow[], total_count: total, page: pg, pageSize: ps, has_next: from + ps < total, has_previous: pg > 1, error: null }
+  } catch (err) {
+    captureApiError(err, { route: 'actions/ops', error_type: 'preview_history_error', business_id: auth.businessId })
+    return emptyPage('Could not load preview history.')
+  }
+}
+
+// ── Phase 18: Export history (searchable, paginated) ─────────────
+
+export async function getOpsExportHistory(params: {
+  page?:     number
+  pageSize?: number
+  search?:   string
+  format?:   string
+  status?:   string
+} = {}): Promise<PaginatedOpsResult<Record<string, unknown>>> {
+  const auth = await requireAuth()
+  if (!auth.ok) return emptyPage(auth.error)
+  const db  = createServiceRoleClient()
+  const ps  = params.pageSize ?? 15
+  const pg  = params.page ?? 1
+  const from = (pg - 1) * ps
+  const to   = from + ps - 1
+
+  try {
+    let query = db.from('ops_exports')
+      .select('id,business_id,export_type,format,status,row_count,source_table,created_at', { count: 'exact' })
+      .eq('business_id', auth.businessId)
+      .order('created_at', { ascending: false })
+      .range(from, to)
+
+    if (params.format) query = query.eq('format', params.format)
+    if (params.status) query = query.eq('status', params.status)
+
+    if (params.search && params.search.length >= 3) {
+      query = (query as ReturnType<typeof db.from>).textSearch('search_vector', params.search.trim(), { type: 'websearch', config: 'english' }) as typeof query
+    } else if (params.search) {
+      query = query.ilike('export_type', `%${params.search}%`)
+    }
+
+    let { data, count, error } = await query
+    if (error && params.search && params.search.length >= 3) {
+      const fb = await db.from('ops_exports')
+        .select('id,business_id,export_type,format,status,row_count,source_table,created_at', { count: 'exact' })
+        .eq('business_id', auth.businessId)
+        .ilike('export_type', `%${params.search}%`)
+        .order('created_at', { ascending: false }).range(from, to)
+      data = fb.data; count = fb.count; error = fb.error
+    }
+    if (error) throw error
+    const total = count ?? 0
+    return { rows: (data ?? []) as Record<string, unknown>[], total_count: total, page: pg, pageSize: ps, has_next: from + ps < total, has_previous: pg > 1, error: null }
+  } catch (err) {
+    captureApiError(err, { route: 'actions/ops', error_type: 'export_history_error', business_id: auth.businessId })
+    return emptyPage('Could not load export history.')
+  }
 }

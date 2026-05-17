@@ -6,6 +6,7 @@ import type { NotificationRule, BusinessMember } from '@/lib/actions/ops'
 import { SAFE_TEMPLATE_VARS } from '@/lib/validation/ops'
 import { capture } from '@/lib/analytics/posthog'
 import NotificationPreviewDrawer from './NotificationPreviewDrawer'
+import EmailTemplateLivePreview   from './EmailTemplateLivePreview'
 
 // Client-side template validation (safe variable check only — no server-only imports)
 function validateTemplate(template: string, maxLength: number): string | null {
@@ -136,9 +137,8 @@ export default function NotificationRuleForm({ rule, members, onClose, onSaved }
     }
     setError(null)
 
-    const mappedRecipientType = (recipientMode === 'selected_users' || recipientMode === 'multiple_emails')
-      ? 'custom_email' as const  // backend uses custom_email for these modes
-      : recipientMode as 'owner'|'assigned_user'|'all_admins'|'custom_email'
+    // Phase 18: selected_users and multiple_emails are now proper backend types
+    const mappedRecipientType = recipientMode as 'owner'|'assigned_user'|'all_admins'|'custom_email'|'selected_users'|'multiple_emails'
 
     const data = {
       name:                   name.trim(),
@@ -283,13 +283,6 @@ export default function NotificationRuleForm({ rule, members, onClose, onSaved }
 
             {showTemplate && (
               <div className="mt-3 flex flex-col gap-3">
-                <div className="flex flex-wrap gap-1.5">
-                  <span className="text-[10.5px] text-[#6a6a6e]">Available variables:</span>
-                  {SAFE_TEMPLATE_VARS.map((v) => (
-                    <code key={v} className="text-[10px] px-1.5 py-0.5 rounded bg-white/[0.06] text-[#9a9a9d] font-mono">{v}</code>
-                  ))}
-                </div>
-
                 <Field label="Subject Template" hint="max 256 chars">
                   <input value={subjectTemplate} onChange={(e) => { setSubjectTemplate(e.target.value); setSubjectErr(null) }}
                     maxLength={256} placeholder="e.g. [{{severity}}] {{title}} — Helios AI Ops" className={inputClass} />
@@ -303,6 +296,9 @@ export default function NotificationRuleForm({ rule, members, onClose, onSaved }
                   {bodyErr && <p className="text-[11px] text-[#ff8a7a] mt-1">{bodyErr}</p>}
                   <p className="text-[10.5px] text-[#6a6a6e]">Leave empty to use the system default template.</p>
                 </Field>
+
+                {/* Live preview — updates as user types, no server calls */}
+                <EmailTemplateLivePreview subject={subjectTemplate} body={bodyTemplate} />
               </div>
             )}
           </div>

@@ -1117,6 +1117,95 @@ After applying `db/add-ops-phase-17-fields.sql`, the ops tables get `search_vect
 
 ---
 
+## Phase 18 — Cron Verification, Template Test Email, Preview History, Live Preview
+
+### Vercel Cron Verification (Phase 18)
+
+The cron endpoint now uses `lib/ops/cron.ts` for centralised verification and run logging.
+
+Secret priority: `CRON_SECRET` → `VERCEL_CRON_SECRET` → `OPS_CRON_SECRET`
+
+All three secrets are optional individually. Set at least one. Requests must include:
+```
+Authorization: Bearer <secret>
+```
+
+Each run is logged with `verification_method` (which secret matched), `request_source` (vercel / external_scheduler / local / unknown), and `duration_ms`. The cron response JSON includes `verification_method` in the payload for debugging.
+
+### Notification Test Email with Custom Templates (Phase 18)
+
+`POST /api/ops/notifications/test` now:
+- Loads the rule's `email_subject_template` and `email_body_template` if set
+- Validates both against the safe variable allowlist
+- Applies sample values (title: "Payment failed", severity: "critical", etc.)
+- Sets `last_test_rendered_with_template = true` when a custom template is used
+- Falls back to the system default template if no custom template is configured
+
+### Selected Users and Multiple Emails Recipient Modes (Phase 18)
+
+`lib/ops/notifications.ts` now fully resolves:
+- `selected_users` → looks up profiles by `recipient_user_ids[]` array
+- `multiple_emails` → uses `recipient_emails[]` array directly
+- `all_admins` → queries business members with role `owner` or `admin`
+- Emails are deduplicated (lowercased), capped at 10
+- For preview/dry-run, emails are masked: `jo***@example.com`
+
+### Live Email Template Preview (Phase 18)
+
+`EmailTemplateLivePreview` renders as the user types — no server calls, no email sent:
+- Sample values substitute all `{{variable}}` placeholders client-side
+- Unknown variables are highlighted as `[UNKNOWN VAR]`
+- Character counts shown with warnings at 90% of limit
+- Clickable variable chips show sample values on hover
+
+### Notification Preview and Dry-Run with Actual Template Rendering (Phase 18)
+
+`POST /api/ops/notifications/preview` now uses `generateNotificationPreview()` which:
+- Applies the rule's actual subject/body templates with sample vars
+- Sets `rendered_with_template = true` in the stored preview record
+- Stores `preview_hash` for deduplication
+- For dry-run type: sets `last_dry_run_at`, `last_dry_run_status = 'success'`
+- Preview recipients are always masked before returning to the client
+
+### Notification Preview History Export (Phase 18)
+
+`POST /api/ops/notification-previews/export` supports CSV and JSON:
+- Max 2,000 rows, scoped to authenticated business
+- Sanitised fields only: `created_at`, `preview_type`, `source_rule_name`, `rendered_with_template`, `dry_run_status`, `subject_preview` (truncated), `recipient_preview` (masked)
+- Marks exported rows with `exported_at` and `export_format`
+- Logs to `ops_exports` with `source_table = ops_notification_previews`
+
+The `NotificationPreviewHistoryPanel` in the SLA & Routing tab shows paginated preview history with search and export buttons.
+
+### Cron History Pagination and Filters (Phase 18)
+
+`OpsCronHistoryPanel` now supports:
+- Server-side pagination (15 rows per page) with Prev/Next controls
+- Status filter: All / Completed / Failed / Started
+- FTS search across `job_name`, `status`, `trigger_source`, `verification_method`
+- Displays `verification_method` and `businesses_checked` per run
+
+### Full-Text Search for Audit Trail and Exports (Phase 18)
+
+After applying `db/add-ops-phase-18-fields.sql`, these tables gain `search_vector` tsvector columns:
+- `ops_audit_trail` — indexes `action` + `target_table`
+- `ops_exports` — indexes `export_type` + `format` + `status` + `source_table`
+- `ops_notification_previews` — indexes `preview_type` + `source_rule_name`
+- `ops_cron_runs` — indexes `job_name` + `status` + `trigger_source` + `verification_method`
+
+All four use `textSearch('search_vector', ...)` for ≥ 3 char searches with `ilike` fallback.
+
+### Privacy and Security Notes (Phase 18)
+
+- Preview recipient emails always masked in API responses and export output
+- Cron secrets never stored or returned — only `verification_method` label is recorded
+- Template body text never exported in full — `subject_preview` capped at 120 chars
+- `selected_users` IDs validated as business members before saving
+- `multiple_emails` addresses validated with email regex before saving
+- FTS columns built from safe non-PII fields only
+
+---
+
 ## Security Notes
 
 - `SUPABASE_SERVICE_ROLE_KEY` bypasses RLS — only use server-side in server actions or API routes.

@@ -151,7 +151,7 @@ const TRIGGER_TYPE = z.enum([
 ])
 
 const CHANNEL        = z.enum(['email','dashboard','none'])
-const RECIPIENT_TYPE = z.enum(['owner','assigned_user','all_admins','custom_email'])
+const RECIPIENT_TYPE = z.enum(['owner','assigned_user','all_admins','custom_email','selected_users','multiple_emails'])
 const TARGET_TYPE    = z.enum(['event','alert','task','approval','conversation'])
 
 export const opsNotificationRuleSchema = z.object({
@@ -319,15 +319,59 @@ export const launchCheckRunSchema = z.object({
 
 export const getOpsCronRunsSchema = z.object({
   page:     z.number().int().min(1).default(1),
-  pageSize: z.number().int().min(5).max(100).default(20),
+  pageSize: z.number().int().min(5).max(100).default(15),
   status:   z.string().max(32).optional(),
   date_from: z.string().datetime().optional(),
   date_to:   z.string().datetime().optional(),
+  search:    z.string().max(256).optional(),
 })
 
 export const notificationDryRunSchema = z.object({
   rule_id: z.string().uuid(),
 })
+
+// ── Phase 18 schemas ──────────────────────────────────────────────
+
+export const getNotificationPreviewHistorySchema = z.object({
+  page:         z.number().int().min(1).default(1),
+  pageSize:     z.number().int().min(5).max(100).default(15),
+  rule_id:      z.string().uuid().optional(),
+  preview_type: z.enum(['rule_preview','dry_run']).optional(),
+  date_from:    z.string().datetime().optional(),
+  date_to:      z.string().datetime().optional(),
+  search:       z.string().max(256).optional(),
+})
+
+export const exportNotificationPreviewsSchema = z.object({
+  format:       z.enum(['csv','json']).default('csv'),
+  rule_id:      z.string().uuid().optional(),
+  preview_type: z.enum(['rule_preview','dry_run']).optional(),
+  date_from:    z.string().datetime().optional(),
+  date_to:      z.string().datetime().optional(),
+  search:       z.string().max(256).optional(),
+  limit:        z.number().int().min(1).max(2000).default(500),
+})
+
+export const getOpsExportHistorySchema = z.object({
+  page:     z.number().int().min(1).default(1),
+  pageSize: z.number().int().min(5).max(100).default(15),
+  search:   z.string().max(256).optional(),
+  format:   z.string().max(16).optional(),
+  status:   z.string().max(32).optional(),
+  date_from: z.string().datetime().optional(),
+  date_to:   z.string().datetime().optional(),
+})
+
+// Extend recipient_type to include Phase 18 modes
+export const RECIPIENT_TYPES_V2 = ['owner','assigned_user','all_admins','custom_email','selected_users','multiple_emails'] as const
+
+export const validateRecipientEmailsSchema = z.array(
+  z.string().email().max(256)
+).min(1).max(10)
+
+export const validateRecipientUsersSchema = z.array(
+  z.string().uuid()
+).min(1).max(10)
 
 // ── Inferred types ────────────────────────────────────────────────
 
