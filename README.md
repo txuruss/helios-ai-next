@@ -1289,6 +1289,110 @@ Rules: no raw body stored, no signatures, no tokens, no PII. Only `safe_summary`
 
 ---
 
+## Phase 20 — Landing Page, Setup Checklist, Demo Mode, Trust Controls
+
+### Product Positioning (Phase 20)
+
+**Headline:** Stop Missing Customers While You're Busy Working
+
+**Subheadline:** Helios AI replies to customers, answers FAQs, captures leads, books appointments, and alerts you instantly through website chat and WhatsApp.
+
+**Built for:** barbershops, salons, spas, clinics, repair shops, and appointment-based local businesses.
+
+### Landing Page Structure (Phase 20)
+
+1. **Hero** — New headline + subheadline + CTA buttons (Book a Demo / See How It Works) + trust line
+2. **Problem** — Missed messages, slow replies, bookings getting lost
+3. **How It Works** — 5-step flow from first message to booked appointment
+4. **Features** — 8 feature cards (Website AI Chat, WhatsApp, FAQ, Lead Capture, Cal.com, Notifications, Mission Control, Human Handoff)
+5. **Trust & Safety** — Human handoff, conversation logs, booking confirmation, failed message alerts, AI pause mode, owner override
+6. **Pricing** — Starter / Booking OS (Recommended) / Ops Center with setup and monthly ranges
+7. **FAQ + Final CTA**
+
+### Pricing Labels (Phase 20)
+
+| Internal plan | Public label |
+|---------------|--------------|
+| `starter`     | Starter      |
+| `pro`         | Booking OS   |
+| `scale`       | Ops Center   |
+
+Price ranges are display-only. Stripe plan IDs (`starter/pro/scale`) are unchanged.
+
+### Dashboard Navigation Groups (Phase 20)
+
+The sidebar now uses grouped navigation:
+- **Core**: Mission Control, Inbox, Bookings, Leads
+- **Automation**: Ops Center, AI Agents
+- **Setup**: Business, Services, Cal.com, WhatsApp, Widget
+- **System**: Settings + Logout
+
+All routes preserved — grouping is visual only.
+
+### Setup Checklist (Phase 20)
+
+`/dashboard/setup` — 10-step checklist tracked in `client_setup_progress` table:
+1. Business Profile
+2. Services Added
+3. FAQs Added
+4. Booking Rules Configured
+5. Cal.com Connected
+6. WhatsApp Connected
+7. Widget Installed
+8. Test Conversation
+9. Notifications Tested
+10. Launch Approved
+
+`SetupProgressCard` on Mission Control shows progress bar and next action. Launch button appears when 8+ steps are complete.
+
+### Demo Mode (Phase 20)
+
+Demo Mode loads safe sample data for "Elite Cuts Barbershop" — tagged with `metadata->demo:true` for clean removal:
+- Sample services, FAQs, leads
+- Demo ops event logged
+- `demo_mode_active` tracked in `client_setup_progress`
+
+**Rules:** No emails, WhatsApp messages, bookings, or Stripe charges during demo. Reset removes only demo-tagged rows.
+
+### AI Pause Mode (Phase 20)
+
+Business owners can pause the AI from `/dashboard/setup`:
+- `businesses.ai_paused` column (added in migration)
+- When paused, `/api/chat` returns: "The team has paused automated replies. Someone will follow up soon."
+- Toggle via `toggleAiPaused()` server action
+- Toggle visible in Setup page and is analytics-tracked
+
+### Trust & Safety Controls (Phase 20)
+
+- **AI Pause Mode**: Pause/resume AI from setup page
+- **Human Handoff**: Existing handoff behavior preserved and visible in setup guide
+- **Conversation Logs**: All messages stored in Supabase
+- **Booking Confirmation**: Cal.com flow only confirms with verified availability
+- **Failed Message Alerts**: `ops_events` created on notification failures
+- **Owner Override**: Business owner can pause, review, and override at any time
+
+### Privacy and Security Notes (Phase 20)
+
+- Demo data tagged with `metadata->demo:true` — never mixed with real customer data
+- AI pause check reads `businesses.ai_paused` server-side — never trusted from client
+- CTA analytics (`landing_cta_clicked`, `setup_item_completed`) send no PII
+- Demo mode never calls Anthropic, Meta WhatsApp, Cal.com, Stripe, or Resend
+- `client_setup_progress` RLS: business members read/update only their own row
+
+### How to Test Locally (Phase 20)
+
+1. Run `db/add-client-setup-progress.sql` in Supabase SQL Editor
+2. Landing page at `/` shows new headline and pricing
+3. `/dashboard` → Mission Control shows Setup Progress and Demo Mode cards
+4. `/dashboard/setup` → Full checklist with AI Pause controls
+5. Click "Load Demo Business" → loads Elite Cuts sample data
+6. Click "Reset Demo Data" → removes only demo-tagged rows
+7. Toggle AI Pause → `/api/chat` returns safe fallback message when paused
+8. Sidebar shows grouped navigation (Core / Automation / Setup)
+9. All existing pages still work
+
+---
+
 ## Security Notes
 
 - `SUPABASE_SERVICE_ROLE_KEY` bypasses RLS — only use server-side in server actions or API routes.
