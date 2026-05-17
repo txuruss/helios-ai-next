@@ -6,6 +6,7 @@ import { checkChatRateLimit } from '@/lib/rate-limit/chat'
 import { sendBookingNotification } from '@/lib/notifications/owner'
 import { checkLimit, trackUsage } from '@/lib/billing/limits'
 import { createOpsEvent } from '@/lib/ops/events'
+import { createBookingConfirmation } from '@/lib/bookings/confirmation'
 
 const MAX_BODY_BYTES = 16 * 1024
 
@@ -140,6 +141,18 @@ export async function POST(request: NextRequest) {
     // Return success since Cal.com booking was created, just flag the save issue
   }
 
+  // Phase 21: Create booking confirmation portal link (fire-and-forget — non-blocking)
+  let portalUrl: string | null = null
+  if (booking?.id) {
+    const confirmation = await createBookingConfirmation({
+      bookingId:      booking.id,
+      businessId:     business_id,
+      expiresInHours: 48,
+      db,
+    })
+    if (!confirmation.error) portalUrl = confirmation.portalUrl
+  }
+
   // Update lead status if lead_id provided
   if (lead_id) {
     await db
@@ -197,10 +210,12 @@ export async function POST(request: NextRequest) {
   return NextResponse.json({
     ok: true,
     booking: {
-      id:                 booking?.id ?? null,
-      status:             booking?.status ?? (cal.status === 'ACCEPTED' ? 'confirmed' : 'pending'),
-      calcom_booking_uid: cal.calcom_booking_uid,
-      scheduled_at:       selected_time,
+      id:                   booking?.id ?? null,
+      status:               booking?.status ?? (cal.status === 'ACCEPTED' ? 'confirmed' : 'pending'),
+      confirmation_status:  'pending',
+      calcom_booking_uid:   cal.calcom_booking_uid,
+      scheduled_at:         selected_time,
+      portal_url:           portalUrl,
     },
   })
 }

@@ -4,6 +4,19 @@
 
 export type PlanId = 'starter' | 'pro' | 'scale'
 
+// Phase 21: Public-facing display names mapped from internal plan IDs.
+// Stripe price IDs and internal logic remain unchanged.
+export const PLAN_DISPLAY_NAMES: Record<string, string> = {
+  starter: 'Starter',
+  pro:     'Booking OS',
+  scale:   'Ops Center',
+  free:    'Free',
+}
+
+export function getPlanDisplayName(planId: string | null | undefined): string {
+  return PLAN_DISPLAY_NAMES[planId ?? ''] ?? (planId ? planId.charAt(0).toUpperCase() + planId.slice(1) : 'Free')
+}
+
 export interface PlanLimits {
   ai_conversations_month: number
   leads_month:            number
@@ -17,23 +30,41 @@ export interface PlanLimits {
 }
 
 export interface Plan {
-  id:           PlanId
-  name:         string
-  price_monthly: number          // display price in USD
-  stripe_price_env: string       // env var name holding the Stripe price ID
-  limits:       PlanLimits
-  badge?:       string
-  features:     string[]
+  id:                   PlanId
+  name:                 string   // internal name (preserved for backward compat)
+  displayName:          string   // public-facing label: Starter / Booking OS / Ops Center
+  price_monthly:        number   // legacy — kept for backward compat, not shown publicly
+  // Public flat pricing shown on landing and billing pages
+  setupFeeRange:        string   // e.g. "$997 setup"
+  monthlyRange:         string   // e.g. "$149/mo"
+  // Internal ranges — for quoting flexibility only, never shown publicly
+  internalSetupRange:   string   // e.g. "$497 to $1,500"
+  internalMonthlyRange: string   // e.g. "$99 to $299/mo"
+  bestFor:              string   // one-line audience description
+  recommended:          boolean  // highlight as primary recommended offer
+  stripe_price_env:     string   // env var name holding the Stripe price ID
+  limits:               PlanLimits
+  badge?:               string
+  features:             string[]
+  cta:                  string   // button label for upgrade
 }
 
 // ── Plan definitions ──────────────────────────────────────────────
 
 export const PLANS: Record<PlanId, Plan> = {
   starter: {
-    id:            'starter',
-    name:          'Starter',
-    price_monthly: 29,
-    stripe_price_env: 'NEXT_PUBLIC_STRIPE_STARTER_PRICE_ID',
+    id:                   'starter',
+    name:                 'Starter',
+    displayName:          'Starter',
+    price_monthly:        29,                       // legacy — not shown publicly
+    setupFeeRange:        '$997 setup',             // flat public price
+    monthlyRange:         '$149/mo',                // flat public price
+    internalSetupRange:   '$497 to $1,500',         // internal quoting reference only
+    internalMonthlyRange: '$99 to $299/mo',         // internal quoting reference only
+    bestFor:              'Simple website chat, FAQs, lead capture',
+    recommended:          false,
+    cta:                  'Start with Starter',
+    stripe_price_env:     'NEXT_PUBLIC_STRIPE_STARTER_PRICE_ID',
     limits: {
       ai_conversations_month: 250,
       leads_month:            100,
@@ -46,21 +77,29 @@ export const PLANS: Record<PlanId, Plan> = {
       team_members:           1,
     },
     features: [
-      '1 business & widget',
-      '250 AI conversations / month',
-      '100 leads / month',
-      '50 bookings / month',
-      'Powered by Helios AI (required)',
-      'Basic support',
+      'Website AI chat',
+      'FAQ answering',
+      'Lead capture form',
+      'Email notification to owner',
+      'Basic dashboard',
+      '1 revision round',
     ],
   },
 
   pro: {
-    id:            'pro',
-    name:          'Pro',
-    price_monthly: 79,
-    stripe_price_env: 'NEXT_PUBLIC_STRIPE_PRO_PRICE_ID',
-    badge:         'Most Popular',
+    id:                   'pro',
+    name:                 'Pro',
+    displayName:          'Booking OS',
+    price_monthly:        79,                       // legacy — not shown publicly
+    setupFeeRange:        '$2,500 setup',           // flat public price
+    monthlyRange:         '$399/mo',                // flat public price
+    internalSetupRange:   '$1,500 to $3,500',       // internal quoting reference only
+    internalMonthlyRange: '$299 to $750/mo',        // internal quoting reference only
+    bestFor:              'Website chat, WhatsApp, booking flow, notifications',
+    recommended:          true,
+    cta:                  'Upgrade to Booking OS',
+    stripe_price_env:     'NEXT_PUBLIC_STRIPE_PRO_PRICE_ID',
+    badge:                'Recommended',
     limits: {
       ai_conversations_month: 2000,
       leads_month:            1000,
@@ -73,22 +112,30 @@ export const PLANS: Record<PlanId, Plan> = {
       team_members:           5,
     },
     features: [
-      '3 businesses & widgets',
-      '2,000 AI conversations / month',
-      '1,000 leads / month',
-      '500 bookings / month',
-      'Remove "Powered by Helios AI"',
-      'Cal.com booking enabled',
-      'Email notifications',
-      'Priority support',
+      'Website AI chat',
+      'WhatsApp assistant',
+      'FAQ answering',
+      'Lead capture',
+      'Appointment request flow',
+      'Owner notifications',
+      'Basic CRM / dashboard',
+      'Monthly optimization',
     ],
   },
 
   scale: {
-    id:            'scale',
-    name:          'Scale',
-    price_monthly: 199,
-    stripe_price_env: 'NEXT_PUBLIC_STRIPE_SCALE_PRICE_ID',
+    id:                   'scale',
+    name:                 'Scale',
+    displayName:          'Ops Center',
+    price_monthly:        199,                      // legacy — not shown publicly
+    setupFeeRange:        '$5,000 setup',           // flat public price
+    monthlyRange:         '$999/mo',                // flat public price
+    internalSetupRange:   '$3,500 to $8,000+',      // internal quoting reference only
+    internalMonthlyRange: '$750 to $2,000+/mo',     // internal quoting reference only
+    bestFor:              'Multi-location, dashboard, automation workflows, reporting',
+    recommended:          false,
+    cta:                  'Upgrade to Ops Center',
+    stripe_price_env:     'NEXT_PUBLIC_STRIPE_SCALE_PRICE_ID',
     limits: {
       ai_conversations_month: 10000,
       leads_month:            5000,
@@ -101,13 +148,13 @@ export const PLANS: Record<PlanId, Plan> = {
       team_members:           20,
     },
     features: [
-      '10 businesses & widgets',
-      '10,000 AI conversations / month',
-      '5,000 leads / month',
-      '2,500 bookings / month',
-      'Remove "Powered by Helios AI"',
-      'Advanced automations (Phase 7)',
-      'Team members (Phase 7)',
+      'Full AI booking system',
+      'Website chat + WhatsApp automation',
+      'Lead dashboard',
+      'Client onboarding flow',
+      'Admin notifications',
+      'Follow-up automation',
+      'Analytics / reporting',
       'Priority support',
     ],
   },

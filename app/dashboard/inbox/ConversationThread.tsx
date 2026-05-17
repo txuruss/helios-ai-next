@@ -2,6 +2,8 @@
 
 import type { ThreadSession } from './InboxClient'
 import type { WhatsAppMessage } from '@/types'
+import AiConfidenceBadge     from './AiConfidenceBadge'
+import ConversationAiControls from './ConversationAiControls'
 
 interface Props {
   session:  ThreadSession
@@ -29,18 +31,38 @@ function formatTime(ts: string): string {
   })
 }
 
+type ExtSession = ThreadSession & {
+  ai_paused?:            boolean
+  ai_confidence?:        string | null
+  last_confidence_reason?: string | null
+}
+
 export default function ConversationThread({ session, messages }: Props) {
+  const ext = session as ExtSession
   return (
     <div className="flex flex-col h-full">
       <div className="px-5 py-3.5 border-b border-white/[0.06] flex items-center gap-3">
         <div className="w-8 h-8 rounded-full bg-[#25d366]/10 flex items-center justify-center text-[13px] text-[#25d366] shrink-0">
           ✆
         </div>
-        <div>
+        <div className="flex-1 min-w-0">
           <p className="text-[13px] font-semibold text-white">{maskPhone(session.external_thread_id)}</p>
-          <p className="text-[11px] text-[#6a6a6e]">
-            {messages.length} message{messages.length !== 1 ? 's' : ''} · WhatsApp
-          </p>
+          <div className="flex items-center gap-3 mt-0.5">
+            <p className="text-[11px] text-[#6a6a6e]">
+              {messages.length} message{messages.length !== 1 ? 's' : ''} · WhatsApp
+            </p>
+            {ext.ai_confidence && (
+              <AiConfidenceBadge
+                confidence={ext.ai_confidence}
+                reason={ext.last_confidence_reason}
+              />
+            )}
+            {ext.ai_paused && (
+              <span className="text-[10px] px-2 py-0.5 rounded-full border border-[#ffae3c]/30 bg-[#ffae3c]/[0.08] text-[#ffae3c]">
+                AI paused
+              </span>
+            )}
+          </div>
         </div>
       </div>
 
@@ -53,6 +75,12 @@ export default function ConversationThread({ session, messages }: Props) {
           messages.map((msg) => <MessageBubble key={msg.id} msg={msg} />)
         )}
       </div>
+
+      {/* Conversation-level AI pause controls */}
+      <ConversationAiControls
+        sessionId={session.id}
+        aiPaused={ext.ai_paused ?? false}
+      />
     </div>
   )
 }

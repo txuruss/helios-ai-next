@@ -136,13 +136,13 @@ export default function Hero() {
                 Book a Demo
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
               </Link>
-              <a
-                href="#how-it-works"
+              <Link
+                href="/demo"
                 className="btn-ghost"
-                onClick={() => capture('landing_cta_clicked', { source: 'hero', cta: 'how_it_works' })}
+                onClick={() => capture('landing_cta_clicked', { source: 'hero', cta: 'see_demo' })}
               >
                 See How It Works
-              </a>
+              </Link>
             </div>
 
             {/* Trust line */}

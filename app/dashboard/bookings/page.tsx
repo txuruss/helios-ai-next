@@ -10,6 +10,24 @@ const STATUS_PILL: Record<string, string> = {
   no_show:   'pill pill-mute',
 }
 
+const CONFIRM_PILL: Record<string, string> = {
+  pending:            'text-[10px] px-2 py-0.5 rounded-full border border-[#ffae3c]/30 bg-[#ffae3c]/[0.08] text-[#ffae3c]',
+  customer_confirmed: 'text-[10px] px-2 py-0.5 rounded-full border border-[#3b9eff]/30 bg-[#3b9eff]/[0.08] text-[#3b9eff]',
+  owner_confirmed:    'text-[10px] px-2 py-0.5 rounded-full border border-[#3b9eff]/30 bg-[#3b9eff]/[0.08] text-[#3b9eff]',
+  confirmed:          'text-[10px] px-2 py-0.5 rounded-full border border-[#22d093]/30 bg-[#22d093]/[0.08] text-[#22d093]',
+  rejected:           'text-[10px] px-2 py-0.5 rounded-full border border-[#ff8a7a]/30 bg-[#ff8a7a]/[0.08] text-[#ff8a7a]',
+  expired:            'text-[10px] px-2 py-0.5 rounded-full border border-white/[0.10] bg-white/[0.04] text-[#6a6a6e]',
+}
+
+const CONFIRM_LABELS: Record<string, string> = {
+  pending:            '⏳ Awaiting',
+  customer_confirmed: '✓ Customer confirmed',
+  owner_confirmed:    '✓ Owner confirmed',
+  confirmed:          '✅ Confirmed',
+  rejected:           '✗ Rejected',
+  expired:            '⏱ Expired',
+}
+
 export default async function BookingsPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -57,43 +75,63 @@ export default async function BookingsPage() {
                   <th>Date & Time</th>
                   <th>Duration</th>
                   <th>Status</th>
+                  <th>Confirmation</th>
                   <th></th>
                 </tr>
               </thead>
               <tbody>
-                {bookings.map((b) => (
-                  <tr key={b.id}>
-                    <td>
-                      <div className="font-medium text-white">{b.customer_name ?? '—'}</div>
-                      {b.customer_email && (
-                        <div className="text-[12px] text-[#6a6a6e]">{b.customer_email}</div>
-                      )}
-                    </td>
-                    <td className="text-[#9a9a9d]">
-                      {(b as Booking & { services?: { name: string } | null }).services?.name ?? '—'}
-                    </td>
-                    <td className="font-mono text-[12.5px] text-[#9a9a9d] whitespace-nowrap">
-                      {b.scheduled_at
-                        ? new Date(b.scheduled_at).toLocaleString(undefined, {
-                            weekday: 'short', month: 'short', day: 'numeric',
-                            hour: '2-digit', minute: '2-digit',
-                          })
-                        : '—'}
-                    </td>
-                    <td className="text-[#9a9a9d]">
-                      {b.duration_min ? `${b.duration_min} min` : '—'}
-                    </td>
-                    <td>
-                      <span className={STATUS_PILL[b.status] ?? 'pill pill-mute'}>{b.status}</span>
-                    </td>
-                    <td>
-                      <button className="h-7 px-3 rounded-lg text-[12px] border border-white/10 bg-white/[0.02]
-                                          text-[#9a9a9d] hover:text-white hover:border-white/[0.18] transition-all">
-                        View
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                {bookings.map((b) => {
+                  const bExt = b as Booking & { services?: { name: string } | null; confirmation_status?: string; customer_portal_token?: string }
+                  const confStatus = bExt.confirmation_status ?? 'pending'
+                  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? ''
+                  const portalUrl = bExt.customer_portal_token ? `${appUrl}/booking/${bExt.customer_portal_token}` : null
+                  return (
+                    <tr key={b.id}>
+                      <td>
+                        <div className="font-medium text-white">{b.customer_name ?? '—'}</div>
+                        {b.customer_email && (
+                          <div className="text-[12px] text-[#6a6a6e]">{b.customer_email}</div>
+                        )}
+                      </td>
+                      <td className="text-[#9a9a9d]">
+                        {bExt.services?.name ?? '—'}
+                      </td>
+                      <td className="font-mono text-[12.5px] text-[#9a9a9d] whitespace-nowrap">
+                        {b.scheduled_at
+                          ? new Date(b.scheduled_at).toLocaleString(undefined, {
+                              weekday: 'short', month: 'short', day: 'numeric',
+                              hour: '2-digit', minute: '2-digit',
+                            })
+                          : '—'}
+                      </td>
+                      <td className="text-[#9a9a9d]">
+                        {b.duration_min ? `${b.duration_min} min` : '—'}
+                      </td>
+                      <td>
+                        <span className={STATUS_PILL[b.status] ?? 'pill pill-mute'}>{b.status}</span>
+                      </td>
+                      <td>
+                        <div className="flex flex-col gap-1">
+                          <span className={CONFIRM_PILL[confStatus] ?? CONFIRM_PILL.pending}>
+                            {CONFIRM_LABELS[confStatus] ?? confStatus}
+                          </span>
+                          {portalUrl && (
+                            <a href={portalUrl} target="_blank" rel="noopener noreferrer"
+                               className="text-[10px] text-[#6a6a6e] hover:text-white underline">
+                              Portal →
+                            </a>
+                          )}
+                        </div>
+                      </td>
+                      <td>
+                        <button className="h-7 px-3 rounded-lg text-[12px] border border-white/10 bg-white/[0.02]
+                                            text-[#9a9a9d] hover:text-white hover:border-white/[0.18] transition-all">
+                          View
+                        </button>
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>

@@ -1393,6 +1393,75 @@ Business owners can pause the AI from `/dashboard/setup`:
 
 ---
 
+## Phase 21 — Trust Controls, Booking Confirmation, Demo Routes, Billing Labels
+
+### AI Confidence Indicator (Phase 21)
+
+`lib/ai/confidence.ts` — rule-based confidence scoring:
+- **High**: FAQ matched, service matched, booking details complete
+- **Medium**: General reply, no specific match
+- **Low**: Pricing/policy question without FAQ data or missing business data
+- **Needs Review**: Human handoff triggers, booking change/cancel, complaint keywords, or AI paused
+
+Confidence shown as a badge in the Inbox conversation thread header. `AiConfidenceBadge` component renders color-coded status with reason tooltip.
+
+### Conversation-Level AI Pause (Phase 21)
+
+`pauseConversationAi()` and `resumeConversationAi()` in `lib/actions/inbox.ts` set `chat_sessions.ai_paused`. The `ConversationAiControls` component in the inbox thread allows pausing/resuming per conversation with an optional reason. The `/api/chat` route now checks both `businesses.ai_paused` (business-level) and `chat_sessions.ai_paused` (conversation-level) before generating a reply.
+
+### Booking Confirmation Step (Phase 21)
+
+`lib/bookings/confirmation.ts` adds:
+- `createBookingConfirmation()` — generates `customer_portal_token` + `confirmation_token` with 48h expiry
+- `confirmBookingByCustomer()` — validates token, transitions `confirmation_status`
+- `confirmBookingByOwner()` — dashboard-only confirm
+- `rejectBookingConfirmation()` — customer or owner reject
+
+The `/api/calcom/book` route now calls `createBookingConfirmation()` after booking creation (non-blocking). The booking response includes `portal_url`. Bookings page shows `confirmation_status` with color-coded pills.
+
+### Customer Booking Portal (Phase 21)
+
+Public route `/booking/[token]` — no auth required, token validated server-side:
+- Shows service, date, time, business name, and confirmation status
+- Confirm and Cancel buttons call `/api/booking/[token]/confirm` and `/api/booking/[token]/reject`
+- Expired tokens show safe error message
+- Never exposes internal IDs, owner email, or raw metadata
+
+### Public Demo Routes (Phase 21)
+
+`/demo` — sales demo landing:
+- "Run Demo Flow" button animates through 6 steps (message → AI reply → lead → booking → notification → Mission Control)
+- Static preview cards for website chat, Mission Control, and owner alert
+- CTA links to `/login` and `/demo/widget`
+
+`/demo/widget` — sandbox widget:
+- Canned AI replies using `DEMO_FAQS` and `DEMO_SERVICES` data
+- Quick-prompt buttons for common questions
+- No external API calls (zero Anthropic, Cal.com, or WhatsApp)
+- Clear "Demo sandbox" label throughout
+
+Landing page "See How It Works" CTA now links to `/demo`.
+
+### Billing Labels (Phase 21)
+
+`lib/billing/plans.ts` adds `displayName` field and `getPlanDisplayName()`:
+- `starter` → Starter
+- `pro` → Booking OS
+- `scale` → Ops Center
+
+Billing dashboard now shows `displayName` in plan cards. Stripe price IDs and internal plan logic unchanged.
+
+### Privacy and Security Notes (Phase 21)
+
+- Customer portal tokens are 64-char hex — never raw booking IDs or business IDs
+- Portal tokens expire in 48 hours; expired tokens transition booking to `expired` status
+- `/api/booking/[token]/*` routes validate token server-side using `createServiceRoleClient()`, never from client
+- Demo sandbox never calls Anthropic, Cal.com, Meta WhatsApp, Stripe, or Resend
+- AI confidence is rule-based only — no false claims about model statistical confidence
+- Conversation AI pause stores reason server-side; never logged to analytics
+
+---
+
 ## Security Notes
 
 - `SUPABASE_SERVICE_ROLE_KEY` bypasses RLS — only use server-side in server actions or API routes.

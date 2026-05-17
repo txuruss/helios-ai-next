@@ -111,12 +111,12 @@ export default function PricingSection() {
         </div>
 
         <p className="text-center mt-7 text-[13px] text-[#6a6a6e]">
-          Final pricing depends on your workflow, integrations, and system complexity. Book a demo for a custom quote.
+          Flat public pricing keeps setup simple. Custom requirements, extra locations, advanced workflows, or complex integrations may require add-ons.
         </p>
         <div className="mt-4 max-w-[640px] mx-auto flex items-start gap-2.5 p-4 rounded-xl
                         bg-white/[0.02] border border-white/[0.06] text-[13px] text-[#9a9a9d]">
           <svg className="text-[#ffae3c] shrink-0 mt-0.5" width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2 14 9l7 2-7 2-2 7-2-7-7-2 7-2 2-7Z"/></svg>
-          Not sure which plan fits? Book a free demo — we&apos;ll review your workflow and recommend the right system.
+          Not sure which system fits? Book a free demo — we&apos;ll review your workflow and recommend the right plan.
         </div>
       </div>
     </section>

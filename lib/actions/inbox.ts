@@ -596,6 +596,119 @@ export async function bulkUpdateConversations(
   }
 }
 
+// ── Phase 21: Conversation-level AI pause/resume ──────────────────
+
+export async function pauseConversationAi(
+  sessionId: string,
+  reason?:   string,
+): Promise<{ success?: string; error?: string }> {
+  if (!sessionId) return { error: 'Invalid session.' }
+
+  const auth = await requireInboxAccess()
+  if (!auth.ok) return { error: auth.error }
+
+  const db = createServiceRoleClient()
+  try {
+    const { error: upErr } = await db
+      .from('chat_sessions')
+      .update({
+        ai_paused:        true,
+        ai_pause_reason:  reason ? reason.slice(0, 256) : null,
+      })
+      .eq('id', sessionId)
+      .eq('business_id', auth.businessId)
+
+    if (upErr) throw upErr
+
+    void import('@/lib/ops/events').then(({ createOpsEvent }) =>
+      createOpsEvent({
+        business_id: auth.businessId,
+        source:      'inbox',
+        event_type:  'conversation_ai_paused',
+        severity:    'info',
+        title:       'AI paused for a conversation',
+        metadata:    { session_id: sessionId },
+      }, db)
+    ).catch(() => undefined)
+
+    void import('@/lib/analytics/posthog').then(({ capture }) =>
+      capture('conversation_ai_paused', { has_reason: !!reason })
+    )
+
+    return { success: 'AI paused for this conversation.' }
+  } catch (err) {
+    captureApiError(err, { route: 'actions/inbox', error_type: 'pause_conv_ai_error', business_id: auth.businessId })
+    return { error: 'Could not pause AI for this conversation.' }
+  }
+}
+
+export async function resumeConversationAi(
+  sessionId: string,
+): Promise<{ success?: string; error?: string }> {
+  if (!sessionId) return { error: 'Invalid session.' }
+
+  const auth = await requireInboxAccess()
+  if (!auth.ok) return { error: auth.error }
+
+  const db = createServiceRoleClient()
+  try {
+    const { error: upErr } = await db
+      .from('chat_sessions')
+      .update({ ai_paused: false, ai_pause_reason: null })
+      .eq('id', sessionId)
+      .eq('business_id', auth.businessId)
+
+    if (upErr) throw upErr
+
+    void import('@/lib/analytics/posthog').then(({ capture }) =>
+      capture('conversation_ai_resumed', {})
+    )
+
+    return { success: 'AI resumed for this conversation.' }
+  } catch (err) {
+    captureApiError(err, { route: 'actions/inbox', error_type: 'resume_conv_ai_error', business_id: auth.businessId })
+    return { error: 'Could not resume AI.' }
+  }
+}
+
+// ── Phase 21: Get conversation AI confidence ───────────────────────
+
+export async function getConversationAiState(
+  sessionId: string,
+): Promise<{
+  ai_paused:            boolean
+  ai_confidence:        string
+  ai_review_required:   boolean
+  last_confidence_reason: string | null
+  error:                string | null
+}> {
+  const EMPTY = { ai_paused: false, ai_confidence: 'medium', ai_review_required: false, last_confidence_reason: null, error: null }
+  const auth = await requireInboxAccess()
+  if (!auth.ok) return { ...EMPTY, error: auth.error }
+  const db = createServiceRoleClient()
+
+  try {
+    const { data } = await db
+      .from('chat_sessions')
+      .select('ai_paused, ai_confidence, ai_review_required, last_confidence_reason')
+      .eq('id', sessionId)
+      .eq('business_id', auth.businessId)
+      .single()
+
+    if (!data) return EMPTY
+    const d = data as { ai_paused?: boolean; ai_confidence?: string; ai_review_required?: boolean; last_confidence_reason?: string | null }
+    return {
+      ai_paused:            d.ai_paused ?? false,
+      ai_confidence:        d.ai_confidence ?? 'medium',
+      ai_review_required:   d.ai_review_required ?? false,
+      last_confidence_reason: d.last_confidence_reason ?? null,
+      error:                null,
+    }
+  } catch {
+    return EMPTY
+  }
+}
+
 // ── unassignConversation ──────────────────────────────────────────
 
 export async function unassignConversation(

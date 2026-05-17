@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useTransition, useEffect } from 'react'
+import Link from 'next/link'
 import { getDemoModeState, loadDemoData, resetDemoData } from '@/lib/actions/demo'
 import { DEMO_BUSINESS } from '@/lib/demo/demo-data'
 import { capture } from '@/lib/analytics/posthog'
@@ -135,6 +136,20 @@ export default function DemoModeCard() {
             Cancel
           </button>
         )}
+      </div>
+
+      {/* Demo links */}
+      <div className="flex gap-3 mt-3 pt-3 border-t border-white/[0.06]">
+        <Link href="/demo" target="_blank"
+          className="text-[11.5px] text-[#9a9a9d] hover:text-white transition-colors"
+          onClick={() => capture('demo_page_viewed', { source: 'dashboard' })}>
+          View Demo Page →
+        </Link>
+        <Link href="/demo/widget" target="_blank"
+          className="text-[11.5px] text-[#9a9a9d] hover:text-white transition-colors"
+          onClick={() => capture('demo_widget_opened', { source: 'dashboard' })}>
+          Widget Sandbox →
+        </Link>
       </div>
     </div>
   )

@@ -50,8 +50,8 @@ export default async function SettingsPage() {
           <p className="text-[14px] text-[#9a9a9d] mb-5">Manage your subscription plan and usage limits.</p>
           <div className="flex items-center justify-between p-4 rounded-xl bg-white/[0.02] border border-white/[0.06]">
             <div>
-              <div className="font-semibold capitalize">{plan.name} Plan</div>
-              <div className="text-[13px] text-[#9a9a9d] mt-0.5">${plan.price_monthly}/month · {plan.limits.ai_conversations_month.toLocaleString()} AI conversations</div>
+              <div className="font-semibold">{plan.displayName ?? plan.name} Plan</div>
+              <div className="text-[13px] text-[#9a9a9d] mt-0.5">{plan.monthlyRange} · {plan.limits.ai_conversations_month.toLocaleString()} AI conversations/mo</div>
             </div>
             <Link href="/dashboard/settings/billing" className="btn-primary btn-sm">
               Manage Billing

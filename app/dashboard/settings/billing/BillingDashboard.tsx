@@ -2,13 +2,12 @@
 
 import { useActionState, useEffect, useTransition } from 'react'
 import { createCheckoutSessionAction, createPortalSessionAction } from '@/lib/actions/billing'
-import { ALL_PLANS } from '@/lib/billing/plans'
+import { ALL_PLANS, getPlanDisplayName } from '@/lib/billing/plans'
 import { trackBillingPageViewed, trackCheckoutStarted, trackPortalOpened } from '@/lib/analytics/events'
 import type { Plan, PlanLimits } from '@/lib/billing/plans'
 import type { Subscription } from '@/types'
 
 interface UsageSummary { ai_conversations: number; leads: number; bookings: number }
-interface LimitStatus  { used: number; limit: number }
 
 interface Props {
   subscription:   Subscription | null
@@ -50,27 +49,42 @@ function PlanCard({
     window.location.href = state.url
   }
 
+  const isRecommended = plan.recommended
+
   return (
     <div className={`relative border rounded-2xl p-6 flex flex-col gap-4 transition-all ${
-      plan.badge
+      isRecommended
         ? 'border-[#ff7a18]/40 bg-gradient-to-b from-[#ff7a18]/[0.06] to-transparent'
         : 'border-white/10 bg-[#0f1012]/60'
     }`}>
-      {plan.badge && (
+      {isRecommended && (
         <span className="absolute -top-3 left-1/2 -translate-x-1/2 text-[10.5px] font-semibold px-3 py-1 rounded-full
                          bg-gradient-to-b from-[#ff8a2a] to-[#ee6a0c] text-[#1a0c00] tracking-[0.04em]">
-          {plan.badge}
+          Recommended
         </span>
       )}
 
+      {/* Name */}
       <div>
-        <div className="text-[12px] font-semibold uppercase tracking-[0.14em] text-[#ffae3c] mb-1">{plan.name}</div>
-        <div className="flex items-end gap-1">
-          <span className="text-[32px] font-semibold">${plan.price_monthly}</span>
-          <span className="text-[14px] text-[#9a9a9d] mb-1.5">/month</span>
+        <div className="text-[12px] font-semibold uppercase tracking-[0.14em] text-[#ffae3c] mb-1">
+          {plan.displayName}
+        </div>
+        <p className="text-[13px] text-[#6a6a6e]">{plan.bestFor}</p>
+      </div>
+
+      {/* Price ranges */}
+      <div className="border-y border-white/[0.06] py-3.5 flex flex-col gap-2">
+        <div className="flex justify-between items-center">
+          <span className="text-[11px] font-medium uppercase tracking-[0.08em] text-[#6a6a6e]">Setup</span>
+          <span className="font-mono text-[13px] text-white font-medium">{plan.setupFeeRange}</span>
+        </div>
+        <div className="flex justify-between items-center">
+          <span className="text-[11px] font-medium uppercase tracking-[0.08em] text-[#6a6a6e]">Monthly</span>
+          <span className="font-mono text-[13px] text-[#ffae3c] font-medium">{plan.monthlyRange}</span>
         </div>
       </div>
 
+      {/* Features */}
       <ul className="flex flex-col gap-2 flex-1">
         {plan.features.map((f) => (
           <li key={f} className="flex items-start gap-2 text-[13px] text-[#9a9a9d]">
@@ -79,6 +93,13 @@ function PlanCard({
           </li>
         ))}
       </ul>
+
+      {/* Usage limit hint */}
+      <p className="text-[11px] text-[#6a6a6e]">
+        {plan.limits.ai_conversations_month.toLocaleString()} AI convos ·{' '}
+        {plan.limits.leads_month.toLocaleString()} leads ·{' '}
+        {plan.limits.bookings_month.toLocaleString()} bookings / mo
+      </p>
 
       {state.error && (
         <p className="text-[12px] text-[#ff8a7a]">{state.error}</p>
@@ -96,11 +117,11 @@ function PlanCard({
             type="submit"
             disabled={pending || !stripeReady}
             className={`w-full h-10 rounded-[10px] text-[13.5px] font-medium transition-all disabled:opacity-50 ${
-              plan.badge
+              isRecommended
                 ? 'bg-gradient-to-b from-[#ff8a2a] to-[#ee6a0c] text-[#1a0c00]'
                 : 'border border-white/10 bg-white/[0.04] text-white hover:bg-white/[0.08]'
             }`}>
-            {pending ? 'Redirecting…' : !stripeReady ? 'Billing not configured' : `Upgrade to ${plan.name}`}
+            {pending ? 'Redirecting…' : !stripeReady ? 'Contact to Upgrade' : plan.cta}
           </button>
         </form>
       )}
@@ -114,14 +135,14 @@ export default function BillingDashboard({
   const [portalState, portalAction, portalPending] = useActionState(createPortalSessionAction, {})
   const [, startNav] = useTransition()
 
-  // Track billing page view (safe — no PII)
   useEffect(() => { trackBillingPageViewed('', currentPlanId) }, [currentPlanId])
 
   if (portalState.url && typeof window !== 'undefined') {
     startNav(() => { window.location.href = portalState.url! })
   }
 
-  const status = subscription?.status
+  const displayName = getPlanDisplayName(currentPlanId)
+  const status      = subscription?.status
   const nextRenewal = subscription?.current_period_end
     ? new Date(subscription.current_period_end).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })
     : null
@@ -133,14 +154,17 @@ export default function BillingDashboard({
         <div className="flex items-start justify-between mb-5">
           <div>
             <div className="text-[12px] font-semibold uppercase tracking-[0.14em] text-[#6a6a6e] mb-1">Current Plan</div>
-            <div className="text-[22px] font-semibold capitalize">{currentPlanId}</div>
+            <div className="text-[22px] font-semibold">{displayName}</div>
             {status && (
               <span className={`pill text-[11px] mt-1 ${
-                status === 'active'   ? 'pill-green'
-                : status === 'trialing' ? 'pill-cyan'
-                : status === 'past_due' ? 'pill-amber'
+                status === 'active'    ? 'pill-green'
+                : status === 'trialing'  ? 'pill-cyan'
+                : status === 'past_due'  ? 'pill-amber'
                 : 'pill-mute'
               }`}>{status.replace('_', ' ')}</span>
+            )}
+            {!subscription && (
+              <p className="text-[12.5px] text-[#6a6a6e] mt-1.5">No active subscription — on free tier.</p>
             )}
           </div>
           <div className="flex flex-col items-end gap-2">
@@ -175,14 +199,29 @@ export default function BillingDashboard({
 
       {/* Stripe not configured warning */}
       {!stripeReady && (
-        <div className="flex items-center gap-3 px-5 py-4 rounded-xl border border-[#ffae3c]/30 bg-[#ffae3c]/[0.05]
+        <div className="flex items-start gap-3 px-5 py-4 rounded-xl border border-[#ffae3c]/30 bg-[#ffae3c]/[0.05]
                         text-[13.5px] text-[#ffae3c]">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" className="shrink-0">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" className="shrink-0 mt-0.5">
             <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
             <line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/>
           </svg>
           <span>
-            Stripe is not configured. Add <code className="font-mono text-[11.5px]">STRIPE_SECRET_KEY</code> and price IDs to enable checkout.
+            Billing is not fully configured yet. Stripe environment variables are missing — upgrades require a Stripe connection.
+            Contact your account manager to upgrade your plan.
+          </span>
+        </div>
+      )}
+
+      {/* Stripe configured but uses legacy subscription prices */}
+      {stripeReady && (
+        <div className="flex items-start gap-3 px-5 py-4 rounded-xl border border-[#3b9eff]/20 bg-[#3b9eff]/[0.04]
+                        text-[12.5px] text-[#9a9a9d]">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#3b9eff" strokeWidth="2.2" strokeLinecap="round" className="shrink-0 mt-0.5">
+            <circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>
+          </svg>
+          <span>
+            Online checkout is currently configured for subscription billing. Setup fee collection may require a manual invoice
+            until Stripe products are updated to match the current offer pricing.
           </span>
         </div>
       )}
@@ -202,6 +241,12 @@ export default function BillingDashboard({
             />
           ))}
         </div>
+
+        {/* Stripe / pricing note */}
+        <p className="mt-5 text-[12.5px] text-[#6a6a6e] leading-relaxed">
+          Flat public pricing keeps setup simple. Online checkout may need updated Stripe products before live payments
+          match the current offer pricing. Monthly plans cover hosting, AI operations, monitoring, and support.
+        </p>
       </div>
     </div>
   )

@@ -144,17 +144,33 @@ export async function POST(request: NextRequest) {
   }
   log.rate_limit = rlResult.limit > 0 ? 'allowed' : 'skipped'
 
-  // 7. Check AI pause state
+  // 7. Check AI pause state (business-level + conversation-level)
   const db = createServiceRoleClient()
+
+  // Business-level pause
   const { data: bizPauseRow } = await db
     .from('businesses').select('ai_paused').eq('id', business_id).single()
   if ((bizPauseRow as { ai_paused?: boolean } | null)?.ai_paused) {
     finish(200, undefined)
     return respond({
-      ok:    true,
-      reply: 'The team has paused automated replies. Someone will follow up soon.',
+      ok:     true,
+      reply:  'The team has paused automated replies. Someone will follow up soon.',
       paused: true,
     }, 200, cors)
+  }
+
+  // Conversation-level pause (if session_id provided)
+  if (session_id) {
+    const { data: sessRow } = await db
+      .from('chat_sessions').select('ai_paused').eq('id', session_id).eq('business_id', business_id).single()
+    if ((sessRow as { ai_paused?: boolean } | null)?.ai_paused) {
+      finish(200, undefined)
+      return respond({
+        ok:     true,
+        reply:  'A team member will follow up with you shortly.',
+        paused: true,
+      }, 200, cors)
+    }
   }
 
   // 8. Run shared AI engine
