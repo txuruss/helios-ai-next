@@ -414,6 +414,146 @@ export async function sendBookingConfirmationEmail(params: {
 
 // ── Log confirmation event ────────────────────────────────────────
 
+// ── Send owner notification when customer confirms ────────────────
+
+export async function sendOwnerBookingConfirmedEmail(params: {
+  bookingId:    string
+  businessId:   string
+  businessName: string
+  serviceName:  string | null
+  scheduledAt:  string | null
+  customerName: string | null
+  ownerEmail:   string
+  dashboardUrl: string
+  db?:          DbClient
+}): Promise<{ ok: boolean; error?: string }> {
+  const client  = params.db ?? createServiceRoleClient()
+  const { sendEmail } = await import('@/lib/resend/client')
+
+  if (!process.env.RESEND_API_KEY) {
+    await client.from('bookings').update({ owner_confirmation_email_status: 'skipped' })
+      .eq('id', params.bookingId).catch(() => undefined)
+    return { ok: true }
+  }
+
+  const dateStr = params.scheduledAt
+    ? new Date(params.scheduledAt).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', year: 'numeric' })
+    : 'To be confirmed'
+  const timeStr = params.scheduledAt
+    ? new Date(params.scheduledAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+    : ''
+
+  // Safe customer name — only first name or "A customer"
+  const safeCustomer = params.customerName
+    ? params.customerName.split(' ')[0] ?? 'A customer'
+    : 'A customer'
+
+  const bookingLink = `${params.dashboardUrl}/dashboard/bookings`
+
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"></head>
+<body style="font-family:system-ui,sans-serif;background:#0a0a0c;color:#f3f3f3;padding:32px;max-width:600px;margin:0 auto;">
+  <div style="background:#0f1012;border:1px solid rgba(255,255,255,0.08);border-radius:16px;padding:32px;">
+    <div style="display:flex;align-items:center;gap:12px;margin-bottom:24px;">
+      <div style="width:36px;height:36px;background:#22d093;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:16px;">✓</div>
+      <span style="font-size:18px;font-weight:600;">${params.businessName}</span>
+    </div>
+    <h2 style="margin:0 0 8px;font-size:19px;color:#f3f3f3;">Booking Confirmed by Customer</h2>
+    <p style="color:#9a9a9d;margin:0 0 20px;font-size:14px;line-height:1.6;">
+      ${safeCustomer} has confirmed a booking request. Please review and confirm your end.
+    </p>
+    <div style="background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);border-radius:12px;padding:16px;margin-bottom:24px;">
+      ${params.serviceName ? `<div style="display:flex;justify-content:space-between;margin-bottom:8px;"><span style="color:#6a6a6e;font-size:12px;">Service</span><span style="font-size:13px;font-weight:600;">${params.serviceName}</span></div>` : ''}
+      <div style="display:flex;justify-content:space-between;margin-bottom:8px;"><span style="color:#6a6a6e;font-size:12px;">Date</span><span style="font-size:13px;font-weight:600;">${dateStr}</span></div>
+      ${timeStr ? `<div style="display:flex;justify-content:space-between;"><span style="color:#6a6a6e;font-size:12px;">Time</span><span style="font-size:13px;font-weight:600;">${timeStr}</span></div>` : ''}
+    </div>
+    <a href="${bookingLink}" style="display:inline-block;padding:12px 24px;background:#ff7a18;color:#1a0c00;font-weight:600;border-radius:10px;text-decoration:none;font-size:14px;">
+      Review in Dashboard →
+    </a>
+    <p style="color:#6a6a6e;font-size:12px;margin-top:24px;">
+      This notification was sent by Helios AI. Log in to confirm or reject the booking.
+    </p>
+  </div>
+</body></html>`
+
+  const text = `Booking confirmed by customer — ${params.businessName}\n\nService: ${params.serviceName ?? 'N/A'}\nDate: ${dateStr}${timeStr ? `\nTime: ${timeStr}` : ''}\n\nReview in dashboard: ${bookingLink}`
+
+  try {
+    const result = await sendEmail({
+      to:      params.ownerEmail,
+      subject: `Booking confirmed — ${safeCustomer} · ${params.businessName}`,
+      html,
+      text,
+    })
+
+    const now = new Date().toISOString()
+    await client.from('bookings').update({
+      owner_confirmation_email_sent_at:  result.ok ? now : null,
+      owner_confirmation_email_status:   result.ok ? 'sent' : 'failed',
+    }).eq('id', params.bookingId).catch(() => undefined)
+
+    capture(result.ok ? 'booking_owner_notification_sent' : 'booking_owner_notification_failed', { status: result.ok ? 'sent' : 'failed' })
+    return result.ok ? { ok: true } : { ok: false, error: 'Send failed.' }
+  } catch (err) {
+    captureApiError(err, { route: 'bookings/confirmation', error_type: 'owner_email_error', business_id: params.businessId })
+    return { ok: false, error: 'Owner email failed.' }
+  }
+}
+
+// ── Cal.com availability check ────────────────────────────────────
+
+export async function checkCalcomAvailability(params: {
+  bookingId:    string
+  businessId:   string
+  scheduledAt:  string | null
+  calcomEventTypeId?: number | null
+  db?:          DbClient
+}): Promise<{ available: boolean; status: string; error?: string }> {
+  const client = params.db ?? createServiceRoleClient()
+
+  if (!process.env.CALCOM_API_KEY || !params.scheduledAt || !params.calcomEventTypeId) {
+    await client.from('bookings').update({
+      calcom_availability_status:     'skipped',
+      calcom_availability_checked_at: new Date().toISOString(),
+    }).eq('id', params.bookingId).catch(() => undefined)
+    return { available: true, status: 'skipped' }
+  }
+
+  try {
+    const { getAvailability } = await import('@/lib/calcom/client')
+    const dateStr  = params.scheduledAt.split('T')[0] ?? ''
+    const startUtc = new Date(`${dateStr}T00:00:00Z`).toISOString()
+    const endUtc   = new Date(`${dateStr}T23:59:59Z`).toISOString()
+    const result   = await getAvailability({
+      eventTypeId: params.calcomEventTypeId!,
+      startTime:   startUtc,
+      endTime:     endUtc,
+    })
+
+    const isAvailable = result.ok
+
+    await client.from('bookings').update({
+      calcom_availability_status:     isAvailable ? 'available' : 'unavailable',
+      calcom_availability_checked_at: new Date().toISOString(),
+      calcom_availability_error:      result.ok ? null : 'Slot may not be available.',
+    }).eq('id', params.bookingId).catch(() => undefined)
+
+    capture('booking_availability_checked', { status: isAvailable ? 'available' : 'unavailable' })
+    return { available: isAvailable, status: isAvailable ? 'available' : 'unavailable' }
+  } catch (err) {
+    const errSummary = err instanceof Error ? err.message.slice(0, 100) : 'Unknown error'
+    captureApiError(err, { route: 'bookings/confirmation', error_type: 'calcom_availability_error', business_id: params.businessId })
+
+    await client.from('bookings').update({
+      calcom_availability_status:     'failed',
+      calcom_availability_checked_at: new Date().toISOString(),
+      calcom_availability_error:      errSummary,
+    }).eq('id', params.bookingId).catch(() => undefined)
+
+    capture('booking_availability_failed', { error: 'check_failed' })
+    return { available: true, status: 'failed', error: 'Availability check failed.' }
+  }
+}
+
 export async function logBookingConfirmationEvent(params: {
   businessId:  string
   bookingId:   string

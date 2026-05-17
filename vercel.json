@@ -3,6 +3,10 @@
     {
       "path": "/api/cron/ops/sla",
       "schedule": "*/10 * * * *"
+    },
+    {
+      "path": "/api/cron/bookings/expire-confirmations",
+      "schedule": "*/15 * * * *"
     }
   ]
 }

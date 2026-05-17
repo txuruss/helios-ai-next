@@ -1,13 +1,15 @@
 'use client'
 
 import { useState, useTransition } from 'react'
-import { ownerConfirmBooking, ownerRejectBooking } from '@/lib/actions/bookings'
+import { ownerConfirmBooking, ownerRejectBooking, resendBookingConfirmationEmail } from '@/lib/actions/bookings'
 
 interface Props {
   bookingId:          string
   confirmationStatus: string
   portalToken?:       string | null
   portalUrl?:         string | null
+  hasCustomerEmail?:  boolean
+  resendCount?:       number
   onUpdated?:         () => void
 }
 
@@ -16,6 +18,8 @@ export default function BookingActionsClient({
   confirmationStatus,
   portalToken,
   portalUrl,
+  hasCustomerEmail,
+  resendCount,
   onUpdated,
 }: Props) {
   const [msg,        setMsg]        = useState<string | null>(null)
@@ -24,6 +28,7 @@ export default function BookingActionsClient({
   const [reason,     setReason]     = useState('')
   const [confirming, startConfirm]  = useTransition()
   const [rejecting,  startReject]   = useTransition()
+  const [resending,  startResend]   = useTransition()
   const [copied,     setCopied]     = useState(false)
 
   const canAct = ['pending', 'customer_confirmed'].includes(confirmationStatus)
@@ -45,6 +50,17 @@ export default function BookingActionsClient({
       if (result.error) { setError(result.error); return }
       setMsg(result.success ?? 'Rejected.')
       setShowReject(false)
+      onUpdated?.()
+    })
+  }
+
+  const handleResend = () => {
+    setError(null)
+    startResend(async () => {
+      const result = await resendBookingConfirmationEmail(bookingId)
+      if (result.error) { setError(result.error); return }
+      if (result.skipped) { setMsg('Email skipped — Resend not configured.'); return }
+      setMsg('✓ Confirmation email resent.')
       onUpdated?.()
     })
   }
@@ -106,6 +122,14 @@ export default function BookingActionsClient({
         <button onClick={handleCopyPortal}
           className="h-6 px-2 rounded text-[10px] border border-white/[0.10] text-[#6a6a6e] hover:text-white hover:bg-white/[0.04] transition-all text-left">
           {copied ? '✓ Copied!' : '⎘ Copy Portal Link'}
+        </button>
+      )}
+
+      {/* Resend confirmation email */}
+      {['pending', 'customer_confirmed'].includes(confirmationStatus) && hasCustomerEmail && portalToken && (
+        <button onClick={handleResend} disabled={resending}
+          className="h-6 px-2 rounded text-[10px] border border-[#3b9eff]/20 text-[#3b9eff] hover:bg-[#3b9eff]/10 transition-all disabled:opacity-40 text-left">
+          {resending ? '…' : `↺ Resend Email${(resendCount ?? 0) > 0 ? ` (${resendCount})` : ''}`}
         </button>
       )}
     </div>

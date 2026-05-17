@@ -87,6 +87,76 @@ export async function ownerConfirmBooking(
   }
 }
 
+// ── Resend booking confirmation email ────────────────────────────
+
+export async function resendBookingConfirmationEmail(
+  bookingId: string,
+): Promise<{ ok?: boolean; skipped?: boolean; error?: string }> {
+  const auth = await requireAuth()
+  if (!auth.ok) return { error: auth.error }
+  const db = createServiceRoleClient()
+
+  try {
+    const { data: booking } = await db
+      .from('bookings')
+      .select('id, business_id, customer_email, customer_portal_token, customer_confirmation_email_resend_count, scheduled_at, services(name), businesses(name)')
+      .eq('id', bookingId)
+      .eq('business_id', auth.businessId)
+      .single()
+
+    if (!booking) return { error: 'Booking not found.' }
+
+    const b = booking as {
+      id: string
+      business_id: string
+      customer_email: string | null
+      customer_portal_token: string | null
+      customer_confirmation_email_resend_count: number
+      scheduled_at: string | null
+      services?: { name?: string } | null
+      businesses?: { name?: string } | null
+    }
+
+    if (!b.customer_email) return { error: 'No customer email on this booking.' }
+    if (!b.customer_portal_token) return { error: 'No portal link exists for this booking.' }
+
+    if (!process.env.RESEND_API_KEY) {
+      capture('booking_confirmation_resend_failed', { reason: 'resend_not_configured' })
+      return { skipped: true }
+    }
+
+    const appUrl    = process.env.NEXT_PUBLIC_APP_URL ?? 'https://helios.ai'
+    const portalUrl = `${appUrl}/booking/${b.customer_portal_token}`
+    const bizName   = (b.businesses as { name?: string } | null)?.name ?? 'Your Business'
+
+    const { sendBookingConfirmationEmail } = await import('@/lib/bookings/confirmation')
+    const result = await sendBookingConfirmationEmail({
+      bookingId:    bookingId,
+      businessId:   auth.businessId,
+      businessName: bizName,
+      serviceName:  (b.services as { name?: string } | null)?.name ?? null,
+      scheduledAt:  b.scheduled_at,
+      customerEmail: b.customer_email,
+      portalUrl,
+      db,
+    })
+
+    if (!result.ok) return { error: 'Email send failed.' }
+
+    // Increment resend count
+    await db.from('bookings').update({
+      customer_confirmation_email_resend_count:   (b.customer_confirmation_email_resend_count ?? 0) + 1,
+      customer_confirmation_email_last_resent_at: new Date().toISOString(),
+    }).eq('id', bookingId).eq('business_id', auth.businessId)
+
+    capture('booking_confirmation_email_resent', { count: (b.customer_confirmation_email_resend_count ?? 0) + 1 })
+    return { ok: true }
+  } catch (err) {
+    captureApiError(err, { route: 'actions/bookings', error_type: 'resend_email_error', business_id: auth.businessId })
+    return { error: 'Could not resend email.' }
+  }
+}
+
 // ── Owner reject booking ──────────────────────────────────────────
 
 export async function ownerRejectBooking(

@@ -149,6 +149,69 @@ export async function getAiPaused(): Promise<{ paused: boolean; reason: string |
   }
 }
 
+// ── Demo QA checklist ─────────────────────────────────────────────
+
+export interface DemoQaCheck {
+  id:           string
+  business_id:  string
+  check_key:    string
+  check_label:  string
+  check_status: 'pending' | 'passed' | 'failed' | 'skipped'
+  notes:        string | null
+  checked_at:   string | null
+  updated_at:   string
+}
+
+export async function getDemoQaChecks(): Promise<{
+  checks: DemoQaCheck[]
+  error:  string | null
+}> {
+  const auth = await requireAuth()
+  if (!auth.ok) return { checks: [], error: auth.error }
+  const db = createServiceRoleClient()
+
+  try {
+    const { data } = await db.from('client_demo_qa_checks')
+      .select('*')
+      .eq('business_id', auth.businessId)
+      .order('created_at', { ascending: true })
+    return { checks: (data ?? []) as DemoQaCheck[], error: null }
+  } catch (err) {
+    captureApiError(err, { route: 'actions/setup', error_type: 'get_qa_checks_error', business_id: auth.businessId })
+    return { checks: [], error: 'Could not load QA checklist.' }
+  }
+}
+
+export async function updateDemoQaCheck(
+  checkKey:   string,
+  status:     'pending' | 'passed' | 'failed' | 'skipped',
+  checkLabel: string,
+  notes?:     string,
+): Promise<{ success?: string; error?: string }> {
+  const auth = await requireAuth()
+  if (!auth.ok) return { error: auth.error }
+  const db = createServiceRoleClient()
+
+  try {
+    await db.from('client_demo_qa_checks').upsert({
+      business_id:  auth.businessId,
+      check_key:    checkKey,
+      check_label:  checkLabel,
+      check_status: status,
+      notes:        notes ?? null,
+      checked_by:   status !== 'pending' ? auth.userId : null,
+      checked_at:   status !== 'pending' ? new Date().toISOString() : null,
+      updated_at:   new Date().toISOString(),
+    }, { onConflict: 'business_id,check_key' })
+
+    capture('demo_qa_check_updated', { check_key: checkKey, status })
+    return { success: `QA check ${checkKey} updated.` }
+  } catch (err) {
+    captureApiError(err, { route: 'actions/setup', error_type: 'update_qa_check_error', business_id: auth.businessId })
+    return { error: 'Could not save QA check.' }
+  }
+}
+
 // ── Launch approval ───────────────────────────────────────────────
 
 export async function approveLaunch(): Promise<{ success?: string; error?: string }> {

@@ -12,6 +12,7 @@ import AgentWorkforceSnapshot from './mission-control/AgentWorkforceSnapshot'
 import PlanUsageCard          from './mission-control/PlanUsageCard'
 import SetupProgressCard      from './mission-control/SetupProgressCard'
 import DemoModeCard           from './mission-control/DemoModeCard'
+import AiReviewCard           from './mission-control/AiReviewCard'
 
 export const metadata = { title: 'Mission Control — Helios AI' }
 
@@ -89,6 +90,8 @@ export default async function DashboardPage() {
   let waInbound  = 0
   let totalRuns  = 0
   let agentRuns: Array<{ id: string; run_type: string; status: string; input_summary: string | null; created_at: string }> = []
+  let aiReviewCount   = 0
+  let aiApprovalCount = 0
 
   if (hasServiceRole) {
     const db = createServiceRoleClient()
@@ -114,6 +117,16 @@ export default async function DashboardPage() {
     waInbound  = waRes.count    ?? 0
     agentRuns  = (runsRes.data ?? []) as typeof agentRuns
     totalRuns  = runsTotalRes.count ?? 0
+
+    // AI review counts
+    const [reviewSessRes, reviewApprovalRes] = await Promise.all([
+      db.from('chat_sessions').select('*', { count: 'exact', head: true })
+        .eq('business_id', businessId).eq('ai_review_required', true),
+      db.from('approval_items').select('*', { count: 'exact', head: true })
+        .eq('business_id', businessId).eq('approval_type', 'ai_review').eq('status', 'pending'),
+    ])
+    aiReviewCount   = reviewSessRes.count   ?? 0
+    aiApprovalCount = reviewApprovalRes.count ?? 0
   }
 
   const [
@@ -206,6 +219,14 @@ export default async function DashboardPage() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-5">
         <SetupProgressCard />
         <DemoModeCard />
+      </div>
+
+      {/* AI Review Queue */}
+      <div className="mb-5">
+        <AiReviewCard
+          reviewRequiredCount={aiReviewCount}
+          pendingApprovalCount={aiApprovalCount}
+        />
       </div>
 
       {/* Attention + Plan Usage */}

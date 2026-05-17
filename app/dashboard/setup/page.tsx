@@ -5,6 +5,7 @@ import PageHeader from '@/components/dashboard/PageHeader'
 import { getSetupProgress, getAiPaused } from '@/lib/actions/setup'
 import { SETUP_ITEM_KEYS, SETUP_ITEM_LABELS, computeSetupPercent } from '@/lib/validation/setup'
 import SetupChecklistClient from './SetupChecklistClient'
+import DemoQaChecklist from './DemoQaChecklist'
 
 export const metadata: Metadata = { title: 'Setup Guide — Helios AI' }
 
@@ -93,9 +94,10 @@ export default async function SetupPage() {
           </div>
         </div>
 
-        {/* Checklist */}
+        {/* Checklist + QA */}
         <div className="lg:col-span-2">
           <SetupChecklistClient initialProgress={progress} initialAiPaused={aiResult.paused} />
+          <DemoQaChecklist />
         </div>
       </div>
     </>

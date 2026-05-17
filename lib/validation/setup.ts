@@ -20,6 +20,36 @@ export const updateSetupItemSchema = z.object({
   value: z.boolean(),
 })
 
+// ── Demo QA checklist ─────────────────────────────────────────────
+
+export const DEMO_QA_CHECKS = [
+  { key: 'landing_page_reviewed',     label: 'Landing page reviewed'         },
+  { key: 'demo_page_reviewed',        label: 'Demo page reviewed'            },
+  { key: 'business_profile_created',  label: 'Business profile created'      },
+  { key: 'services_added',            label: 'Services added'                },
+  { key: 'faqs_added',                label: 'FAQs added'                    },
+  { key: 'widget_configured',         label: 'Widget configured'             },
+  { key: 'test_chat_completed',       label: 'Test chat completed'           },
+  { key: 'lead_capture_tested',       label: 'Lead capture tested'           },
+  { key: 'notification_tested',       label: 'Owner notification tested'     },
+  { key: 'calcom_booking_tested',     label: 'Cal.com booking tested'        },
+  { key: 'whatsapp_flow_tested',      label: 'WhatsApp flow tested'          },
+  { key: 'inbox_handoff_tested',      label: 'Inbox handoff tested'          },
+  { key: 'mission_control_reviewed',  label: 'Mission Control reviewed'      },
+  { key: 'ops_center_reviewed',       label: 'Ops Center reviewed'           },
+  { key: 'billing_page_reviewed',     label: 'Billing page reviewed'         },
+  { key: 'security_env_checked',      label: 'Security / env vars checked'   },
+  { key: 'demo_recorded',             label: 'Final demo recorded'           },
+] as const
+
+export type DemoQaCheckKey = typeof DEMO_QA_CHECKS[number]['key']
+
+export const updateDemoQaCheckSchema = z.object({
+  check_key: z.string().min(1).max(64),
+  status:    z.enum(['pending', 'passed', 'failed', 'skipped']),
+  notes:     z.string().max(512).optional(),
+})
+
 export const toggleAiPausedSchema = z.object({
   paused: z.boolean(),
   reason: z.string().max(256).optional(),
