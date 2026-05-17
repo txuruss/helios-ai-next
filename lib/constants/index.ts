@@ -27,11 +27,13 @@ export const DASHBOARD_NAV = [
   { id: 'ops',       label: 'Ops Center',      href: '/dashboard/ops',      icon: 'Activity',        group: 'Automation' },
   { id: 'agents',    label: 'AI Agents',       href: '/dashboard/agents',   icon: 'Bot',             group: 'Automation' },
   // Setup — configuration
-  { id: 'business',  label: 'Business',        href: '/dashboard/business', icon: 'Building2',       group: 'Setup'      },
-  { id: 'services',  label: 'Services',        href: '/dashboard/services', icon: 'Briefcase',       group: 'Setup'      },
-  { id: 'calcom',    label: 'Cal.com',         href: '/dashboard/calcom',   icon: 'Link',            group: 'Setup'      },
-  { id: 'whatsapp',  label: 'WhatsApp',        href: '/dashboard/whatsapp', icon: 'MessageCircle',   group: 'Setup'      },
-  { id: 'widget',    label: 'Widget',          href: '/dashboard/widget',   icon: 'MessageSquare',   group: 'Setup'      },
+  { id: 'business',   label: 'Business',        href: '/dashboard/business',   icon: 'Building2',       group: 'Setup'      },
+  { id: 'services',   label: 'Services',        href: '/dashboard/services',   icon: 'Briefcase',       group: 'Setup'      },
+  { id: 'calcom',     label: 'Cal.com',         href: '/dashboard/calcom',     icon: 'Link',            group: 'Setup'      },
+  { id: 'whatsapp',   label: 'WhatsApp',        href: '/dashboard/whatsapp',   icon: 'MessageCircle',   group: 'Setup'      },
+  { id: 'widget',     label: 'Widget',          href: '/dashboard/widget',     icon: 'MessageSquare',   group: 'Setup'      },
+  { id: 'onboarding', label: 'Onboarding',      href: '/dashboard/onboarding', icon: 'ClipboardList',   group: 'Setup'      },
+  { id: 'delivery',   label: 'Delivery',        href: '/dashboard/delivery',   icon: 'CheckSquare',     group: 'Setup'      },
   // System
   { id: 'settings',  label: 'Settings',        href: '/dashboard/settings', icon: 'Settings',        group: 'System'     },
 ] as const

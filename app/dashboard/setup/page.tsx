@@ -6,13 +6,17 @@ import { getSetupProgress, getAiPaused } from '@/lib/actions/setup'
 import { SETUP_ITEM_KEYS, SETUP_ITEM_LABELS, computeSetupPercent } from '@/lib/validation/setup'
 import SetupChecklistClient from './SetupChecklistClient'
 import DemoQaChecklist from './DemoQaChecklist'
+import { getOnboardingIntake } from '@/lib/actions/onboarding'
+import { getDeliveryProgress } from '@/lib/actions/delivery'
 
 export const metadata: Metadata = { title: 'Setup Guide — Helios AI' }
 
 export default async function SetupPage() {
-  const [setupResult, aiResult] = await Promise.all([
+  const [setupResult, aiResult, intakeResult, deliveryResult] = await Promise.all([
     getSetupProgress(),
     getAiPaused(),
+    getOnboardingIntake().catch(() => ({ intake: null, error: null })),
+    getDeliveryProgress().catch(() => ({ progress: { total: 0, completed: 0, blocked: 0, in_progress: 0, pending: 0, skipped: 0, percent: 0, launchReady: false }, error: null })),
   ])
 
   const progress = setupResult.progress
@@ -98,6 +102,35 @@ export default async function SetupPage() {
         <div className="lg:col-span-2">
           <SetupChecklistClient initialProgress={progress} initialAiPaused={aiResult.paused} />
           <DemoQaChecklist />
+
+          {/* Client Setup Pipeline summary */}
+          <div className="flex flex-col gap-3 border-t border-white/[0.06] pt-6 mt-6">
+            <p className="text-[12px] font-semibold text-[#6a6a6e] uppercase tracking-[0.12em]">Client Setup Pipeline</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="border border-white/[0.07] rounded-2xl p-4 bg-[#0f1012]">
+                <p className="text-[11px] text-[#6a6a6e] uppercase tracking-[0.1em] mb-1">Onboarding Intake</p>
+                <p className="text-[14px] font-semibold text-white capitalize">
+                  {intakeResult.intake?.status ?? 'Not started'}
+                </p>
+                <Link href="/dashboard/onboarding"
+                  className="text-[11.5px] text-[#ffae3c] hover:underline mt-1.5 inline-block">
+                  {intakeResult.intake ? 'View intake →' : 'Start intake →'}
+                </Link>
+              </div>
+              <div className="border border-white/[0.07] rounded-2xl p-4 bg-[#0f1012]">
+                <p className="text-[11px] text-[#6a6a6e] uppercase tracking-[0.1em] mb-1">Delivery Pipeline</p>
+                <p className="text-[14px] font-semibold text-white">
+                  {deliveryResult.progress.total > 0
+                    ? `${deliveryResult.progress.percent}% complete`
+                    : 'Not started'}
+                </p>
+                <Link href="/dashboard/delivery"
+                  className="text-[11.5px] text-[#ffae3c] hover:underline mt-1.5 inline-block">
+                  {deliveryResult.progress.total > 0 ? 'View pipeline →' : 'Create tasks →'}
+                </Link>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </>

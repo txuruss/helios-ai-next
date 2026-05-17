@@ -14,6 +14,7 @@ import SetupProgressCard      from './mission-control/SetupProgressCard'
 import DemoModeCard           from './mission-control/DemoModeCard'
 import AiReviewCard           from './mission-control/AiReviewCard'
 import LaunchReadinessCard    from './mission-control/LaunchReadinessCard'
+import ClientOnboardingCard   from './mission-control/ClientOnboardingCard'
 
 export const metadata = { title: 'Mission Control — Helios AI' }
 
@@ -130,6 +131,25 @@ export default async function DashboardPage() {
     aiApprovalCount = reviewApprovalRes.count ?? 0
   }
 
+  // Load onboarding + delivery data
+  let onboardingStatus: 'not_started' | 'draft' | 'submitted' | 'in_review' | 'approved' | 'needs_changes' = 'not_started'
+  let deliveryProgressData = { total: 0, completed: 0, blocked: 0, in_progress: 0, pending: 0, skipped: 0, percent: 0, launchReady: false }
+
+  if (hasServiceRole && businessId) {
+    try {
+      const [{ getOnboardingIntake }, { getDeliveryProgress }] = await Promise.all([
+        import('@/lib/actions/onboarding'),
+        import('@/lib/actions/delivery'),
+      ])
+      const [intakeRes, progressRes] = await Promise.all([
+        getOnboardingIntake(),
+        getDeliveryProgress(),
+      ])
+      onboardingStatus    = (intakeRes.intake?.status as typeof onboardingStatus) ?? 'not_started'
+      deliveryProgressData = progressRes.progress
+    } catch { /* non-fatal */ }
+  }
+
   const [
     { metrics },
     eventsResult,
@@ -222,13 +242,21 @@ export default async function DashboardPage() {
         <DemoModeCard />
       </div>
 
-      {/* AI Review Queue + Launch Readiness */}
+      {/* Client Onboarding + Launch Readiness */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-5">
+        <ClientOnboardingCard
+          intakeStatus={onboardingStatus}
+          deliveryProgress={deliveryProgressData}
+        />
+        <LaunchReadinessCard />
+      </div>
+
+      {/* AI Review Queue */}
+      <div className="mb-5">
         <AiReviewCard
           reviewRequiredCount={aiReviewCount}
           pendingApprovalCount={aiApprovalCount}
         />
-        <LaunchReadinessCard />
       </div>
 
       {/* Attention + Plan Usage */}

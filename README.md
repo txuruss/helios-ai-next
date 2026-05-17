@@ -1548,6 +1548,92 @@ All routes load cleanly:
 
 ## Security Notes
 
+---
+
+## Phase 25 — Client Onboarding Pipeline
+
+### Overview
+
+Phase 25 makes Helios AI repeatable for real clients. Each new client gets a structured onboarding intake and a 19-task delivery pipeline.
+
+### Onboarding Intake (`/dashboard/onboarding`)
+
+8-section intake form covering:
+1. Business Basics (name, type, city, website)
+2. Owner Contact (name, email, phone)
+3. Channels (WhatsApp, Instagram, Facebook)
+4. Services (names, pricing, durations — free text)
+5. FAQs (top questions and answers)
+6. Booking Rules (hours, lead time, cancellation)
+7. Branding & AI Persona (tone, AI instructions)
+8. Review & Submit
+
+- **Save Draft** → preserves progress without locking the form
+- **Submit Intake** → sets `status = submitted`, creates the delivery pipeline automatically (idempotent)
+- Intake fields are free-text notes — never passed directly to AI without review
+
+### Delivery Pipeline (`/dashboard/delivery`)
+
+19 default tasks grouped by category: Intake → Services → FAQs → Booking → WhatsApp → Cal.com → Widget → QA Testing → Launch → Handoff.
+
+Task actions: **Start**, **Complete**, **Block** (requires reason), **Skip**
+
+Progress summary shows: completed, blocked, in_progress, pending, skipped counts + % complete bar.
+
+**Launch approval** button appears when ≥80% of tasks are complete or skipped with no blocked tasks.
+
+All task status changes create safe `ops_events` for audit trail.
+
+### Sidebar Navigation
+
+Two new items in the **Setup** group:
+- **Onboarding** → `/dashboard/onboarding`
+- **Delivery** → `/dashboard/delivery`
+
+### Mission Control Card
+
+`ClientOnboardingCard` replaces the second card in the AI Review / Launch Readiness row. Shows:
+- Intake status pill (Not Started / Draft / Submitted / In Review / Approved / Needs Changes)
+- Delivery progress bar and % complete
+- Blocked task count
+- CTAs to `/dashboard/onboarding` and `/dashboard/delivery`
+
+### Setup Page Integration
+
+`/dashboard/setup` shows a **Client Setup Pipeline** summary below the QA checklist with intake status and delivery progress + links.
+
+### Database Tables
+
+| Table | Purpose |
+|-------|---------|
+| `client_onboarding_intake` | One row per business — all intake fields, status, timestamps |
+| `client_delivery_tasks` | 19 tasks per business — category, status, priority, blocked_reason |
+
+Both tables have RLS: business members can read/update their own rows. Service role used for server-side inserts.
+
+### How to Test Locally
+
+1. Run `db/add-client-onboarding-pipeline.sql` in Supabase SQL Editor
+2. `/dashboard/onboarding` → fill in Business Basics, Services, FAQs → Save Draft
+3. Go to section 8 → Submit Intake
+4. `/dashboard/delivery` → 19 tasks appear in groups
+5. Mark tasks: Start → Complete; try Block (requires reason)
+6. At 80%+ completion with no blocked tasks → Launch approval button appears
+7. Mission Control shows ClientOnboardingCard with intake status and delivery %
+8. `/dashboard/setup` shows pipeline summary below QA checklist
+
+### Security
+
+- `business_id` always derived from `business_members` via authenticated session
+- Intake notes stored as plain text, never passed to AI without explicit server-side review
+- Phone/email fields validated server-side with Zod — never exposed in analytics
+- Ops events log only safe summaries (`onboarding_submitted`, `delivery_task_completed`)
+- Never expose raw intake content in PostHog events
+
+---
+
+## Security Notes
+
 - `SUPABASE_SERVICE_ROLE_KEY` bypasses RLS — only use server-side in server actions or API routes.
 - Never prefix service role key with `NEXT_PUBLIC_`.
 - All dashboard routes are protected by middleware + layout-level auth checks.
