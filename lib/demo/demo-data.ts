@@ -82,3 +82,53 @@ export const DEMO_OPS_ALERTS = [
   { title: 'No Cal.com account linked',     severity: 'warning', source: 'setup'    },
   { title: 'Widget not installed on site',  severity: 'info',    source: 'setup'    },
 ]
+
+// Demo booking (tagged as demo for clean reset)
+export const DEMO_BOOKING = {
+  customer_name:     'Marcus T.',
+  customer_email:    null,         // never use real emails in demo
+  service_interest:  'Haircut + Beard',
+  notes:             '[Demo] Sample booking request',
+  status:            'pending',
+  confirmation_status: 'pending',
+  metadata:          { demo: true },
+}
+
+// Demo ops events (tagged as demo for clean reset)
+export const DEMO_OPS_EVENTS = [
+  {
+    source:     'demo',
+    event_type: 'demo_lead_captured',
+    severity:   'info',
+    title:      '[Demo] Lead captured via website chat',
+    metadata:   { demo: true },
+  },
+  {
+    source:     'demo',
+    event_type: 'demo_booking_requested',
+    severity:   'info',
+    title:      '[Demo] Booking request received',
+    metadata:   { demo: true },
+  },
+  {
+    source:     'demo',
+    event_type: 'demo_owner_notified',
+    severity:   'info',
+    title:      '[Demo] Owner notification sent',
+    metadata:   { demo: true },
+  },
+]
+
+// Demo recording script for 2-minute demo
+export const DEMO_RECORDING_SCRIPT = [
+  { step: 1, title: 'Landing page',        note: 'Show the problem statement and Book a Demo CTA at /' },
+  { step: 2, title: 'Open /demo',          note: 'Run the demo flow animation at /demo' },
+  { step: 3, title: 'Website chat',        note: 'Show the embedded widget sandbox — reply to "Can I book for Saturday?"' },
+  { step: 4, title: 'Lead capture',        note: 'Show leads in /dashboard/leads after demo flow completes' },
+  { step: 5, title: 'Booking request',     note: 'Show /dashboard/bookings — pending confirmation badge' },
+  { step: 6, title: 'Mission Control',     note: 'Show /dashboard — KPI cards, setup progress, launch readiness' },
+  { step: 7, title: 'Inbox handoff',       note: 'Show /dashboard/inbox — AI badge, Pause AI button' },
+  { step: 8, title: 'Ops Center safety',   note: 'Show /dashboard/ops — System Health, Production Checks' },
+  { step: 9, title: 'Setup checklist',     note: 'Show /dashboard/setup — QA checklist and launch readiness' },
+  { step: 10, title: 'Book a Demo CTA',    note: 'Return to / and click "Book a Demo"' },
+]

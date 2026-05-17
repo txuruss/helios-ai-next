@@ -139,16 +139,21 @@ export default function DemoModeCard() {
       </div>
 
       {/* Demo links */}
-      <div className="flex gap-3 mt-3 pt-3 border-t border-white/[0.06]">
+      <div className="flex gap-3 mt-3 pt-3 border-t border-white/[0.06] flex-wrap">
         <Link href="/demo" target="_blank"
           className="text-[11.5px] text-[#9a9a9d] hover:text-white transition-colors"
           onClick={() => capture('demo_page_viewed', { source: 'dashboard' })}>
-          View Demo Page →
+          View /demo →
         </Link>
         <Link href="/demo/widget" target="_blank"
           className="text-[11.5px] text-[#9a9a9d] hover:text-white transition-colors"
           onClick={() => capture('demo_widget_opened', { source: 'dashboard' })}>
           Widget Sandbox →
+        </Link>
+        <Link href="/dashboard/setup"
+          className="text-[11.5px] text-[#9a9a9d] hover:text-white transition-colors"
+          onClick={() => capture('demo_recording_checklist_viewed', {})}>
+          QA Checklist →
         </Link>
       </div>
     </div>

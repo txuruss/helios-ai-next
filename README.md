@@ -1462,6 +1462,90 @@ Billing dashboard now shows `displayName` in plan cards. Stripe price IDs and in
 
 ---
 
+## Phase 24 — Production QA, Launch Readiness, Demo Polish
+
+### Demo Business Setup
+
+Load the Elite Cuts Barbershop demo by clicking **Load Demo Business** in the Mission Control Demo Mode card. This seeds:
+- 5 sample services, 5 FAQs, 4 leads, 1 booking request, 3 Ops Center events
+- All rows tagged `{demo:true}` in metadata
+- **Reset** removes only demo-tagged rows — never touches real client data
+
+### Launch Readiness Card
+
+Mission Control now shows a **Launch Readiness** card that auto-runs 12 safe QA checks on load:
+- Business profile, services, FAQs, widget, Cal.com, WhatsApp, Resend, Anthropic, leads, conversations, Supabase config, App URL
+- Returns status labels only: `passed / warning / failed / skipped`
+- Never returns env values, tokens, or provider payloads
+- Readiness states: **Not Started → In Progress → Ready for Demo → Production Ready**
+
+### Demo QA Checklist
+
+`/dashboard/setup` includes a 17-step QA checklist with cycle-able status (Pending → Passed → Failed → Skipped):
+1. Landing page reviewed
+2. Demo page reviewed
+3. Business profile created
+4. Services added
+5. FAQs added
+6. Widget configured
+7. Test chat completed
+8. Lead capture tested
+9. Owner notification tested
+10. Cal.com booking tested
+11. WhatsApp flow tested
+12. Inbox handoff tested
+13. Mission Control reviewed
+14. Ops Center reviewed
+15. Billing page reviewed
+16. Security / env vars checked
+17. Final demo recorded
+
+Shows **🎬 Ready for Demo** when ≥60% of checks passed with no failures. Shows **🚀 Production Ready** when all checks pass.
+
+### Production Env Checklist
+
+The Ops Center System Health tab includes a **Production Launch Checklist** that checks env configuration:
+- `ANTHROPIC_API_KEY` — critical
+- `SUPABASE_SERVICE_ROLE_KEY` — critical
+- `STRIPE_SECRET_KEY` + webhook secret — high
+- `RESEND_API_KEY` — normal
+- `META_ACCESS_TOKEN` — normal
+- `CALCOM_API_KEY` — normal
+- `RELEVANCE_API_KEY` — normal
+- `OPS_CRON_SECRET` — normal
+- `SENTRY_DSN` — normal
+- `POSTHOG_KEY` — low
+
+Click **▶ Run Checks** in the System Health tab.
+
+### Demo Recording Script (2 minutes)
+
+| Step | Location | What to show |
+|------|----------|-------------|
+| 1    | `/`           | Problem statement headline + "Stop missing customers" + Book a Demo CTA |
+| 2    | `/demo`       | Run Demo Flow animation (6 steps) |
+| 3    | `/demo`       | Embedded widget — type "Can I book for Saturday?" — get AI reply |
+| 4    | `/dashboard/leads` | Show leads captured from demo |
+| 5    | `/dashboard/bookings` | Show pending booking + Confirm/Reject buttons |
+| 6    | `/dashboard`  | Mission Control KPIs, Setup Progress, Launch Readiness card |
+| 7    | `/dashboard/inbox` | AI confidence badge, Pause AI button, human handoff flow |
+| 8    | `/dashboard/ops` | System Health, Production Checks, Webhook Observability |
+| 9    | `/dashboard/setup` | QA checklist, "Ready for Demo" state |
+| 10   | `/`           | Return to landing — "Book a Demo" button |
+
+### Route Audit (Phase 24 verified)
+
+All routes load cleanly:
+- `/` — landing page with flat pricing
+- `/demo` — public demo with embedded widget and animated flow
+- `/demo/widget` — standalone sandbox
+- `/booking/test` — branded invalid-link page (no Next.js 404)
+- `/booking/[valid_token]` — customer portal
+- `/dashboard/*` — all protected dashboard routes
+- `/dashboard/settings/billing` — flat public pricing (Starter / Booking OS / Ops Center)
+
+---
+
 ## Security Notes
 
 - `SUPABASE_SERVICE_ROLE_KEY` bypasses RLS — only use server-side in server actions or API routes.

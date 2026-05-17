@@ -5,6 +5,7 @@ import { captureApiError } from '@/lib/logging/api'
 import { capture } from '@/lib/analytics/posthog'
 import {
   DEMO_BUSINESS, DEMO_SERVICES, DEMO_FAQS, DEMO_LEADS,
+  DEMO_BOOKING, DEMO_OPS_EVENTS,
 } from '@/lib/demo/demo-data'
 
 type DbRow = Record<string, unknown>
@@ -93,18 +94,35 @@ export async function loadDemoData(confirm: true): Promise<{ ok?: boolean; error
     }))
     await db.from('leads').upsert(demoLeadInserts, { onConflict: 'business_id,name', ignoreDuplicates: true }).catch(() => undefined)
 
-    // Create a demo ops event
-    await db.from('ops_events').insert({
-      business_id: auth.businessId,
-      source:      'demo',
-      event_type:  'demo_loaded',
-      severity:    'info',
-      title:       `Demo data loaded for ${DEMO_BUSINESS.name}`,
-      status:      'resolved',
-      metadata:    { demo: true },
-    }).catch(() => undefined)
+    // Insert demo booking request
+    const tomorrow = new Date(Date.now() + 86400000)
+    tomorrow.setHours(14, 30, 0, 0)
+    await db.from('bookings').upsert({
+      business_id:          auth.businessId,
+      customer_name:        DEMO_BOOKING.customer_name,
+      customer_email:       null,
+      status:               DEMO_BOOKING.status,
+      confirmation_status:  DEMO_BOOKING.confirmation_status,
+      notes:                DEMO_BOOKING.notes,
+      scheduled_at:         tomorrow.toISOString(),
+      metadata:             DEMO_BOOKING.metadata,
+    }, { onConflict: 'business_id,customer_name', ignoreDuplicates: true }).catch(() => undefined)
+
+    // Insert demo ops events
+    for (const ev of DEMO_OPS_EVENTS) {
+      await db.from('ops_events').insert({
+        business_id: auth.businessId,
+        source:      ev.source,
+        event_type:  ev.event_type,
+        severity:    ev.severity,
+        title:       ev.title,
+        status:      'resolved',
+        metadata:    ev.metadata,
+      }).catch(() => undefined)
+    }
 
     capture('demo_mode_loaded', { demo_business: DEMO_BUSINESS.name })
+    capture('demo_business_loaded', {})
 
     return { ok: true }
   } catch (err) {
@@ -127,6 +145,7 @@ export async function resetDemoData(): Promise<{ ok?: boolean; error?: string }>
       db.from('services').delete().eq('business_id', auth.businessId).contains('metadata', { demo: true }).catch(() => undefined),
       db.from('faqs').delete().eq('business_id', auth.businessId).contains('metadata', { demo: true }).catch(() => undefined),
       db.from('leads').delete().eq('business_id', auth.businessId).contains('metadata', { demo: true }).catch(() => undefined),
+      db.from('bookings').delete().eq('business_id', auth.businessId).contains('metadata', { demo: true }).catch(() => undefined),
       db.from('ops_events').delete().eq('business_id', auth.businessId).contains('metadata', { demo: true }).catch(() => undefined),
     ])
 
@@ -139,6 +158,7 @@ export async function resetDemoData(): Promise<{ ok?: boolean; error?: string }>
     }, { onConflict: 'business_id' })
 
     capture('demo_mode_reset', {})
+    capture('demo_business_reset', {})
 
     return { ok: true }
   } catch (err) {

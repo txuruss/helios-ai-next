@@ -13,6 +13,7 @@ import PlanUsageCard          from './mission-control/PlanUsageCard'
 import SetupProgressCard      from './mission-control/SetupProgressCard'
 import DemoModeCard           from './mission-control/DemoModeCard'
 import AiReviewCard           from './mission-control/AiReviewCard'
+import LaunchReadinessCard    from './mission-control/LaunchReadinessCard'
 
 export const metadata = { title: 'Mission Control — Helios AI' }
 
@@ -221,12 +222,13 @@ export default async function DashboardPage() {
         <DemoModeCard />
       </div>
 
-      {/* AI Review Queue */}
-      <div className="mb-5">
+      {/* AI Review Queue + Launch Readiness */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-5">
         <AiReviewCard
           reviewRequiredCount={aiReviewCount}
           pendingApprovalCount={aiApprovalCount}
         />
+        <LaunchReadinessCard />
       </div>
 
       {/* Attention + Plan Usage */}
