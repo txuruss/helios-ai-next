@@ -1,0 +1,10 @@
+[build]
+  command = "npm run build"
+  publish = ".next"
+
+[functions]
+  node_bundler = "esbuild"
+
+# Netlify Next.js adapter (auto-detected via @netlify/plugin-nextjs)
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
