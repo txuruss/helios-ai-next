@@ -29,12 +29,59 @@ export default async function DashboardPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
 
-  const { data: membership } = user
+  let { data: membership } = user
     ? await supabase.from('business_members')
         .select('business_id').eq('user_id', user.id).limit(1).single()
     : { data: null }
 
-  // ── No business profile → existing setup screen ───────────────────
+  // ── Defensive membership repair ───────────────────────────────────
+  // If the anon-client membership query returned null (could be a cache
+  // miss after createBusiness, or a rare partial-write), check via service
+  // role whether a business was created by this user without a membership
+  // row and self-heal so the user is not stuck on the setup screen.
+  if (!membership && user && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    try {
+      const db = createServiceRoleClient()
+      // Check if a business_members row exists (service role bypasses RLS)
+      const { data: svcMembership } = await db
+        .from('business_members')
+        .select('business_id')
+        .eq('user_id', user.id)
+        .limit(1)
+        .single()
+
+      if (svcMembership) {
+        // Row exists but anon-client missed it (stale cache or RLS edge case)
+        membership = svcMembership
+      } else {
+        // Check if a business exists that needs a membership row created
+        const { data: orphanBiz } = await db
+          .from('businesses')
+          .select('id, name')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+
+        if (orphanBiz) {
+          // Repair: insert the missing owner membership row
+          const { error: repairErr } = await db
+            .from('business_members')
+            .insert({ business_id: orphanBiz.id, user_id: user.id, role: 'owner' })
+
+          if (!repairErr) {
+            console.log('[dashboard] Repaired missing business_members row for', user.id.slice(0, 8))
+            membership = { business_id: orphanBiz.id }
+          } else {
+            console.error('[dashboard] Membership repair failed:', repairErr.message)
+          }
+        }
+      }
+    } catch (repairEx) {
+      console.error('[dashboard] Repair check failed:', repairEx instanceof Error ? repairEx.message : repairEx)
+    }
+  }
+
+  // ── No business profile → setup screen ───────────────────────────
   if (!membership) {
     return (
       <>

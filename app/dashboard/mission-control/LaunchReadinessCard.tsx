@@ -49,10 +49,13 @@ export default function LaunchReadinessCard() {
 
   return (
     <div className={`border rounded-2xl overflow-hidden transition-all ${cfg.bg}`}>
-      {/* Header */}
-      <button
+      {/* Header — div instead of button to avoid nested-button hydration error */}
+      <div
+        role="button"
+        tabIndex={0}
         onClick={() => setExpanded((v) => !v)}
-        className="w-full flex items-center gap-3 px-5 py-4 hover:bg-white/[0.02] transition-colors text-left"
+        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setExpanded((v) => !v) } }}
+        className="w-full flex items-center gap-3 px-5 py-4 hover:bg-white/[0.02] transition-colors text-left cursor-pointer"
       >
         <span className="text-[22px] shrink-0">{cfg.emoji}</span>
         <div className="flex-1 min-w-0">
@@ -82,7 +85,7 @@ export default function LaunchReadinessCard() {
           </button>
           <span className="text-[#6a6a6e] text-[12px]">{expanded ? '▲' : '▼'}</span>
         </div>
-      </button>
+      </div>
 
       {/* Readiness message */}
       {!expanded && readiness !== 'not_started' && (

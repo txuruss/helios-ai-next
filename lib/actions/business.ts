@@ -161,6 +161,12 @@ export async function createBusiness(
     new_values:  { name: parsed.data.name },
   })
 
+  // 10. Invalidate all cached server-component data so the dashboard sees the
+  //     new business_members row immediately instead of serving stale null.
+  revalidatePath('/dashboard')
+  revalidatePath('/dashboard/business')
+  revalidatePath('/dashboard/setup')
+
   redirect('/dashboard')
 }
 
