@@ -1,12 +1,74 @@
 # Helios AI — Deployment Guide
 
-> Deploy Helios AI to Vercel and connect all required services.
+> **Recommended platform: Netlify**
+>
+> Vercel Hobby does not support cron jobs that run more than once per day. Helios AI requires crons every 10 and 15 minutes (SLA checks, booking expiry). Use Netlify instead, which supports scheduled functions at any frequency.
+
+---
+
+## Netlify Deployment (Recommended)
+
+### Why Netlify
+
+Vercel Hobby blocks cron jobs that run more frequently than once per day. Helios AI needs:
+- SLA check: every 10 minutes
+- Booking expiry: every 15 minutes
+
+Netlify supports scheduled functions at any frequency on all plans, including the free tier.
+
+### Build Settings
+
+`netlify.toml` is already configured at the project root:
+
+```toml
+[build]
+  command = "npm run build"
+  publish = ".next"
+
+[functions]
+  node_bundler = "esbuild"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
+```
+
+### Scheduled Functions
+
+Two Netlify scheduled functions replace the Vercel cron config:
+
+| File | Schedule | Route called |
+|------|----------|-------------|
+| `netlify/functions/ops-sla-cron.ts` | Every 10 min | `/api/cron/ops/sla` |
+| `netlify/functions/booking-expiry-cron.ts` | Every 15 min | `/api/cron/bookings/expire-confirmations` |
+
+Each function calls the existing internal API route using `NEXT_PUBLIC_APP_URL` and `Authorization: Bearer ${CRON_SECRET}`.
+
+`vercel.json` is kept in the repo but is not used by Netlify.
+
+### Deploy Steps
+
+1. Push to GitHub
+2. Go to [app.netlify.com](https://app.netlify.com) → "Add new site" → "Import an existing project"
+3. Connect your GitHub repository
+4. Build settings are auto-detected from `netlify.toml`
+5. Set all required environment variables (see below)
+6. Deploy
+
+### Smoke Test after Netlify Deploy
+
+- [ ] Visit `https://your-site.netlify.app/` — landing page loads
+- [ ] Visit `/demo` — loads
+- [ ] Visit `/booking/test` — branded invalid page
+- [ ] Log in → `/dashboard` loads
+- [ ] `/dashboard/setup` → run Production Readiness Check
+- [ ] Check Netlify Functions dashboard → confirm scheduled functions are listed
+- [ ] Trigger manually: `POST /api/cron/ops/sla` with `Authorization: Bearer YOUR_CRON_SECRET`
 
 ---
 
 ## Required Environment Variables
 
-Set these in Vercel → Project → Settings → Environment Variables.
+Set these in Netlify → Site → Environment Variables (or Vercel if using Vercel).
 
 ### Core (required — app will not work without these)
 
@@ -97,7 +159,9 @@ All migrations are idempotent — safe to re-run.
 
 ---
 
-## Vercel Build Settings
+## Vercel Build Settings (if using Vercel Pro or above)
+
+> **Note:** Vercel Hobby does not support crons running more than once per day. For frequent crons, use Netlify (see above) or Vercel Pro.
 
 Build Command: `npm run build` (default)  
 Output Directory: `.next` (default)  
@@ -105,7 +169,9 @@ Install Command: `npm install`
 
 ---
 
-## Vercel Cron Configuration
+## Vercel Cron Configuration (Vercel Pro only)
+
+> `vercel.json` is kept in the repo but is **not used by Netlify**. Netlify uses scheduled functions in `netlify/functions/` instead.
 
 `vercel.json` includes:
 ```json

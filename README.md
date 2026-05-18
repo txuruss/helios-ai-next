@@ -1643,6 +1643,27 @@ Both tables have RLS: business members can read/update their own rows. Service r
 
 ---
 
+## Deployment Target: Netlify
+
+**Recommended platform: [Netlify](https://netlify.com)**
+
+Vercel Hobby does not support cron jobs running more than once per day. Helios AI needs crons every 10–15 minutes. Netlify supports scheduled functions at any frequency on all plans including free.
+
+`netlify.toml` at the project root configures the build. Two scheduled functions in `netlify/functions/` replace the `vercel.json` cron entries:
+
+| Function | Schedule | Purpose |
+|----------|----------|---------|
+| `ops-sla-cron.ts` | Every 10 min | SLA breach processing |
+| `booking-expiry-cron.ts` | Every 15 min | Booking confirmation expiry |
+
+Each function calls its internal API route using `NEXT_PUBLIC_APP_URL` and `Authorization: Bearer ${CRON_SECRET}`.
+
+`vercel.json` is kept in the repo (for Vercel Pro users) but is **not used by Netlify**.
+
+See `docs/deployment.md` for full deployment instructions.
+
+---
+
 ## Phase 28 — Beta Launch Readiness
 
 ### Beta Launch Checklist (`/dashboard/setup`)
