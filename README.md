@@ -1640,3 +1640,81 @@ Both tables have RLS: business members can read/update their own rows. Service r
 - RLS policies ensure users can only access their own business data.
 - No secrets are committed — `.env.local` is in `.gitignore`.
 - All Meta API calls happen server-side only. No WhatsApp credentials reach the browser.
+
+---
+
+## Phase 28 — Beta Launch Readiness
+
+### Beta Launch Checklist (`/dashboard/setup`)
+
+The setup page now includes a **Beta Launch Readiness** section with three groups:
+
+1. **Product Readiness** — verify all dashboard routes load correctly
+2. **Client Readiness** — business profile, services, FAQs, widget, notifications, handoff
+3. **Security Checklist** — no keys exposed, RLS enabled, routes protected
+
+Progress is persisted in `localStorage`. "Beta Ready" badge appears when all required checks pass.
+
+### Production Readiness Check
+
+`runProductionReadinessCheck()` checks all environment variables and returns only safe status labels (`configured / missing / optional / warning`). Never returns actual env values. Accessible from the Beta Launch Readiness section.
+
+### Route Audit (Phase 28 verified)
+
+All 66 routes load cleanly including:
+- `/booking/test` — branded invalid-link page
+- `/dashboard/settings/billing` — never redirects for authenticated users
+- `/dashboard/templates` — 7 niche templates
+- `/dashboard/audits` — deployment score
+- `/dashboard/onboarding` — intake form
+- `/dashboard/delivery` — 19-task pipeline
+
+### Demo Script
+
+See `docs/demo-script.md` for a 2–3 minute demo script including:
+- Problem statement
+- Widget demo
+- Mission Control walkthrough
+- Booking confirmation
+- Setup checklist
+- Pricing
+
+### First Beta Client Checklist
+
+See `docs/first-beta-client-checklist.md` for:
+- Before/during/after sales call steps
+- Client setup Day 1–4 workflow
+- QA and launch approval steps
+- Handoff checklist
+- Success metrics (first 30 days)
+
+### Deployment Guide
+
+See `docs/deployment.md` for:
+- All required and optional environment variables
+- Supabase migration order
+- Vercel build settings
+- Webhook URL setup (WhatsApp, Stripe, Cal.com, Relevance)
+- Post-deploy smoke test checklist
+
+---
+
+## Post-Phase-28 Action Plan
+
+After Phase 28, stop major feature development and move into production:
+
+1. **Commit and push Phase 28** to `main`
+2. **Deploy to Vercel** — connect the GitHub repo, set environment variables
+3. **Apply all Supabase migrations** in order (see `docs/deployment.md`)
+4. **Set production env variables** — Supabase, Anthropic, Resend, App URL, CRON_SECRET
+5. **Run production smoke test** — verify all routes, run env check, run audit
+6. **Record 2-minute demo** — follow `docs/demo-script.md`
+7. **Test with one real local service business** — follow `docs/first-beta-client-checklist.md`
+8. **Fix bugs only** — no new features until beta client is live
+9. **Start sales outreach** — DM 10 local barbershops/salons/spas with the demo video
+
+---
+
+## Security Notes
+
+- `SUPABASE_SERVICE_ROLE_KEY` bypasses RLS — only use server-side in server actions or API routes.

@@ -6,6 +6,7 @@ import { getSetupProgress, getAiPaused } from '@/lib/actions/setup'
 import { SETUP_ITEM_KEYS, SETUP_ITEM_LABELS, computeSetupPercent } from '@/lib/validation/setup'
 import SetupChecklistClient from './SetupChecklistClient'
 import DemoQaChecklist from './DemoQaChecklist'
+import BetaLaunchChecklist from './BetaLaunchChecklist'
 import { getOnboardingIntake } from '@/lib/actions/onboarding'
 import { getDeliveryProgress } from '@/lib/actions/delivery'
 
@@ -102,6 +103,7 @@ export default async function SetupPage() {
         <div className="lg:col-span-2">
           <SetupChecklistClient initialProgress={progress} initialAiPaused={aiResult.paused} />
           <DemoQaChecklist />
+          <BetaLaunchChecklist />
 
           {/* Client Setup Pipeline summary */}
           <div className="flex flex-col gap-3 border-t border-white/[0.06] pt-6 mt-6">
