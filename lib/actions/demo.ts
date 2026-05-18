@@ -7,6 +7,7 @@ import {
   DEMO_BUSINESS, DEMO_SERVICES, DEMO_FAQS, DEMO_LEADS,
   DEMO_BOOKING, DEMO_OPS_EVENTS,
   DEMO_AUDIT, DEMO_AUDIT_FINDINGS, DEMO_AUDIT_RECOMMENDATION,
+  DEMO_TEMPLATE_APPLICATION,
 } from '@/lib/demo/demo-data'
 
 type DbRow = Record<string, unknown>
@@ -142,6 +143,13 @@ export async function loadDemoData(confirm: true): Promise<{ ok?: boolean; error
       }).catch(() => undefined)
     }
 
+    // Insert demo template application log
+    await db.from('business_template_applications').insert({
+      business_id:   auth.businessId,
+      applied_by:    auth.userId,
+      ...DEMO_TEMPLATE_APPLICATION,
+    }).catch(() => undefined)
+
     capture('demo_mode_loaded', { demo_business: DEMO_BUSINESS.name })
     capture('demo_business_loaded', {})
 
@@ -169,6 +177,7 @@ export async function resetDemoData(): Promise<{ ok?: boolean; error?: string }>
       db.from('bookings').delete().eq('business_id', auth.businessId).contains('metadata', { demo: true }).catch(() => undefined),
       db.from('ops_events').delete().eq('business_id', auth.businessId).contains('metadata', { demo: true }).catch(() => undefined),
       db.from('business_audits').delete().eq('business_id', auth.businessId).contains('metadata', { demo: true }).catch(() => undefined),
+      db.from('business_template_applications').delete().eq('business_id', auth.businessId).contains('metadata', { demo: true }).catch(() => undefined),
     ])
 
     // Unmark demo mode

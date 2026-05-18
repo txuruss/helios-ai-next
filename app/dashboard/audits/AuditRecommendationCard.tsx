@@ -1,9 +1,13 @@
 'use client'
 
 import Link from 'next/link'
-import type { AuditRecommendation } from '@/lib/actions/audits'
+import type { AuditRecommendation, BusinessAudit } from '@/lib/actions/audits'
+import { getRecommendedTemplateByBusinessType } from '@/lib/templates/niche-templates'
 
-interface Props { recommendation: AuditRecommendation }
+interface Props {
+  recommendation: AuditRecommendation
+  businessType?:  string | null
+}
 
 const PLAN_DISPLAY: Record<string, string> = {
   starter: 'Starter', pro: 'Booking OS', scale: 'Ops Center',
@@ -14,7 +18,8 @@ const PLAN_COLOR: Record<string, string> = {
   scale:   'border-[#c084fc]/30 bg-gradient-to-b from-[#c084fc]/[0.05] to-transparent',
 }
 
-export default function AuditRecommendationCard({ recommendation: rec }: Props) {
+export default function AuditRecommendationCard({ recommendation: rec, businessType }: Props) {
+  const suggestedTemplate = getRecommendedTemplateByBusinessType(businessType ?? null)
   const planLabel = PLAN_DISPLAY[rec.recommended_plan] ?? rec.recommended_plan
   const colorClass = PLAN_COLOR[rec.recommended_plan] ?? PLAN_COLOR.starter
 
@@ -61,6 +66,19 @@ export default function AuditRecommendationCard({ recommendation: rec }: Props) 
               </li>
             ))}
           </ol>
+        </div>
+      )}
+
+      {/* Template suggestion */}
+      {suggestedTemplate && (
+        <div className="mb-5 px-4 py-3 rounded-xl border border-[#ff7a18]/20 bg-[#ff7a18]/[0.04]">
+          <p className="text-[11.5px] text-[#ffae3c] mb-1">
+            {suggestedTemplate.icon} Suggested niche template: <strong>{suggestedTemplate.name}</strong>
+          </p>
+          <p className="text-[11px] text-[#9a9a9d]">Pre-loaded services, FAQs, and booking rules for your business type.</p>
+          <Link href="/dashboard/templates" className="text-[11.5px] text-[#ffae3c] hover:underline mt-1 inline-block">
+            Apply {suggestedTemplate.name} Template →
+          </Link>
         </div>
       )}
 

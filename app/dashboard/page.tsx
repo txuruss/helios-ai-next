@@ -16,6 +16,7 @@ import AiReviewCard           from './mission-control/AiReviewCard'
 import LaunchReadinessCard    from './mission-control/LaunchReadinessCard'
 import ClientOnboardingCard   from './mission-control/ClientOnboardingCard'
 import DeploymentScoreCard   from './mission-control/DeploymentScoreCard'
+import NicheTemplateCard     from './mission-control/NicheTemplateCard'
 
 export const metadata = { title: 'Mission Control — Helios AI' }
 
@@ -151,6 +152,23 @@ export default async function DashboardPage() {
     } catch { /* non-fatal */ }
   }
 
+  // Load template + business type
+  let businessType:         string | null = null
+  let lastAppliedTemplate:  string | null = null
+
+  if (hasServiceRole && businessId) {
+    try {
+      const [{ getLastAppliedTemplate }] = await Promise.all([import('@/lib/actions/templates')])
+      const db = createServiceRoleClient()
+      const [bizRes, lastTpl] = await Promise.all([
+        db.from('businesses').select('business_type').eq('id', businessId).single(),
+        getLastAppliedTemplate(),
+      ])
+      businessType        = (bizRes.data as { business_type?: string | null } | null)?.business_type ?? null
+      lastAppliedTemplate = lastTpl.templateKey
+    } catch { /* non-fatal */ }
+  }
+
   // Load onboarding + delivery data
   let onboardingStatus: 'not_started' | 'draft' | 'submitted' | 'in_review' | 'approved' | 'needs_changes' = 'not_started'
   let deliveryProgressData = { total: 0, completed: 0, blocked: 0, in_progress: 0, pending: 0, skipped: 0, percent: 0, launchReady: false }
@@ -262,7 +280,7 @@ export default async function DashboardPage() {
         <DemoModeCard />
       </div>
 
-      {/* Deployment Score + Client Onboarding */}
+      {/* Deployment Score + Niche Template */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-5">
         <DeploymentScoreCard
           score={auditScore}
@@ -270,14 +288,18 @@ export default async function DashboardPage() {
           criticalCount={auditCritical}
           hasAudit={hasAudit}
         />
+        <NicheTemplateCard
+          businessType={businessType}
+          lastAppliedTemplate={lastAppliedTemplate}
+        />
+      </div>
+
+      {/* Client Onboarding + Launch Readiness */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 mb-5">
         <ClientOnboardingCard
           intakeStatus={onboardingStatus}
           deliveryProgress={deliveryProgressData}
         />
-      </div>
-
-      {/* Launch Readiness */}
-      <div className="mb-5">
         <LaunchReadinessCard />
       </div>
 

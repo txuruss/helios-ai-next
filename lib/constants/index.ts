@@ -30,6 +30,7 @@ export const DASHBOARD_NAV = [
   // Setup — configuration
   { id: 'business',   label: 'Business',        href: '/dashboard/business',   icon: 'Building2',       group: 'Setup'      },
   { id: 'services',   label: 'Services',        href: '/dashboard/services',   icon: 'Briefcase',       group: 'Setup'      },
+  { id: 'templates',  label: 'Templates',       href: '/dashboard/templates',  icon: 'Layers',          group: 'Setup'      },
   { id: 'calcom',     label: 'Cal.com',         href: '/dashboard/calcom',     icon: 'Link',            group: 'Setup'      },
   { id: 'whatsapp',   label: 'WhatsApp',        href: '/dashboard/whatsapp',   icon: 'MessageCircle',   group: 'Setup'      },
   { id: 'widget',     label: 'Widget',          href: '/dashboard/widget',     icon: 'MessageSquare',   group: 'Setup'      },

@@ -4,6 +4,7 @@ import { useState, useTransition } from 'react'
 import Link from 'next/link'
 import { saveOnboardingDraft, submitOnboardingIntake } from '@/lib/actions/onboarding'
 import type { OnboardingIntake } from '@/lib/actions/onboarding'
+import { getRecommendedTemplateByBusinessType } from '@/lib/templates/niche-templates'
 import { capture } from '@/lib/analytics/posthog'
 
 interface Props {
@@ -167,6 +168,14 @@ export default function OnboardingClient({ initialIntake, loadError }: Props) {
             </Field>
             <Field label="Business Type">
               <input value={businessType} onChange={(e) => setBusinessType(e.target.value)} maxLength={256} placeholder="Barbershop" className={inputClass} />
+              {businessType.length >= 3 && (() => {
+                const tpl = getRecommendedTemplateByBusinessType(businessType)
+                return tpl ? (
+                  <p className="text-[11px] text-[#ffae3c] mt-1">
+                    {tpl.icon} Suggested template: <Link href="/dashboard/templates" className="underline hover:text-white">{tpl.name}</Link>
+                  </p>
+                ) : null
+              })()}
             </Field>
             <Field label="City">
               <input value={city} onChange={(e) => setCity(e.target.value)} maxLength={256} placeholder="Brooklyn" className={inputClass} />

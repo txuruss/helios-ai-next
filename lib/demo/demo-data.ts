@@ -154,6 +154,18 @@ export const DEMO_AUDIT_RECOMMENDATION = {
   next_steps:        ['Complete onboarding intake', 'Connect WhatsApp Business', 'Connect Cal.com', 'Add services and FAQs', 'Test booking flow end-to-end'],
 }
 
+// Demo template application (barbershop template applied as demo)
+export const DEMO_TEMPLATE_APPLICATION = {
+  template_key:            'barbershop',
+  apply_mode:              'append',
+  services_created:        6,
+  faqs_created:            5,
+  business_fields_updated: false,
+  status:                  'completed',
+  safe_summary:            'Applied Barbershop template (append): 6 services, 5 FAQs',
+  metadata:                { demo: true },
+}
+
 // Demo recording script for 2-minute demo
 export const DEMO_RECORDING_SCRIPT = [
   { step: 1, title: 'Landing page',        note: 'Show the problem statement and Book a Demo CTA at /' },
