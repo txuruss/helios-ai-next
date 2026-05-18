@@ -38,16 +38,18 @@ export async function requireTeam(
     }
 
     // Look up team membership. The team_members table is created via
-    // a Supabase migration. If the table doesn't exist yet, we still
-    // gracefully degrade to mock data in dev — production routes will
-    // simply 404 the user back to /team/login.
-    let teamRow: { id: string; role: string; full_name: string | null; email: string } | null = null
+    // supabase/migrations/20260518120000_create_team_members.sql. Until
+    // that migration runs in a given environment, the SELECT below errors;
+    // we catch and fall through. Active-status filter blocks `invited`
+    // and `suspended` rows from getting access.
+    let teamRow: { id: string; role: string; full_name: string | null; email: string; status: string } | null = null
 
     try {
       const { data } = await supabase
         .from('team_members')
-        .select('id, role, full_name, email')
+        .select('id, role, full_name, email, status')
         .eq('user_id', user.id)
+        .eq('status', 'active')
         .maybeSingle()
       teamRow = data ?? null
     } catch {
@@ -59,8 +61,9 @@ export async function requireTeam(
         const db = createServiceRoleClient()
         const { data } = await db
           .from('team_members')
-          .select('id, role, full_name, email')
+          .select('id, role, full_name, email, status')
           .eq('user_id', user.id)
+          .eq('status', 'active')
           .maybeSingle()
         teamRow = data ?? null
       } catch {
@@ -104,16 +107,17 @@ export async function requireTeam(
   redirect('/team/login')
 }
 
+// Pass 31: aligned with the team_members CHECK constraint.
+// Accepts the canonical `team_*` values written by the SQL migration AND
+// the legacy un-prefixed values (`sales`, `delivery`, etc.) so any dev
+// or staging row created before the migration still resolves correctly.
 function normalizeTeamRole(raw: string | null | undefined): TeamRole {
-  if (
-    raw === 'founder_admin' ||
-    raw === 'sales' ||
-    raw === 'delivery' ||
-    raw === 'support' ||
-    raw === 'analyst'
-  ) {
-    return raw
-  }
+  if (raw === 'founder_admin') return 'founder_admin'
+  if (raw === 'team_sales'    || raw === 'sales')    return 'team_sales'
+  if (raw === 'team_delivery' || raw === 'delivery') return 'team_delivery'
+  if (raw === 'team_content'  || raw === 'content')  return 'team_content'
+  if (raw === 'team_support'  || raw === 'support')  return 'team_support'
+  if (raw === 'team_analyst'  || raw === 'analyst')  return 'team_analyst'
   // Unknown role → least-privilege default
-  return 'analyst'
+  return 'team_analyst'
 }

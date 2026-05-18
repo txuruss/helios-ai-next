@@ -24,12 +24,16 @@ export interface ClientSession {
 
 // ── Team portal — internal Helios AI staff ───────────────────────
 
+// Pass 31: role values aligned with the Supabase `team_members` CHECK
+// constraint (supabase/migrations/20260518120000_create_team_members.sql).
+// All non-founder team roles share the `team_` prefix.
 export type TeamRole =
   | 'founder_admin'
-  | 'sales'
-  | 'delivery'
-  | 'support'
-  | 'analyst'
+  | 'team_sales'
+  | 'team_delivery'
+  | 'team_content'
+  | 'team_support'
+  | 'team_analyst'
 
 export interface TeamSession {
   teamMemberId: string

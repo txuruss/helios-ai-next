@@ -3,38 +3,26 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { logout } from '@/lib/auth/actions'
-import { TEAM_NAV, TEAM_NAV_GROUPS } from './TeamNav'
-import { teamCanAccessRoute } from '@/lib/auth/permissions'
-import type { TeamRole } from '@/lib/auth/types'
+import { ADMIN_NAV, ADMIN_NAV_GROUPS } from './AdminNav'
 import { cn } from '@/components/ui/cn'
 import {
-  LayoutDashboard, TrendingUp, BarChart2, Send, Building2, FolderKanban,
-  PackageCheck, ShieldCheck, Bot, Notebook, Bell, CheckSquare, CreditCard,
-  Settings, LogOut, X,
+  Compass, BarChart2, Users, Send, Building2, Bot, Calendar, PackageCheck,
+  Bell, FileText, Share2, TrendingUp, Settings, LogOut, X,
 } from 'lucide-react'
 
 const ICONS: Record<string, React.ComponentType<{ size?: number; className?: string }>> = {
-  LayoutDashboard, TrendingUp, BarChart2, Send, Building2, FolderKanban,
-  PackageCheck, ShieldCheck, Bot, Notebook, Bell, CheckSquare, CreditCard, Settings,
-}
-
-const ROLE_LABEL: Record<TeamRole, string> = {
-  founder_admin: 'Founder',
-  team_sales:    'Sales',
-  team_delivery: 'Delivery',
-  team_content:  'Content',
-  team_support:  'Support',
-  team_analyst:  'Analyst',
+  Compass, BarChart2, Users, Send, Building2, Bot, Calendar, PackageCheck,
+  Bell, FileText, Share2, TrendingUp, Settings,
 }
 
 interface Props {
   open:     boolean
   onClose:  () => void
-  role:     TeamRole
   fullName: string | null
+  email:    string
 }
 
-export default function TeamSidebar({ open, onClose, role, fullName }: Props) {
+export default function AdminSidebar({ open, onClose, fullName, email }: Props) {
   const pathname = usePathname()
 
   return (
@@ -55,8 +43,10 @@ export default function TeamSidebar({ open, onClose, role, fullName }: Props) {
             style={{ backgroundImage: 'url(/assets/helios-logo.png)', boxShadow: '0 0 18px rgba(255,122,24,0.45)' }}
           />
           <div className="flex-1 min-w-0">
-            <div className="text-[13px] font-semibold">Helios AI Team</div>
-            <div className="text-[10.5px] font-medium text-[#ffae3c]">{ROLE_LABEL[role]} · {fullName ?? 'Member'}</div>
+            <div className="text-[13px] font-semibold truncate">Helios Admin</div>
+            <div className="text-[10.5px] font-medium text-[#ffae3c] truncate">
+              Founder · {fullName ?? email.split('@')[0]}
+            </div>
           </div>
           <button onClick={onClose}
             className="lg:hidden w-7 h-7 rounded-lg bg-white/[0.04] flex items-center justify-center
@@ -66,10 +56,8 @@ export default function TeamSidebar({ open, onClose, role, fullName }: Props) {
         </div>
 
         <div className="flex-1 overflow-y-auto py-2 px-2.5">
-          {TEAM_NAV_GROUPS.filter((g) => g !== 'Admin').map((group) => {
-            const items = TEAM_NAV.filter((i) =>
-              i.group === group && teamCanAccessRoute(role, i.href).allowed,
-            )
+          {ADMIN_NAV_GROUPS.filter((g) => g !== 'Admin').map((group) => {
+            const items = ADMIN_NAV.filter((i) => i.group === group)
             if (!items.length) return null
             return (
               <div key={group} className="mb-1">
@@ -106,7 +94,7 @@ export default function TeamSidebar({ open, onClose, role, fullName }: Props) {
         </div>
 
         <div className="px-2.5 pb-4 pt-2 border-t border-white/[0.06]">
-          {TEAM_NAV.filter((i) => i.group === 'Admin' && teamCanAccessRoute(role, i.href).allowed).map((item) => {
+          {ADMIN_NAV.filter((i) => i.group === 'Admin').map((item) => {
             const IconComp = ICONS[item.icon]
             const isActive = pathname.startsWith(item.href)
             return (
@@ -141,7 +129,7 @@ export default function TeamSidebar({ open, onClose, role, fullName }: Props) {
             </button>
           </form>
           <div className="text-[10px] text-[#6a6a6e] px-2.5 mt-2 font-mono">
-            team ops / v1.0
+            mission control / v1.0
           </div>
         </div>
       </aside>

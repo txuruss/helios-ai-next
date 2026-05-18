@@ -26,7 +26,7 @@ export function clientRoleHasAtLeast(
 // Lists are inclusive — the matcher uses startsWith on the path.
 const TEAM_ROUTE_ALLOWLIST: Record<TeamRole, readonly string[] | '*'> = {
   founder_admin: '*',
-  sales: [
+  team_sales: [
     '/team/dashboard',
     '/team/outreach',
     '/team/audits',
@@ -37,7 +37,7 @@ const TEAM_ROUTE_ALLOWLIST: Record<TeamRole, readonly string[] | '*'> = {
     '/team/tasks',
     '/team/settings',
   ],
-  delivery: [
+  team_delivery: [
     '/team/dashboard',
     '/team/clients',
     '/team/projects',
@@ -49,7 +49,14 @@ const TEAM_ROUTE_ALLOWLIST: Record<TeamRole, readonly string[] | '*'> = {
     '/team/tasks',
     '/team/settings',
   ],
-  support: [
+  team_content: [
+    '/team/dashboard',
+    '/team/notes',
+    '/team/notifications',
+    '/team/tasks',
+    '/team/settings',
+  ],
+  team_support: [
     '/team/dashboard',
     '/team/clients',
     '/team/notes',
@@ -57,7 +64,7 @@ const TEAM_ROUTE_ALLOWLIST: Record<TeamRole, readonly string[] | '*'> = {
     '/team/tasks',
     '/team/settings',
   ],
-  analyst: [
+  team_analyst: [
     '/team/dashboard',
     '/team/audits',
     '/team/agent-runs',
@@ -102,6 +109,19 @@ export function clientOwnsBusiness(
   requestedBusinessId: string,
 ): boolean {
   return sessionBusinessId === requestedBusinessId
+}
+
+// ── Admin (founder) permissions ───────────────────────────────────
+// Pass 30: /admin/mission-control surface gates on `founder_admin` only.
+// All other team roles must NOT have access to /admin routes. This is
+// stricter than the team ACL above — admin is the founder command center.
+
+export function founderCanAccessAdminRoute(role: TeamRole, _path?: string): AuthorizationResult {
+  if (role === 'founder_admin') return { allowed: true }
+  return {
+    allowed: false,
+    reason: `The /admin surface is restricted to founder_admin. Your role: ${role}.`,
+  }
 }
 
 // ── team_member_id tracking helper ────────────────────────────────

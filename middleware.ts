@@ -62,6 +62,17 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl)
   }
 
+  // ── Pass 30: Protect /admin portal (founder_admin only) ─────────
+  // Middleware only checks "is logged in" — the role check happens
+  // server-side in lib/auth/require-admin.ts. Unauthenticated users go
+  // to /team/login since the founder shares that login form.
+  if (pathname.startsWith('/admin') && !user) {
+    const loginUrl = request.nextUrl.clone()
+    loginUrl.pathname = '/team/login'
+    loginUrl.searchParams.set('redirectTo', pathname)
+    return NextResponse.redirect(loginUrl)
+  }
+
   // ── Redirect authenticated users away from auth pages ─────────
   if ((pathname === '/login' || pathname === '/signup') && user) {
     return NextResponse.redirect(new URL('/dashboard', request.url))

@@ -17,10 +17,11 @@ export interface MockTeamMember {
 
 export const MOCK_TEAM_MEMBERS: MockTeamMember[] = [
   { id: 'mock-team-founder',  user_id: 'mock-team-user',   email: 'founder@helios.ai',  full_name: 'Helios Founder',  role: 'founder_admin', active: true, joined_at: '2026-01-01T00:00:00Z' },
-  { id: 'mock-team-sales',    user_id: 'mock-sales-user',  email: 'sales@helios.ai',    full_name: 'Sales Lead',      role: 'sales',         active: true, joined_at: '2026-02-12T00:00:00Z' },
-  { id: 'mock-team-delivery', user_id: 'mock-delivery-u',  email: 'delivery@helios.ai', full_name: 'Delivery Lead',   role: 'delivery',      active: true, joined_at: '2026-02-12T00:00:00Z' },
-  { id: 'mock-team-support',  user_id: 'mock-support-u',   email: 'support@helios.ai',  full_name: 'Support Agent',   role: 'support',       active: true, joined_at: '2026-03-04T00:00:00Z' },
-  { id: 'mock-team-analyst',  user_id: 'mock-analyst-u',   email: 'analyst@helios.ai',  full_name: 'Ops Analyst',     role: 'analyst',       active: true, joined_at: '2026-03-04T00:00:00Z' },
+  { id: 'mock-team-sales',    user_id: 'mock-sales-user',  email: 'sales@helios.ai',    full_name: 'Sales Lead',      role: 'team_sales',    active: true, joined_at: '2026-02-12T00:00:00Z' },
+  { id: 'mock-team-delivery', user_id: 'mock-delivery-u',  email: 'delivery@helios.ai', full_name: 'Delivery Lead',   role: 'team_delivery', active: true, joined_at: '2026-02-12T00:00:00Z' },
+  { id: 'mock-team-content',  user_id: 'mock-content-u',   email: 'content@helios.ai',  full_name: 'Content Lead',    role: 'team_content',  active: true, joined_at: '2026-03-04T00:00:00Z' },
+  { id: 'mock-team-support',  user_id: 'mock-support-u',   email: 'support@helios.ai',  full_name: 'Support Agent',   role: 'team_support',  active: true, joined_at: '2026-03-04T00:00:00Z' },
+  { id: 'mock-team-analyst',  user_id: 'mock-analyst-u',   email: 'analyst@helios.ai',  full_name: 'Ops Analyst',     role: 'team_analyst',  active: true, joined_at: '2026-03-04T00:00:00Z' },
 ]
 
 // ── Pipeline (sales) ──────────────────────────────────────────────
