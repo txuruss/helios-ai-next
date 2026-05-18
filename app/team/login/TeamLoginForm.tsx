@@ -34,7 +34,11 @@ export default function TeamLoginForm({ redirectTo, authError }: { redirectTo?: 
       </div>
 
       <form action={formAction} className="flex flex-col gap-4">
-        <input type="hidden" name="redirectTo" value={redirectTo ?? '/team/dashboard'} />
+        {/* The login server action runs getSafePostLoginRedirect on success.
+            Founders authenticated here are still routed to /admin/mission-control;
+            team members land on /team/ops. The redirectTo here is only a
+            fallback when no role can be resolved. */}
+        <input type="hidden" name="redirectTo" value={redirectTo ?? ''} />
 
         {displayError && (
           <div className="flex items-center gap-2 px-4 py-3 rounded-xl

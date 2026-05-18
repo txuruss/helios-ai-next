@@ -1,6 +1,9 @@
 import type { Metadata } from 'next'
 import Link from 'next/link'
+import { redirect } from 'next/navigation'
 import TeamLoginForm from './TeamLoginForm'
+import { createClient } from '@/lib/supabase/server'
+import { getSafePostLoginRedirect } from '@/lib/auth/post-login-redirect'
 
 export const metadata: Metadata = {
   title: 'Team Sign In — Helios AI',
@@ -13,6 +16,16 @@ export default async function TeamLoginPage({
   searchParams: Promise<{ redirectTo?: string; error?: string }>
 }) {
   const params = await searchParams
+
+  // Already-signed-in users skip the team login form and land on the
+  // correct portal for their role (founder → /admin, team → /team/ops,
+  // client/unknown → /dashboard).
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (user) {
+    const dest = await getSafePostLoginRedirect(user.id, params.redirectTo ?? null)
+    redirect(dest)
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center relative overflow-hidden bg-[#070707]">

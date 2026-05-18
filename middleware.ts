@@ -73,10 +73,13 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl)
   }
 
-  // ── Redirect authenticated users away from auth pages ─────────
-  if ((pathname === '/login' || pathname === '/signup') && user) {
-    return NextResponse.redirect(new URL('/dashboard', request.url))
-  }
+  // ── Authenticated users on /login or /signup ──────────────────
+  // Intentionally NO hard redirect here. The pages themselves
+  // (app/(auth)/login/page.tsx, app/(auth)/signup/page.tsx) call
+  // getSafePostLoginRedirect() to send the user to their role home
+  // (founder → /admin/mission-control, team → /team/ops, client → /dashboard).
+  // Doing the redirect in middleware would prevent that role lookup from
+  // running and lock everyone onto /dashboard.
 
   return supabaseResponse
 }

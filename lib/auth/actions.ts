@@ -3,6 +3,7 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { loginSchema, signupSchema } from '@/lib/validation/schemas'
+import { getSafePostLoginRedirect } from './post-login-redirect'
 import type { ActionState } from '@/types'
 
 export async function login(
@@ -24,7 +25,7 @@ export async function login(
   }
 
   const supabase = await createClient()
-  const { error } = await supabase.auth.signInWithPassword({
+  const { data, error } = await supabase.auth.signInWithPassword({
     email: parsed.data.email,
     password: parsed.data.password,
   })
@@ -45,8 +46,15 @@ export async function login(
     return { error: 'Sign in failed. Please try again.' }
   }
 
-  const redirectTo = formData.get('redirectTo') as string | null
-  redirect(redirectTo && redirectTo.startsWith('/') ? redirectTo : '/dashboard')
+  // Role-aware destination. The userId comes from the Supabase response,
+  // not from the form — never trust a client-supplied identity.
+  const userId = data.user?.id
+  const requestedRedirectTo = formData.get('redirectTo') as string | null
+  const dest = userId
+    ? await getSafePostLoginRedirect(userId, requestedRedirectTo)
+    : '/dashboard'
+
+  redirect(dest)
 }
 
 export async function signup(
