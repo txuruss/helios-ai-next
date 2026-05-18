@@ -129,19 +129,19 @@ export default function Hero() {
             {/* CTAs */}
             <div className="flex gap-3 mt-8 flex-wrap">
               <Link
-                href="/login"
+                href="/audit"
                 className="btn-primary"
-                onClick={() => capture('landing_cta_clicked', { source: 'hero', cta: 'book_demo' })}
+                onClick={() => capture('landing_cta_clicked', { source: 'hero', cta: 'start_audit' })}
               >
-                Book a Demo
+                Start Free Business Audit
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
               </Link>
               <Link
-                href="/demo"
+                href="/choose-plan"
                 className="btn-ghost"
-                onClick={() => capture('landing_cta_clicked', { source: 'hero', cta: 'see_demo' })}
+                onClick={() => capture('landing_cta_clicked', { source: 'hero', cta: 'choose_plan' })}
               >
-                See How It Works
+                Choose Your Plan
               </Link>
             </div>
 

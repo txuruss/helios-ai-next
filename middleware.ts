@@ -33,10 +33,31 @@ export async function middleware(request: NextRequest) {
 
   const { pathname } = request.nextUrl
 
+  // Forward the current pathname so server layouts can read it via headers().
+  // This is consumed by app/team/layout.tsx to skip auth on /team/login.
+  supabaseResponse.headers.set('x-pathname', pathname)
+  request.headers.set('x-pathname', pathname)
+
   // ── Protect /dashboard and all sub-routes ─────────────────────
   if (pathname.startsWith('/dashboard') && !user) {
     const loginUrl = request.nextUrl.clone()
     loginUrl.pathname = '/login'
+    loginUrl.searchParams.set('redirectTo', pathname)
+    return NextResponse.redirect(loginUrl)
+  }
+
+  // ── Phase 29: Protect /client portal ──────────────────────────
+  if (pathname.startsWith('/client') && !user) {
+    const loginUrl = request.nextUrl.clone()
+    loginUrl.pathname = '/login'
+    loginUrl.searchParams.set('redirectTo', pathname)
+    return NextResponse.redirect(loginUrl)
+  }
+
+  // ── Phase 29: Protect /team portal (login page itself is exempt) ─
+  if (pathname.startsWith('/team') && pathname !== '/team/login' && !user) {
+    const loginUrl = request.nextUrl.clone()
+    loginUrl.pathname = '/team/login'
     loginUrl.searchParams.set('redirectTo', pathname)
     return NextResponse.redirect(loginUrl)
   }

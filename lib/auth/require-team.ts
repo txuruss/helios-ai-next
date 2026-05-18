@@ -1,0 +1,119 @@
+// ── Phase 29: Server-side guard for /team routes ─────────────────
+//
+// Use this from /team/*/page.tsx and /team/layout.tsx Server Components.
+// Returns a typed TeamSession or redirects to /team/login.
+//
+// Resolution order:
+//   1. Supabase session + team_members row → TeamSession
+//   2. No Supabase session → redirect('/team/login?redirectTo=...')
+//   3. Mock auth enabled (dev only) → MOCK_TEAM_SESSION
+//
+// SECURITY: team_members is gated by RLS and team_member_id is the
+// authoritative key for all internal actions — never trust a
+// team_member_id submitted from the client.
+
+import 'server-only'
+
+import { redirect } from 'next/navigation'
+import { createClient, createServiceRoleClient } from '@/lib/supabase/server'
+import { mockAuthEnabled, MOCK_TEAM_SESSION } from './mock-session'
+import { teamCanAccessRoute } from './permissions'
+import type { TeamSession, TeamRole } from './types'
+
+interface RequireTeamOptions {
+  /** The route being requested — used both for redirectTo and ACL check */
+  path?: string
+}
+
+export async function requireTeam(
+  options: RequireTeamOptions = {},
+): Promise<TeamSession> {
+  if (process.env.NEXT_PUBLIC_SUPABASE_URL && process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+    const supabase = await createClient()
+    const { data: { user } } = await supabase.auth.getUser()
+
+    if (!user) {
+      const redirectTo = options.path ? `?redirectTo=${encodeURIComponent(options.path)}` : ''
+      redirect(`/team/login${redirectTo}`)
+    }
+
+    // Look up team membership. The team_members table is created via
+    // a Supabase migration. If the table doesn't exist yet, we still
+    // gracefully degrade to mock data in dev — production routes will
+    // simply 404 the user back to /team/login.
+    let teamRow: { id: string; role: string; full_name: string | null; email: string } | null = null
+
+    try {
+      const { data } = await supabase
+        .from('team_members')
+        .select('id, role, full_name, email')
+        .eq('user_id', user.id)
+        .maybeSingle()
+      teamRow = data ?? null
+    } catch {
+      // Table may not exist yet — fall through to service role check
+    }
+
+    if (!teamRow && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      try {
+        const db = createServiceRoleClient()
+        const { data } = await db
+          .from('team_members')
+          .select('id, role, full_name, email')
+          .eq('user_id', user.id)
+          .maybeSingle()
+        teamRow = data ?? null
+      } catch {
+        // Table not provisioned yet
+      }
+    }
+
+    if (!teamRow) {
+      // Real Supabase user but not a team member — block access
+      redirect('/team/login?error=not_authorized')
+    }
+
+    const role = normalizeTeamRole(teamRow.role)
+    const session: TeamSession = {
+      teamMemberId: teamRow.id,
+      userId:       user.id,
+      email:        teamRow.email,
+      fullName:     teamRow.full_name,
+      role,
+      avatarUrl:    null,
+    }
+
+    // Route-level ACL
+    if (options.path) {
+      const acl = teamCanAccessRoute(session.role, options.path)
+      if (!acl.allowed) redirect('/team/dashboard?error=forbidden')
+    }
+
+    return session
+  }
+
+  // Supabase not configured — dev mock fallback only
+  if (mockAuthEnabled()) {
+    if (options.path) {
+      const acl = teamCanAccessRoute(MOCK_TEAM_SESSION.role, options.path)
+      if (!acl.allowed) redirect('/team/dashboard?error=forbidden')
+    }
+    return MOCK_TEAM_SESSION
+  }
+
+  redirect('/team/login')
+}
+
+function normalizeTeamRole(raw: string | null | undefined): TeamRole {
+  if (
+    raw === 'founder_admin' ||
+    raw === 'sales' ||
+    raw === 'delivery' ||
+    raw === 'support' ||
+    raw === 'analyst'
+  ) {
+    return raw
+  }
+  // Unknown role → least-privilege default
+  return 'analyst'
+}

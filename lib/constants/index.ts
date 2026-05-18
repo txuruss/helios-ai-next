@@ -8,12 +8,10 @@ export const APP_POSITIONING =
 
 // ── Navigation ────────────────────────────────────────────────────
 export const NAV_LINKS = [
-  { label: 'Services',    href: '/#services'   },
-  { label: 'Process',     href: '/#process'    },
-  { label: 'Platform',    href: '/#platform'   },
-  { label: 'Case Studies',href: '/#results'    },
-  { label: 'Pricing',     href: '/#pricing'    },
-  { label: 'Contact',     href: '/#contact'    },
+  { label: 'How It Works', href: '/how-it-works' },
+  { label: 'Industries',   href: '/industries'   },
+  { label: 'Pricing',      href: '/pricing'      },
+  { label: 'Free Audit',   href: '/audit'        },
 ]
 
 // Nav items with group support for sidebar grouping

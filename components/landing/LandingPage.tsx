@@ -286,20 +286,20 @@ function CTASection() {
           </p>
           <div className="flex gap-3 flex-wrap justify-center">
             <Link
-              href="/login"
+              href="/audit"
               className="btn-primary"
-              onClick={() => capture('landing_cta_clicked', { source: 'bottom_cta', cta: 'book_demo' })}
+              onClick={() => capture('landing_cta_clicked', { source: 'bottom_cta', cta: 'start_audit' })}
             >
-              Book a Demo
+              Start Free Business Audit
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
             </Link>
-            <a
-              href="#how-it-works"
+            <Link
+              href="/choose-plan"
               className="btn-ghost"
-              onClick={() => capture('landing_cta_clicked', { source: 'bottom_cta', cta: 'see_how_it_works' })}
+              onClick={() => capture('landing_cta_clicked', { source: 'bottom_cta', cta: 'choose_plan' })}
             >
-              See How It Works
-            </a>
+              Choose Your Plan
+            </Link>
           </div>
           <div className="flex flex-wrap gap-x-6 gap-y-2 justify-center mt-2">
             {['Built for local service businesses', 'No setup without guidance', 'Human handoff included'].map((t) => (

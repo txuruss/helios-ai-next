@@ -97,7 +97,7 @@ export default function PricingSection() {
               </div>
 
               <Link
-                href="/login"
+                href={`/register-business?plan=${tier.internalPlan}`}
                 onClick={() => capture('landing_cta_clicked', { source: 'pricing', plan: tier.id, cta: tier.cta })}
                 className={cn(
                   'inline-flex items-center justify-center h-12 px-6 rounded-full font-semibold text-[14px] transition-all',
