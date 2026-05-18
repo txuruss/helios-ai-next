@@ -10,9 +10,10 @@ import {
   getNotificationRules,
   getOpsAuditTrailAction,
 } from '@/lib/actions/ops'
-import type {
-  SlaPolicy, NotificationRule, AuditTrailRow, SlaSummary, BusinessMember,
-} from '@/lib/actions/ops'
+import type { BusinessMember } from '@/lib/actions/ops'
+import type { SlaPolicy, SlaSummary } from '@/lib/ops/sla'
+import type { NotificationRule } from '@/lib/ops/notifications'
+import type { AuditTrailRow } from '@/lib/ops/audit'
 import { capture } from '@/lib/analytics/posthog'
 import SlaSummaryCards       from './SlaSummaryCards'
 import SlaPolicyTable        from './SlaPolicyTable'

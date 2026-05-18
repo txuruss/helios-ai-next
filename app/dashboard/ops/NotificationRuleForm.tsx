@@ -2,7 +2,8 @@
 
 import { useState, useTransition } from 'react'
 import { createNotificationRule, updateNotificationRule } from '@/lib/actions/ops'
-import type { NotificationRule, BusinessMember } from '@/lib/actions/ops'
+import type { BusinessMember } from '@/lib/actions/ops'
+import type { NotificationRule } from '@/lib/ops/notifications'
 import { SAFE_TEMPLATE_VARS } from '@/lib/validation/ops'
 import { capture } from '@/lib/analytics/posthog'
 import NotificationPreviewDrawer from './NotificationPreviewDrawer'

@@ -2,7 +2,7 @@
 
 import { useState, useTransition, useEffect, useCallback } from 'react'
 import { getOpsAuditTrailAction } from '@/lib/actions/ops'
-import type { AuditTrailRow } from '@/lib/actions/ops'
+import type { AuditTrailRow } from '@/lib/ops/audit'
 import SearchPaginationBar from './SearchPaginationBar'
 
 const PAGE_SIZE = 20

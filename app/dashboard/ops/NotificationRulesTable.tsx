@@ -2,7 +2,8 @@
 
 import { useState, useTransition } from 'react'
 import { toggleNotificationRule, deleteNotificationRule } from '@/lib/actions/ops'
-import type { NotificationRule, BusinessMember } from '@/lib/actions/ops'
+import type { BusinessMember } from '@/lib/actions/ops'
+import type { NotificationRule } from '@/lib/ops/notifications'
 import { capture } from '@/lib/analytics/posthog'
 import NotificationRuleDrawer    from './NotificationRuleDrawer'
 import NotificationPreviewDrawer from './NotificationPreviewDrawer'

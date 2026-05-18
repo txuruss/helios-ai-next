@@ -1,6 +1,7 @@
 'use client'
 
-import type { NotificationRule, BusinessMember } from '@/lib/actions/ops'
+import type { BusinessMember } from '@/lib/actions/ops'
+import type { NotificationRule } from '@/lib/ops/notifications'
 import NotificationRuleForm from './NotificationRuleForm'
 
 interface Props {

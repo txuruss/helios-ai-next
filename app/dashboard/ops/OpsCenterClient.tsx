@@ -13,10 +13,12 @@ import {
 import type {
   OpsOverviewMetrics, OpsEvent, OpsTask, OpsAlert,
   ApprovalItem, SystemHealthItem, ClientSystem,
-  AutomationRule, BusinessMember,
-  SlaPolicy, NotificationRule, AuditTrailRow, SlaSummary, OpsExportRow,
-  PaginatedOpsResult,
+  BusinessMember, OpsExportRow, PaginatedOpsResult,
 } from '@/lib/actions/ops'
+import type { AutomationRule } from '@/lib/ops/automation'
+import type { SlaPolicy, SlaSummary } from '@/lib/ops/sla'
+import type { NotificationRule } from '@/lib/ops/notifications'
+import type { AuditTrailRow } from '@/lib/ops/audit'
 import ExportHistoryPanel from './ExportHistoryPanel'
 import OpsOverview        from './OpsOverview'
 import OpsEventFeed       from './OpsEventFeed'

@@ -1,6 +1,6 @@
 'use client'
 
-import type { SlaPolicy } from '@/lib/actions/ops'
+import type { SlaPolicy } from '@/lib/ops/sla'
 import SlaPolicyForm from './SlaPolicyForm'
 
 interface Props {

@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react'
 import { toggleSlaPolicy, deleteSlaPolicy } from '@/lib/actions/ops'
-import type { SlaPolicy } from '@/lib/actions/ops'
+import type { SlaPolicy } from '@/lib/ops/sla'
 import { capture } from '@/lib/analytics/posthog'
 import SlaPolicyDrawer from './SlaPolicyDrawer'
 

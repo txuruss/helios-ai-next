@@ -5,7 +5,7 @@ import {
   toggleAutomationRule, seedDefaultRules, runOpsAutomationNow,
   deleteAutomationRule, duplicateAutomationRule,
 } from '@/lib/actions/ops'
-import type { AutomationRule } from '@/lib/actions/ops'
+import type { AutomationRule } from '@/lib/ops/automation'
 import { capture } from '@/lib/analytics/posthog'
 import AutomationRuleDrawer from './AutomationRuleDrawer'
 

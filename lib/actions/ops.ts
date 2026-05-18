@@ -661,7 +661,6 @@ export async function getClientSystemsSummary(): Promise<{
 // ── Phase 13: Automation Rules ────────────────────────────────────
 
 import type { AutomationRule } from '@/lib/ops/automation'
-export type { AutomationRule }
 
 export async function getAutomationRules(): Promise<{
   rules: AutomationRule[]
@@ -922,7 +921,6 @@ export async function logOpsExport(
 // ── Phase 14: SLA policies ────────────────────────────────────────
 
 import type { SlaPolicy, SlaSummary, SlaCheckResult } from '@/lib/ops/sla'
-export type { SlaPolicy, SlaSummary, SlaCheckResult }
 
 export async function getSlaPolicies(): Promise<{
   policies: SlaPolicy[]
@@ -970,7 +968,6 @@ export async function seedDefaultSlaPoliciesAction(): Promise<{ seeded: number; 
 // ── Phase 14: Notification rules ──────────────────────────────────
 
 import type { NotificationRule } from '@/lib/ops/notifications'
-export type { NotificationRule }
 
 export async function getNotificationRules(): Promise<{
   rules: NotificationRule[]
@@ -1018,7 +1015,6 @@ export async function seedDefaultNotificationRulesAction(): Promise<{ seeded: nu
 // ── Phase 14: Audit trail ─────────────────────────────────────────
 
 import type { AuditTrailRow } from '@/lib/ops/audit'
-export type { AuditTrailRow }
 
 export async function getOpsAuditTrailAction(
   params: { limit?: number; search?: string; page?: number; pageSize?: number } = {},

@@ -1,6 +1,6 @@
 'use client'
 
-import type { AutomationRule } from '@/lib/actions/ops'
+import type { AutomationRule } from '@/lib/ops/automation'
 import AutomationRuleForm from './AutomationRuleForm'
 
 interface Props {
