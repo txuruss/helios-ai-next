@@ -2,12 +2,13 @@ import Link from 'next/link'
 import { requireAdmin } from '@/lib/auth/require-admin'
 import { getAdminAuditMetrics, getAdminAuditTableRows, type AdminAuditStatus, type AdminAuditPriority } from '@/lib/data/admin-audits'
 import { ArrowLeft, AlertTriangle, ExternalLink } from 'lucide-react'
+import AuditActionsCell from './AuditActionsCell'
 
 export const metadata = { title: 'Audits — Mission Control' }
 
-// Pass 34: live Supabase reads from public.audit_submissions —
-// the public intake queue. business_audits remains the internal-result
-// table (deep view still at /dashboard/audits).
+// Lean Baseline: live Supabase reads from public.audit_submissions —
+// the public intake queue. Action buttons (Mark reviewed / Convert /
+// Archive) are wired to server actions in lib/actions/admin-audits.ts.
 // Only founder_admin can reach this page.
 
 const STATUS_LABEL: Record<AdminAuditStatus, { label: string; color: string }> = {
@@ -45,11 +46,8 @@ export default async function AdminAuditsPage() {
         </Link>
         <h1 className="text-[22px] font-semibold">Audit Intake</h1>
         <p className="text-[13.5px] text-[#9a9a9d]">
-          Public audit and business-registration submissions. Pulled live from{' '}
+          Public audit and business-registration submissions, pulled live from{' '}
           <code className="font-mono text-[12px] px-1 py-0.5 rounded bg-white/[0.04]">public.audit_submissions</code>.
-          Generated audit reports for existing clients live in{' '}
-          <code className="font-mono text-[12px] px-1 py-0.5 rounded bg-white/[0.04]">business_audits</code>{' '}
-          (open via <Link href="/dashboard/audits" className="text-[#ffae3c] hover:underline">/dashboard/audits</Link>).
         </p>
       </div>
 
@@ -159,14 +157,7 @@ export default async function AdminAuditsPage() {
                       {new Date(row.created_at).toLocaleDateString()}
                     </td>
                     <td className="px-5 py-3 text-right">
-                      <div className="flex justify-end gap-2 text-[11.5px]">
-                        <span title="Inspect submission detail (coming soon)"
-                          className="text-[#6a6a6e] cursor-not-allowed">Open</span>
-                        <span title="Mark this submission as in review (coming soon)"
-                          className="text-[#6a6a6e] cursor-not-allowed">In review</span>
-                        <span title="Convert into a business + business_audits run (coming soon)"
-                          className="text-[#6a6a6e] cursor-not-allowed">Convert</span>
-                      </div>
+                      <AuditActionsCell submissionId={row.id} status={row.status} />
                     </td>
                   </tr>
                 )

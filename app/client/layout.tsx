@@ -1,11 +1,10 @@
-import { requireClient } from '@/lib/auth/require-client'
-import ClientShell from '@/components/client-portal/ClientShell'
-
-export default async function ClientPortalLayout({
+// Lean Baseline: /client/* is parked. Middleware redirects all /client
+// traffic to /dashboard; this layout is a passthrough so the route group
+// still type-checks. See docs/PARKED_FEATURES.md.
+export default function ParkedClientLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
-  const session = await requireClient({ redirectFrom: '/client' })
-  return <ClientShell session={session}>{children}</ClientShell>
+  return <>{children}</>
 }

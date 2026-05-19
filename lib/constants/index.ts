@@ -14,31 +14,25 @@ export const NAV_LINKS = [
   { label: 'Free Audit',   href: '/audit'        },
 ]
 
-// Nav items with group support for sidebar grouping
+// Lean MVP navigation — only the active client workspace routes.
+// Parked routes (agents, ops, templates, calcom, whatsapp, widget,
+// onboarding, delivery, audits, chat-test, setup) have been removed
+// from the sidebar; their page files now redirect to /dashboard.
 export const DASHBOARD_NAV = [
   // Core — primary workflow
-  { id: 'overview',  label: 'Mission Control', href: '/dashboard',          icon: 'LayoutDashboard', group: 'Core'       },
-  { id: 'inbox',     label: 'Inbox',           href: '/dashboard/inbox',    icon: 'Inbox',           group: 'Core'       },
-  { id: 'bookings',  label: 'Bookings',        href: '/dashboard/bookings', icon: 'Calendar',        group: 'Core'       },
-  { id: 'leads',     label: 'Leads',           href: '/dashboard/leads',    icon: 'Users',           group: 'Core'       },
-  { id: 'audits',    label: 'Audits',          href: '/dashboard/audits',   icon: 'BarChart2',       group: 'Core'       },
-  // Automation — advanced features
-  { id: 'ops',       label: 'Ops Center',      href: '/dashboard/ops',      icon: 'Activity',        group: 'Automation' },
-  { id: 'agents',    label: 'AI Agents',       href: '/dashboard/agents',   icon: 'Bot',             group: 'Automation' },
+  { id: 'overview', label: 'Overview',  href: '/dashboard',          icon: 'LayoutDashboard', group: 'Core'  },
+  { id: 'inbox',    label: 'Inbox',     href: '/dashboard/inbox',    icon: 'Inbox',           group: 'Core'  },
+  { id: 'bookings', label: 'Bookings',  href: '/dashboard/bookings', icon: 'Calendar',        group: 'Core'  },
+  { id: 'leads',    label: 'Leads',     href: '/dashboard/leads',    icon: 'Users',           group: 'Core'  },
   // Setup — configuration
-  { id: 'business',   label: 'Business',        href: '/dashboard/business',   icon: 'Building2',       group: 'Setup'      },
-  { id: 'services',   label: 'Services',        href: '/dashboard/services',   icon: 'Briefcase',       group: 'Setup'      },
-  { id: 'templates',  label: 'Templates',       href: '/dashboard/templates',  icon: 'Layers',          group: 'Setup'      },
-  { id: 'calcom',     label: 'Cal.com',         href: '/dashboard/calcom',     icon: 'Link',            group: 'Setup'      },
-  { id: 'whatsapp',   label: 'WhatsApp',        href: '/dashboard/whatsapp',   icon: 'MessageCircle',   group: 'Setup'      },
-  { id: 'widget',     label: 'Widget',          href: '/dashboard/widget',     icon: 'MessageSquare',   group: 'Setup'      },
-  { id: 'onboarding', label: 'Onboarding',      href: '/dashboard/onboarding', icon: 'ClipboardList',   group: 'Setup'      },
-  { id: 'delivery',   label: 'Delivery',        href: '/dashboard/delivery',   icon: 'CheckSquare',     group: 'Setup'      },
+  { id: 'business', label: 'Business',  href: '/dashboard/business', icon: 'Building2',       group: 'Setup' },
+  { id: 'services', label: 'Services',  href: '/dashboard/services', icon: 'Briefcase',       group: 'Setup' },
+  // FAQs — Pinned in MVP spec but no dedicated page yet (Phase 4).
   // System
-  { id: 'settings',  label: 'Settings',        href: '/dashboard/settings', icon: 'Settings',        group: 'System'     },
+  { id: 'settings', label: 'Settings',  href: '/dashboard/settings', icon: 'Settings',        group: 'System' },
 ] as const
 
-export const NAV_GROUPS = ['Core', 'Automation', 'Setup', 'System'] as const
+export const NAV_GROUPS = ['Core', 'Setup', 'System'] as const
 export type NavGroup = typeof NAV_GROUPS[number]
 
 // ── Business types ────────────────────────────────────────────────

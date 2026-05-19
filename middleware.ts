@@ -38,6 +38,37 @@ export async function middleware(request: NextRequest) {
   supabaseResponse.headers.set('x-pathname', pathname)
   request.headers.set('x-pathname', pathname)
 
+  // ── Defensive: collapse /admin/admin/* doubled paths ──────────
+  // A relative <Link href="admin/foo"> clicked from /admin/<x> resolves
+  // to /admin/admin/foo. We don't ship any such Link in current code,
+  // but stale HMR builds or future regressions could re-introduce one.
+  // Strip exactly one extra "/admin" prefix and let the request flow
+  // through the rest of middleware (which will catch parked routes,
+  // require auth on /admin/*, etc.).
+  if (pathname.startsWith('/admin/admin/') || pathname === '/admin/admin') {
+    const target = request.nextUrl.clone()
+    target.pathname = pathname.replace(/^\/admin\/admin/, '/admin')
+    return NextResponse.redirect(target)
+  }
+
+  // ── Lean Baseline: park /team and /client ─────────────────────
+  // These route groups are no longer part of MVP UX. Their page files
+  // also redirect, but doing it here short-circuits before any layout
+  // (which would have called requireTeam/requireClient and could 500
+  // in environments missing the team_members table).
+  if (pathname === '/team' || pathname.startsWith('/team/')) {
+    const target = request.nextUrl.clone()
+    target.pathname = '/dashboard'
+    target.search = ''
+    return NextResponse.redirect(target)
+  }
+  if (pathname === '/client' || pathname.startsWith('/client/')) {
+    const target = request.nextUrl.clone()
+    target.pathname = '/dashboard'
+    target.search = ''
+    return NextResponse.redirect(target)
+  }
+
   // ── Protect /dashboard and all sub-routes ─────────────────────
   if (pathname.startsWith('/dashboard') && !user) {
     const loginUrl = request.nextUrl.clone()
@@ -46,29 +77,13 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl)
   }
 
-  // ── Phase 29: Protect /client portal ──────────────────────────
-  if (pathname.startsWith('/client') && !user) {
-    const loginUrl = request.nextUrl.clone()
-    loginUrl.pathname = '/login'
-    loginUrl.searchParams.set('redirectTo', pathname)
-    return NextResponse.redirect(loginUrl)
-  }
-
-  // ── Phase 29: Protect /team portal (login page itself is exempt) ─
-  if (pathname.startsWith('/team') && pathname !== '/team/login' && !user) {
-    const loginUrl = request.nextUrl.clone()
-    loginUrl.pathname = '/team/login'
-    loginUrl.searchParams.set('redirectTo', pathname)
-    return NextResponse.redirect(loginUrl)
-  }
-
-  // ── Pass 30: Protect /admin portal (founder_admin only) ─────────
+  // ── Protect /admin portal (founder_admin only) ────────────────
   // Middleware only checks "is logged in" — the role check happens
-  // server-side in lib/auth/require-admin.ts. Unauthenticated users go
-  // to /team/login since the founder shares that login form.
+  // server-side in lib/auth/require-admin.ts. Unauthenticated users
+  // go to /login (the dedicated /team/login page is parked).
   if (pathname.startsWith('/admin') && !user) {
     const loginUrl = request.nextUrl.clone()
-    loginUrl.pathname = '/team/login'
+    loginUrl.pathname = '/login'
     loginUrl.searchParams.set('redirectTo', pathname)
     return NextResponse.redirect(loginUrl)
   }
@@ -77,9 +92,9 @@ export async function middleware(request: NextRequest) {
   // Intentionally NO hard redirect here. The pages themselves
   // (app/(auth)/login/page.tsx, app/(auth)/signup/page.tsx) call
   // getSafePostLoginRedirect() to send the user to their role home
-  // (founder → /admin/mission-control, team → /team/ops, client → /dashboard).
-  // Doing the redirect in middleware would prevent that role lookup from
-  // running and lock everyone onto /dashboard.
+  // (founder → /admin/mission-control, everyone else → /dashboard).
+  // Doing the redirect in middleware would prevent that role lookup
+  // from running and lock everyone onto /dashboard.
 
   return supabaseResponse
 }

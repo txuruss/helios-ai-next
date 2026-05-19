@@ -62,7 +62,7 @@ export default function Footer() {
               {[
                 { label: 'Case Studies', href: '#results' },
                 { label: 'Process',     href: '#process' },
-                { label: 'Pricing',     href: '#pricing' },
+                { label: 'Pricing',     href: '/pricing' },
                 { label: 'Contact',     href: '#contact' },
                 { label: 'Sign In',     href: '/login'   },
               ].map((item) => (

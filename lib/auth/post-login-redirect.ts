@@ -1,4 +1,4 @@
-// ── Pass 32: Role-aware post-login redirect ──────────────────────
+// ── Role-aware post-login redirect (Lean Baseline) ──────────────
 //
 // Resolves the correct landing path for a freshly authenticated user.
 // Used by:
@@ -7,13 +7,17 @@
 //   • app/(auth)/login/page.tsx + app/(auth)/signup/page.tsx — when an
 //     already-signed-in user lands on the auth pages
 //
-// Rules:
-//   founder_admin                 → /admin/mission-control
+// Rules (Lean Baseline):
+//   founder_admin                  → /admin/mission-control
 //   team_sales / team_delivery /
 //   team_content / team_support /
-//   team_analyst                  → /team/ops
+//   team_analyst                   → /dashboard   (team portal is parked)
 //   active business member (client) → /dashboard
-//   authenticated, no rows yet    → /dashboard/setup
+//   authenticated, no rows yet     → /dashboard
+//
+// /team/* and /client/* are no longer part of MVP UX. Their pages
+// redirect to /dashboard (or /admin for founder), so we never route
+// any user there directly.
 //
 // SECURITY
 // • Identity is derived from Supabase server-side ONLY. We accept a
@@ -22,8 +26,8 @@
 // • Role is re-read from team_members on every login. We do not trust
 //   any role embedded in cookies or session metadata.
 // • Falls back gracefully when team_members has not yet been provisioned
-//   in the current environment — without the table, only the client and
-//   setup branches can match.
+//   in the current environment — without the table, only the client
+//   branch can match (which lands on /dashboard).
 
 import 'server-only'
 
@@ -32,9 +36,12 @@ import { createClient, createServiceRoleClient } from '@/lib/supabase/server'
 // ── Default destinations ─────────────────────────────────────────
 
 export const ADMIN_HOME  = '/admin/mission-control'
-export const TEAM_HOME   = '/team/ops'
 export const CLIENT_HOME = '/dashboard'
-export const SETUP_HOME  = '/dashboard/setup'
+// Lean Baseline: team portal and dashboard setup are parked. Team users
+// land on /dashboard like clients; new users also land on /dashboard
+// (the page itself handles the no-business case inline).
+export const TEAM_HOME   = '/dashboard'
+export const SETUP_HOME  = '/dashboard'
 
 // ── Role bucket — used for ACL on redirectTo ─────────────────────
 
@@ -87,11 +94,11 @@ async function resolveRole(userId: string): Promise<ResolvedRole> {
     return { bucket: 'founder_admin', default: ADMIN_HOME, teamRole }
   }
 
-  // Accept both the canonical team_* values (per the SQL CHECK constraint)
-  // and the legacy un-prefixed values for any pre-migration dev rows.
+  // Lean Baseline: non-founder team members fall through to /dashboard.
+  // The /team/* portal is parked, so we no longer route them there.
   const LEGACY = new Set(['sales', 'delivery', 'content', 'support', 'analyst'])
   if (teamRole && (teamRole.startsWith('team_') || LEGACY.has(teamRole))) {
-    return { bucket: 'team', default: TEAM_HOME, teamRole }
+    return { bucket: 'team', default: CLIENT_HOME, teamRole }
   }
 
   // ── business_members lookup (client) ─────────────────────────
@@ -158,21 +165,22 @@ export function isSafeRedirectTo(path: string | null | undefined): boolean {
 
 // Decides whether a user with `bucket` is allowed to land on `path`.
 // Used to enforce that a malicious or hand-crafted redirectTo can't
-// drop a client into /admin or /team.
+// drop a client into /admin.
 export function canAccessPath(bucket: RoleBucket, path: string): boolean {
   // /admin/* — founder_admin only
   if (path === '/admin' || path.startsWith('/admin/') || path.startsWith('/admin?')) {
     return bucket === 'founder_admin'
   }
-  // /team/* — team members + founder_admin (excluding /team/login which is public)
+  // /team/* and /client/* are parked in the Lean Baseline. They still
+  // exist as redirect stubs to /dashboard, but we refuse to honor them
+  // as a redirectTo target — the role default is always more useful.
   if (path === '/team' || path.startsWith('/team/') || path.startsWith('/team?')) {
-    return bucket === 'founder_admin' || bucket === 'team'
+    return false
   }
-  // /client/* — only authenticated business users (client bucket) and founder_admin
   if (path === '/client' || path.startsWith('/client/') || path.startsWith('/client?')) {
-    return bucket === 'founder_admin' || bucket === 'client'
+    return false
   }
-  // Everything else (`/dashboard`, `/booking`, `/demo`, public pages) is
+  // Everything else (`/dashboard`, `/booking`, public pages) is
   // accessible to any authenticated user. The destination's own auth
   // guards (e.g. dashboard layout) will re-check identity.
   return true
