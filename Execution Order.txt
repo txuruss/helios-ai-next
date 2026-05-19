@@ -1,0 +1,628 @@
+Execution Order
+
+Do not restructure everything in one pass. Use this order:
+
+| Step | Task                                 | Why                                                    |
+| ---- | ------------------------------------ | ------------------------------------------------------ |
+| 1    | Route inventory                      | Prevent accidental deletions                           |
+| 2    | Create docs mapping                  | Forces Claude to document before changing              |
+| 3    | Build `/admin/mission-control` shell | Gives you the final command center                     |
+| 4    | Preserve `/dashboard`                | Avoids breaking working features                       |
+| 5    | Map audit submissions first          | This is your current highest-priority operational flow |
+| 6    | Wire leads, clients, bookings        | Turns Mission Control into a real admin system         |
+| 7    | Wire agent runs and notifications    | Connects Relevance AI operations                       |
+| 8    | Wire revenue                         | Adds business visibility                               |
+| 9    | Add team invite system               | Comes after founder/admin flow is stable               |
+
+If it exists and is not clearly broken, preserve it.
+If it looks unused, document it.
+If it conflicts with the new structure, isolate it.
+Do not delete without approval.
+
+You are working on the live Helios AI codebase.
+
+Goal:
+Restructure Helios AI into the final Mission Control architecture without breaking, deleting, renaming, or removing any existing features from Phases 1 through 29.
+
+This is a reorganization and preservation task, not a rebuild.
+
+Main rule:
+Do not remove working features. Do not delete routes. Do not break auth. Do not break public website flows. Do not break legacy dashboard compatibility.
+
+If any existing feature does not clearly fit into the new structure:
+1. Keep the feature working.
+2. Do not delete it.
+3. Document it inside docs/mission-control-feature-review.md.
+4. Explain where it currently lives, what it does, and where it may belong.
+5. Ask for owner approval before removing, hiding, renaming, or merging it.
+
+Final Helios AI Mental Model:
+- Public Website = sells Helios AI
+- Mission Control = founder/admin command center
+- Client Portal = client-facing business dashboard
+- Team Ops Panel = internal team workspace
+- Legacy Dashboard = current working surface until migration is complete
+- Data Layer = Supabase-backed business, audit, lead, client, booking, agent, revenue, and notification data
+- Auth & Permissions = role-based access control for founder/admin, team, and client users
+
+Primary Mission Control Route:
+- /admin/mission-control
+
+Do not redirect /admin/mission-control to /dashboard.
+Do not redirect founder/admin users to /dashboard unless that is the existing fallback behavior and no admin route exists.
+If there is a current bug sending users to /dashboard when they should go to /admin/mission-control, fix that carefully without breaking /dashboard.
+
+Preserve These Existing Areas:
+- Public website routes
+- Pricing page
+- How It Works page
+- Industries page
+- Demo routes
+- Demo widget
+- Audit flow
+- Choose plan flow
+- Register business flow
+- Login
+- Signup
+- Existing /dashboard routes
+- Existing /client routes
+- Existing /team routes
+- All API routes
+- All auth logic
+- Business setup fix
+- LaunchReadinessCard hydration fix
+- Netlify deployment support
+- Booking flow
+- Templates
+- Ops Center
+- Relevance AI placeholders
+- Supabase integration points
+- Environment variable usage
+- Any existing production fixes
+
+Final Top-Level Route Structure:
+
+Public Website:
+- /
+- /pricing
+- /how-it-works
+- /industries
+- /demo
+- /demo/widget
+- /audit
+- /choose-plan
+- /register-business
+- /login
+- /signup
+
+Founder/Admin:
+- /admin
+- /admin/mission-control
+- /admin/audits
+- /admin/leads
+- /admin/outreach
+- /admin/clients
+- /admin/relevance-ai
+- /admin/content
+- /admin/social
+- /admin/bookings
+- /admin/notifications
+- /admin/delivery
+- /admin/revenue
+- /admin/settings
+
+Client Portal:
+- /client
+- /client/dashboard
+- /client/business-profile
+- /client/audit-results
+- /client/leads
+- /client/bookings
+- /client/conversations
+- /client/ai-assistant
+- /client/knowledge-base
+- /client/reports
+- /client/billing
+- /client/support
+- /client/settings
+
+Team Ops:
+- /team/login
+- /team/ops
+- /team/tasks
+- /team/assigned-leads
+- /team/assigned-clients
+- /team/outreach
+- /team/delivery
+- /team/content
+- /team/support
+
+Legacy Protected Dashboard:
+- /dashboard
+- /dashboard/setup
+- /dashboard/business
+- /dashboard/services
+- /dashboard/inbox
+- /dashboard/leads
+- /dashboard/bookings
+- /dashboard/audits
+- /dashboard/templates
+- /dashboard/ops
+- /dashboard/settings
+- /dashboard/settings/billing
+
+Do not remove the legacy /dashboard routes.
+They must remain functional for backward compatibility until migration is complete.
+
+Mission Control Navigation Groups:
+
+1. Overview
+Must include:
+- Agency Snapshot
+- Active Leads
+- Active Clients
+- Pending Approvals
+- Agent Activity
+- Revenue Snapshot
+- Critical Alerts
+
+Agency Snapshot should show:
+- Total Audits
+- Total Leads
+- Total Clients
+- Active Automations
+- System Health
+- Launch Readiness
+
+Active Leads should show:
+- New Leads
+- Audit Submitted
+- Qualified
+- Contacted
+- Call Booked
+- Proposal Sent
+- Won
+- Lost
+- Nurture
+
+Active Clients should show:
+- Audit Submitted
+- Awaiting Payment
+- Onboarding
+- In Setup
+- QA Review
+- Live
+- Needs Attention
+- Paused
+- Cancelled
+
+Pending Approvals should show:
+- AI Review Items
+- Booking Confirmations
+- Audit Reports
+- Client Launch Approval
+- Delivery QA Approval
+- Manual Owner Review
+
+Agent Activity should show:
+- Business Research Agent
+- Website Audit Agent
+- Client Qualifier Agent
+- Automation Opportunity Agent
+- Sales Offer Builder Agent
+- Quality Check Agent
+- Admin Notification Agent
+- Relevance AI Run Logs
+
+Revenue Snapshot should show:
+- Setup Revenue
+- Monthly Recurring Revenue
+- Starter Plans
+- Booking OS Plans
+- Ops Center Plans
+- Payment Status
+- Revenue Risk
+
+Critical Alerts should show:
+- Failed Automations
+- Failed Webhooks
+- Failed Notifications
+- SLA Breaches
+- Booking Failures
+- WhatsApp Issues
+- Cal.com Issues
+- Stripe Issues
+- Missing API Keys
+- Client Needs Attention
+- Security Warnings
+
+2. Audit Inbox
+Include:
+- New Audit Submissions
+- Public Website Intake
+- Business Details
+- Selected Plan
+- Qualification Score
+- Priority Status
+- Review Status
+- Business Audit Scores
+- Audit Findings
+- Package Recommendation
+- Relevance AI Audit Trigger
+- Audit Report Drafts
+- Convert to Full Audit
+- Move to Lead Pipeline
+
+3. Lead Pipeline
+Include:
+- Website Leads
+- Audit Leads
+- Outreach Leads
+- New Leads
+- Audit Submitted
+- Qualified Leads
+- Contacted
+- Call Booked
+- Proposal Sent
+- Closed Won
+- Closed Lost
+- Nurture
+- Follow-Up Queue
+- Won / Lost Tracking
+
+4. Outreach Center
+Include:
+- Prospect List
+- Business Research
+- Business Research Notes
+- AI Audit Generator
+- Cold Email Drafts
+- WhatsApp Scripts
+- Follow-Up Queue
+- Campaign Status
+- Reply Tracker
+- Campaign Performance
+
+5. Client Management
+Include:
+- Client List
+- Active Clients
+- Business Profiles
+- Client Plan
+- Client Setup Progress
+- Setup Progress
+- Plan Status
+- AI Assistant Status
+- Payment Status
+- Assigned Team Member
+- Last Activity
+- Needs Attention
+
+6. Bookings & Calls
+Include:
+- Demo Calls
+- Strategy Calls
+- Onboarding Calls
+- Client Meetings
+- Booking Requests
+- Confirmed Bookings
+- Rejected Bookings
+- Expired Confirmations
+- Call Status
+- Next Action
+- Calendar Health
+
+7. Inbox
+Include:
+- Website Chat Conversations
+- WhatsApp Conversations
+- Human Handoff
+- AI Pause Controls
+- AI Confidence
+- Needs Review
+- Conversation Logs
+
+8. Delivery Tracker
+Include:
+- Client Onboarding
+- Client Onboarding Intake
+- Setup Checklist
+- Services Setup
+- FAQs Setup
+- AI Assistant Setup
+- Website Widget Setup
+- Widget Setup
+- WhatsApp Setup
+- Cal.com Setup
+- QA Checklist
+- QA Review
+- Launch Approval
+- Launch Readiness
+- Delivery Tasks
+
+9. Niche Templates
+Include:
+- Barbershop
+- Hair Salon
+- Beauty Spa
+- Clinic
+- Cleaning Company
+- Auto Repair Shop
+- Tutor / Education Service
+- Any existing templates
+
+10. Content Center
+Include:
+- Content Ideas
+- Draft Posts
+- Scheduled Posts
+- Published Posts
+- Short-Form Scripts
+- LinkedIn Posts
+- Instagram Posts
+- TikTok Ideas
+- YouTube Ideas
+- Platform
+- Topic
+- Owner
+- Performance Notes
+
+11. Social Media Center
+Include:
+- Instagram
+- TikTok
+- LinkedIn
+- YouTube
+- X
+- Facebook
+- Captions
+- Hooks
+- Publish Dates
+- Publishing Calendar
+
+12. Notifications
+Include:
+- New Audit Submitted
+- New Lead Created
+- Audit Completed
+- Relevance AI Completed
+- Relevance AI Error
+- Agent Error
+- Client Needs Attention
+- Payment Issue
+- Booking Created
+- Follow-Up Due
+- Content Due
+- Delivery Task Overdue
+
+13. Ops Center
+Include:
+- Activity Feed
+- Alerts
+- Tasks
+- Approvals
+- SLA & Routing
+- Automation Rules
+- Notification Rules
+- Webhook Logs
+- Export History
+- Cron History
+- System Health
+
+14. Revenue
+Include:
+- Starter
+- Booking OS
+- Ops Center
+- Setup Revenue
+- Setup Fees
+- Monthly Plans
+- Estimated MRR
+- Active Subscriptions
+- Plan Breakdown
+- Pending Payments
+- Payment Status
+- Stripe Status
+- Revenue Trends
+- Revenue Forecast
+
+15. Production Readiness
+Include:
+- Beta Launch Checklist
+- Environment Check
+- Route Audit
+- Demo Script
+- First Beta Client Checklist
+- Deployment Guide
+- Launch Status
+
+16. Settings
+Include:
+- Business Settings
+- Founder Profile
+- Team Access
+- Role Permissions
+- API Integrations
+- Notifications
+- Supabase Status
+- Anthropic Status
+- Relevance AI Status
+- Relevance AI Settings
+- WhatsApp Status
+- Cal.com Status
+- Resend Status
+- Stripe Status
+- PostHog Status
+- Sentry Status
+- Security
+- Security Settings
+
+Data Layer Alignment:
+Map existing data and Supabase tables into this structure without destructive changes.
+
+Use or preserve these concepts:
+- team_members
+- audit_submissions
+- business_audits
+- businesses
+- leads
+- bookings
+- conversations
+- agent_runs
+- notifications
+- content_items
+- social_posts
+- subscriptions
+- internal_notes
+
+Important data definitions:
+- audit_submissions = raw website intake from public audit/register flows
+- business_audits = generated audit reports, scores, findings, recommendations, and exports
+- leads = sales pipeline records
+- businesses = client/business profiles
+- bookings = demo calls, strategy calls, client meetings, and booking requests
+- conversations = website chat and WhatsApp conversation logs
+- agent_runs = Relevance AI or internal AI execution logs
+- notifications = admin, team, client, and system alerts
+- subscriptions = plan, payment, billing, and revenue data
+
+Auth & Permission Rules:
+Keep all existing auth working.
+
+Final auth model should support:
+- Public Routes
+- Client Routes
+- Admin Routes
+- Team Routes
+- Founder Admin Guard
+- Team Guard
+- Client Guard
+- Role-Based Redirects
+- Supabase Auth
+
+Expected role behavior:
+- Founder/admin users go to /admin/mission-control
+- Client users go to /client/dashboard
+- Team users go to /team/ops
+- Unknown authenticated users use the safest existing fallback
+- Unauthenticated protected-route users go to /login
+
+Do not break existing login, signup, logout, or session handling.
+
+Migration Safety Rules:
+Before changing files:
+1. Inspect current routes.
+2. Inspect current dashboard/admin/client/team layouts.
+3. Identify all existing pages and components.
+4. Create a mapping before moving anything.
+5. Prefer reusing existing components instead of rewriting them.
+6. Do not delete unused-looking components until they are documented.
+7. Keep old route compatibility even if new admin routes are created.
+8. Use redirects only when safe and intentional.
+9. Keep imports stable.
+10. Run type checks and build checks.
+
+Create or update these docs:
+- docs/mission-control-route-map.md
+- docs/mission-control-feature-review.md
+- docs/mission-control-migration-plan.md
+
+docs/mission-control-route-map.md must include:
+- Existing route
+- New intended route
+- Feature owner group
+- Status
+- Notes
+
+Use this format:
+
+| Existing Route | New Route | Group | Status | Notes |
+| --- | --- | --- | --- | --- |
+| /dashboard/audits | /admin/audits | Mission Control / Audit Inbox | Preserved | Legacy route remains active |
+| /dashboard/leads | /admin/leads | Mission Control / Lead Pipeline | Preserved | Reuse existing lead UI |
+| /dashboard/bookings | /admin/bookings | Mission Control / Bookings & Calls | Preserved | Keep booking flow working |
+| /dashboard/ops | /admin/mission-control or /admin/settings/ops | Mission Control / Ops Center | Review | Do not remove |
+| /client/dashboard | /client/dashboard | Client Portal | Preserved | Client-facing |
+| /team/ops | /team/ops | Team Ops | Preserved | Team workspace |
+
+docs/mission-control-feature-review.md must include:
+- Feature name
+- Current file or route
+- What it does
+- Why it does not clearly fit
+- Suggested destination
+- Required owner approval before change
+
+docs/mission-control-migration-plan.md must include:
+- Phase 1: Route inventory
+- Phase 2: Mission Control shell
+- Phase 3: Overview cards
+- Phase 4: Existing feature mapping
+- Phase 5: Legacy dashboard compatibility
+- Phase 6: Supabase data wiring
+- Phase 7: Relevance AI runs
+- Phase 8: Notifications
+- Phase 9: Revenue wiring
+- Phase 10: Team invite system
+
+Implementation Priority:
+1. Fix audit_submissions intake if broken
+2. Show audit submissions inside Mission Control
+3. Add admin status actions
+4. Wire real leads
+5. Wire real clients
+6. Wire real bookings
+7. Wire Relevance AI agent runs
+8. Wire notifications
+9. Wire revenue
+10. Build team invite system
+
+Build the Mission Control shell first:
+- Create /admin/mission-control if missing
+- Add compact sidebar or tab navigation
+- Add Overview as the default section
+- Add empty-state cards where data is not wired yet
+- Use existing components wherever possible
+- Do not create fake destructive data
+- Use safe placeholder states only where needed
+
+Design Requirements:
+- Premium SaaS admin dashboard
+- Dark luxury tech aesthetic
+- Clean spacing
+- No cheap emoji-heavy UI
+- Professional icon system
+- Compact cards
+- Clear status badges
+- Founder-first command center feel
+- Mobile responsive
+- Do not redesign the whole app unless needed
+- Do not change public branding unless required for consistency
+
+Required Final Report:
+After implementation, report:
+
+1. Files changed
+2. Routes preserved
+3. Routes added
+4. Features mapped into Mission Control
+5. Features staying in Client Portal
+6. Features staying in Team Ops
+7. Legacy /dashboard compatibility status
+8. Auth behavior status
+9. Supabase/data behavior status
+10. Relevance AI placeholder status
+11. Items added to docs/mission-control-feature-review.md
+12. Build result
+13. TypeScript result
+14. Any remaining risks
+
+Do not say the task is complete unless:
+- /admin/mission-control works
+- /dashboard still works
+- public website routes still work
+- client routes still work
+- team routes still work
+- auth redirects are not broken
+- build passes or errors are clearly documented
+- TypeScript passes or errors are clearly documented

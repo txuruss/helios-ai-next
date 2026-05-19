@@ -5,6 +5,7 @@ import { MOCK_ADMIN_KPIS, MOCK_ADMIN_CONTENT, MOCK_ADMIN_SOCIAL, MOCK_ADMIN_NOTI
 import type { AdminKpi } from '@/lib/data/mock-admin'
 import { MOCK_BUSINESSES } from '@/lib/data/mock-businesses'
 import { MOCK_PIPELINE, MOCK_DELIVERY, MOCK_OUTREACH, MOCK_AGENT_RUNS } from '@/lib/data/mock-team'
+import { getAdminAuditMetrics, getLatestAdminAuditSubmissions, type AdminAuditRow, type AdminAuditStatus } from '@/lib/data/admin-audits'
 import { CircleAlert, CircleCheck, AlertTriangle, Calendar, Building2, Send, Bot, FileText, Share2, PackageCheck } from 'lucide-react'
 
 export const metadata = { title: 'Mission Control — Helios AI Admin' }
@@ -12,7 +13,15 @@ export const metadata = { title: 'Mission Control — Helios AI Admin' }
 export default async function AdminMissionControlPage() {
   const session = await requireAdmin({ path: '/admin/mission-control' })
 
-  const auditsPending  = MOCK_BUSINESSES.filter((b) => b.audit_status === 'pending' || b.audit_status === 'in_review').slice(0, 4)
+  // ── Pass 33: real audit data ────────────────────────────────────
+  // Audit-related KPIs and the Audit Inbox panel now read from the
+  // production `business_audits` table. Everything else on this page
+  // remains mock — see lib/data/mock-admin.ts.
+  const [auditMetrics, latestAudits] = await Promise.all([
+    getAdminAuditMetrics(),
+    getLatestAdminAuditSubmissions(4),
+  ])
+
   const topDeals       = MOCK_PIPELINE.slice(0, 4)
   const activeProjects = MOCK_DELIVERY.slice(0, 3)
   const recentAgents   = MOCK_AGENT_RUNS.slice(0, 3)
@@ -22,6 +31,19 @@ export default async function AdminMissionControlPage() {
   const alerts         = MOCK_ADMIN_NOTIFICATIONS.filter((n) => !n.acknowledged).slice(0, 4)
   const currentMonth   = MOCK_ADMIN_REVENUE[MOCK_ADMIN_REVENUE.length - 1]
   const priorMonth     = MOCK_ADMIN_REVENUE[MOCK_ADMIN_REVENUE.length - 2]
+
+  // Inject the live "new audits today" value into the KPI grid without
+  // touching the other mock cards.
+  const kpis: AdminKpi[] = MOCK_ADMIN_KPIS.map((kpi) =>
+    kpi.key === 'audits_today'
+      ? {
+          ...kpi,
+          value: String(auditMetrics.newToday),
+          delta: auditMetrics.error ? 'audit table unavailable' : `${auditMetrics.total} total · ${auditMetrics.pending} pending`,
+          tone:  auditMetrics.error ? 'warning' : (auditMetrics.newToday > 0 ? 'success' : 'neutral'),
+        }
+      : kpi,
+  )
 
   return (
     <div className="flex flex-col gap-6">
@@ -38,14 +60,14 @@ export default async function AdminMissionControlPage() {
 
       {/* 1. Overview KPI cards */}
       <section className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-        {MOCK_ADMIN_KPIS.map((kpi) => <KpiCard key={kpi.key} kpi={kpi} />)}
+        {kpis.map((kpi) => <KpiCard key={kpi.key} kpi={kpi} />)}
       </section>
 
       {/* 2 + 3. Audit inbox + Lead pipeline */}
       <section className="grid grid-cols-1 lg:grid-cols-2 gap-4">
         <AdminPreviewCard
           title="Audit Inbox"
-          subtitle="Business registrations awaiting review"
+          subtitle={auditMetrics.error ? 'Audit table unavailable' : `${auditMetrics.total} total · ${auditMetrics.pending} pending`}
           href="/admin/audits"
           hrefLabel="Open audits"
           legacyHref="/dashboard/audits"
@@ -53,16 +75,24 @@ export default async function AdminMissionControlPage() {
         >
           <table className="w-full text-[13px]">
             <thead className="bg-white/[0.02] text-[10.5px] uppercase tracking-[0.08em] text-[#6a6a6e]">
-              <tr><th className="text-left px-5 py-2.5">Business</th><th className="text-left px-5 py-2.5">Industry</th><th className="text-left px-5 py-2.5">Status</th></tr>
+              <tr>
+                <th className="text-left px-5 py-2.5">Business</th>
+                <th className="text-left px-5 py-2.5">Industry</th>
+                <th className="text-left px-5 py-2.5">Status</th>
+                <th className="text-right px-5 py-2.5">Submitted</th>
+              </tr>
             </thead>
             <tbody>
-              {auditsPending.length === 0 ? (
-                <tr><td colSpan={3} className="px-5 py-4 text-[13px] text-[#6a6a6e]">No pending audits.</td></tr>
-              ) : auditsPending.map((a) => (
+              {latestAudits.error ? (
+                <tr><td colSpan={4} className="px-5 py-4 text-[13px] text-[#ff8a7a]">{latestAudits.error}</td></tr>
+              ) : latestAudits.rows.length === 0 ? (
+                <tr><td colSpan={4} className="px-5 py-4 text-[13px] text-[#6a6a6e]">No audit submissions yet.</td></tr>
+              ) : latestAudits.rows.map((a: AdminAuditRow) => (
                 <tr key={a.id} className="border-t border-white/[0.04]">
-                  <td className="px-5 py-2.5 text-white truncate">{a.name}</td>
-                  <td className="px-5 py-2.5 text-[#9a9a9d]">{a.industry}</td>
-                  <td className="px-5 py-2.5"><StatusBadge label={a.audit_status} tone={a.audit_status === 'pending' ? 'warning' : 'info'} /></td>
+                  <td className="px-5 py-2.5 text-white truncate">{a.business_name}</td>
+                  <td className="px-5 py-2.5 text-[#9a9a9d]">{a.business_type ?? '—'}</td>
+                  <td className="px-5 py-2.5"><StatusBadge label={a.status} tone={auditStatusTone(a.status)} /></td>
+                  <td className="px-5 py-2.5 text-right text-[11.5px] text-[#6a6a6e]">{new Date(a.created_at).toLocaleDateString()}</td>
                 </tr>
               ))}
             </tbody>
@@ -341,6 +371,16 @@ function StatusBadge({ label, tone }: { label: string; tone: BadgeTone }) {
       {label.replaceAll('_', ' ')}
     </span>
   )
+}
+
+function auditStatusTone(status: AdminAuditStatus): BadgeTone {
+  if (status === 'new')        return 'info'
+  if (status === 'in_review')  return 'warning'
+  if (status === 'qualified')  return 'success'
+  if (status === 'contacted')  return 'info'
+  if (status === 'converted')  return 'success'
+  if (status === 'archived')   return 'neutral'
+  return 'neutral'
 }
 
 function dealTone(stage: string): BadgeTone {

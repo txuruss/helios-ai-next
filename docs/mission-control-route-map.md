@@ -137,8 +137,8 @@ Built in Pass 30 as a protected founder command center. **No legacy `/dashboard/
 | Current route | Current purpose | Current files | New owner | New target route | Status | Removal permission required |
 |---|---|---|---|---|---|---|
 | `/admin` | Redirect → `/admin/mission-control` | `app/admin/page.tsx` | admin | `/admin` | shell, already aligned | no |
-| `/admin/mission-control` | Founder command center — 10 KPI cards + 10 preview panels (audits, leads, clients, outreach, Relevance, content, social, bookings, notifications, revenue, delivery) | `app/admin/mission-control/page.tsx`, `components/admin/AdminPreviewCard.tsx` | admin | `/admin/mission-control` | shell, linked (via preview panels to legacy `/dashboard/*`) | no |
-| `/admin/audits` | Audit inbox table | `app/admin/audits/page.tsx` | admin | `/admin/audits` | linked → `/dashboard/audits` | no |
+| `/admin/mission-control` | Founder command center — 10 KPI cards + 10 preview panels. **Audit KPI ("new audits today") and the Audit Inbox panel are now live (Pass 33)**; all other panels are still mock. | `app/admin/mission-control/page.tsx`, `components/admin/AdminPreviewCard.tsx`, `lib/data/admin-audits.ts` | admin | `/admin/mission-control` | partially live (audits) + shell (everything else) | no |
+| `/admin/audits` | Audit intake queue — **Pass 34: live reads from `public.audit_submissions` with metrics, status + priority badges, qualification score, and action placeholders.** Read-only across all submissions. | `app/admin/audits/page.tsx`, `lib/data/admin-audits.ts`, `supabase/migrations/20260520120000_create_audit_submissions.sql` | admin | `/admin/audits` | functional (read-only) | no |
 | `/admin/leads` | Lead pipeline table | `app/admin/leads/page.tsx` | admin | `/admin/leads` | linked → `/dashboard/leads` | no |
 | `/admin/outreach` | Outreach campaign cards | `app/admin/outreach/page.tsx` | admin | `/admin/outreach` | shell | no |
 | `/admin/clients` | Active client roster | `app/admin/clients/page.tsx` | admin | `/admin/clients` | linked → `/dashboard/business` | no |
@@ -206,6 +206,42 @@ Navigation components:
 - `components/admin/AdminSidebar.tsx` — admin sidebar (consumes `ADMIN_NAV` from `AdminNav.ts`). Only renders for `founder_admin`.
 
 ---
+
+## Pass 33 — Live audit data (superseded by Pass 34)
+
+`/admin/mission-control` and `/admin/audits` were initially wired to `public.business_audits` in Pass 33. Pass 34 supersedes that wiring — the intake queue now lives in its own table.
+
+## Pass 34 — Audit intake split into `audit_submissions`
+
+A new additive migration (`supabase/migrations/20260520120000_create_audit_submissions.sql`) introduces `public.audit_submissions`, a dedicated intake table for raw public submissions from `/audit` and `/register-business`. This is **separate from `business_audits`**, which remains the generated-audit-results table from Phase 26.
+
+Architecture:
+
+| Table | Purpose | Writers |
+|---|---|---|
+| `public.audit_submissions` | Raw public intake — every audit form post lands here as `status='new'`. Reviewed by the founder in /admin/audits and converted into a real client when qualified. | Server action `submitBusinessRegistration` (service-role insert). Founder UPDATE/DELETE via RLS. |
+| `public.business_audits` | Generated internal audit reports for existing client businesses. Untouched by Pass 34. | `lib/actions/audits.ts` from /dashboard/audits. RLS = business_member or founder_admin via service role. |
+
+Linking columns on `audit_submissions`:
+- `linked_business_id uuid` — set when the founder accepts the lead.
+- `linked_business_audit_id uuid` — set when the converted client has a generated audit row.
+
+Live in Pass 34:
+
+- **`/admin/mission-control`** — the "new audits today" KPI and the **Audit Inbox** preview panel read live rows from `audit_submissions`. Status badges reflect the new intake statuses (`new`, `in_review`, `qualified`, `contacted`, `converted`, `archived`).
+- **`/admin/audits`** — full intake table with metric summary (Total / New today / Pending / In review / Converted / High priority). New columns: priority badge, contact (name + email), qualification score. Action buttons are present as safe placeholders (Open / In review / Convert) — no mutation actions are wired yet.
+- **`lib/data/admin-audits.ts`** — repointed at `audit_submissions`. All three helpers (`getAdminAuditMetrics`, `getLatestAdminAuditSubmissions`, `getAdminAuditTableRows`) still call `requireAdmin()` server-side and run via the service-role client.
+
+Still mock and out of scope:
+
+- Leads, revenue, bookings, Relevance AI runs, content, social, notifications, client analytics on `/admin/mission-control`.
+- Every other `/admin/*` shell page (clients, outreach, relevance-ai, content, social, bookings, notifications, delivery, revenue, settings).
+
+Public form changes:
+
+- `lib/actions/registration.ts` now writes to `audit_submissions` (not `business_audits`).
+- The previous silent `queued_offline` fallback is removed — insert failures surface as safe, user-facing error messages and are logged with full detail server-side only.
+- Relevance AI is **not** triggered from this flow (Pass 34 scope). It will be triggered when the founder converts a submission in a later pass.
 
 ## Summary
 

@@ -43,9 +43,11 @@ export default function RegistrationForm({ defaultPlan }: { defaultPlan: 'starte
         setError(result.error ?? 'Could not submit registration.')
         return
       }
-      // Redirect to a confirmation page (use the audit confirmation route)
-      const audit = result.audit_id ? `?audit=${result.audit_id}` : ''
-      router.push(`/register-business/submitted${audit}`)
+      // Redirect to the confirmation page. Pass 34 renamed the
+      // response field from `audit_id` (legacy business_audits row)
+      // to `submission_id` (new audit_submissions row).
+      const ref = result.submission_id ? `?audit=${result.submission_id}` : ''
+      router.push(`/register-business/submitted${ref}`)
     })
   }
 
