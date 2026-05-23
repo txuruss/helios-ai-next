@@ -24,13 +24,16 @@
 //   • Insert failures are surfaced as safe user-facing errors. We never
 //     silently mark a failed submission as queued. We never return raw
 //     Supabase error text to the user.
-//   • Relevance AI is NOT triggered from this flow (Pass 34 scope). The
-//     internal team is still notified server-side via notifyInternalTeam.
+//   • After the submission is saved, the Helios AI Audit Qualifier Agent is
+//     triggered server-side via triggerAuditQualifier (non-fatal). Results are
+//     written back to qualification_score and priority when the agent returns them.
 
+import { after } from 'next/server'
 import { createServiceRoleClient } from '@/lib/supabase/server'
 import { businessRegistrationSchema } from '@/lib/validation/registration'
 import { notifyInternalTeam } from '@/lib/relevance/relevance-service'
 import { sendAuditNotificationEmail } from '@/lib/email/audit-notification'
+import { triggerAuditQualifier } from '@/lib/ai/relevance-audit-qualifier'
 
 export interface RegistrationResult {
   ok:             boolean
@@ -154,6 +157,58 @@ export async function submitBusinessRegistration(
     // Internal notification failures do not block the submission.
     console.error('[submitBusinessRegistration] notify failed:', notifyErr instanceof Error ? notifyErr.message : notifyErr)
   }
+
+  // ── 6. Trigger Relevance AI Audit Qualifier Agent (non-blocking) ─────
+  // Scheduled via after() so the response is returned to the user before
+  // the Relevance call starts. A timeout or API failure here can never
+  // delay or block the submission. Writes fit_score → qualification_score
+  // and priority back to the row when the agent returns them. All other
+  // agent output fields require a migration — see
+  // docs/RELEVANCE-AI-AUDIT-INTEGRATION-PLAN.md.
+  after(async () => {
+    try {
+      const qualResult = await triggerAuditQualifier({
+        audit_submission_id:           submissionId,
+        submitter_name:                nullIfEmpty(data.contact_name),
+        submitter_email:               nullIfEmpty(data.contact_email),
+        business_name:                 data.business_name,
+        industry:                      nullIfEmpty(data.industry),
+        city:                          nullIfEmpty(data.city),
+        country:                       nullIfEmpty(data.country),
+        website:                       nullIfEmpty(data.website),
+        instagram:                     nullIfEmpty(data.instagram),
+        facebook:                      nullIfEmpty(data.facebook),
+        whatsapp:                      nullIfEmpty(data.whatsapp),
+        current_booking_method:        nullIfEmpty(data.current_booking),
+        monthly_leads:                 typeof data.monthly_leads === 'number' ? data.monthly_leads : null,
+        team_size:                     typeof data.team_size === 'number' ? data.team_size : null,
+        biggest_problem:               nullIfEmpty(data.biggest_problem),
+        services_offered:              data.services.length > 0 ? data.services.join(', ') : null,
+        business_hours:                nullIfEmpty(data.business_hours),
+        existing_booking_software:     nullIfEmpty(data.existing_software),
+        preferred_automation_channels: data.preferred_channels,
+        source:                        'website',
+      })
+
+      if (qualResult.ok) {
+        const updateFields: Record<string, unknown> = {}
+        if (qualResult.fit_score !== null) updateFields.qualification_score = qualResult.fit_score
+        if (qualResult.priority  !== null) updateFields.priority             = qualResult.priority
+
+        if (Object.keys(updateFields).length > 0) {
+          const { error: updateErr } = await db
+            .from('audit_submissions')
+            .update(updateFields)
+            .eq('id', submissionId)
+          if (updateErr) {
+            console.error('[submitBusinessRegistration] qualifier DB update failed:', updateErr.message)
+          }
+        }
+      }
+    } catch (qualErr) {
+      console.error('[submitBusinessRegistration] qualifier failed:', qualErr instanceof Error ? qualErr.message : qualErr)
+    }
+  })
 
   return { ok: true, submission_id: submissionId }
 }
