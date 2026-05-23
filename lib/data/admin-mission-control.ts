@@ -49,7 +49,7 @@ export async function getAdminMissionControlSummary(): Promise<AdminMissionContr
     supabase:  !!process.env.NEXT_PUBLIC_SUPABASE_URL && !!process.env.SUPABASE_SERVICE_ROLE_KEY,
     anthropic: !!process.env.ANTHROPIC_API_KEY,
     calcom:    !!process.env.CALCOM_API_KEY,
-    whatsapp:  !!process.env.WHATSAPP_TOKEN || !!process.env.WHATSAPP_ACCESS_TOKEN,
+    whatsapp:  !!process.env.META_ACCESS_TOKEN,
     stripe:    !!process.env.STRIPE_SECRET_KEY,
   }
 
