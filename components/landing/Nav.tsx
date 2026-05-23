@@ -42,7 +42,7 @@ export default function Nav() {
 
         {/* Desktop links */}
         <div className="hidden md:flex gap-1">
-          {NAV_LINKS.map((link) => (
+          {NAV_LINKS.filter((link) => link.href !== '/audit').map((link) => (
             <a
               key={link.href}
               href={link.href}
@@ -55,8 +55,8 @@ export default function Nav() {
         </div>
 
         {/* CTA */}
-        <Link href="/login" className="btn-primary btn-sm ml-auto shrink-0">
-          Sign In
+        <Link href="/audit" className="btn-primary btn-sm ml-auto shrink-0">
+          Get Free Audit
         </Link>
       </div>
 
@@ -64,7 +64,7 @@ export default function Nav() {
       {menuOpen && (
         <div className="absolute top-[72px] left-4 right-4 rounded-2xl border border-white/10
                         bg-[#0c0c0e]/95 backdrop-blur-xl p-4 flex flex-col gap-1 md:hidden">
-          {NAV_LINKS.map((link) => (
+          {NAV_LINKS.filter((link) => link.href !== '/audit').map((link) => (
             <a
               key={link.href}
               href={link.href}
@@ -75,8 +75,8 @@ export default function Nav() {
               {link.label}
             </a>
           ))}
-          <Link href="/login" className="btn-primary btn-sm mt-2 w-full justify-center">
-            Sign In
+          <Link href="/audit" className="btn-primary btn-sm mt-2 w-full justify-center">
+            Get Free Audit
           </Link>
         </div>
       )}

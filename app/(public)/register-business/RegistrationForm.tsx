@@ -47,7 +47,8 @@ export default function RegistrationForm({ defaultPlan }: { defaultPlan: 'starte
       // response field from `audit_id` (legacy business_audits row)
       // to `submission_id` (new audit_submissions row).
       const ref = result.submission_id ? `?audit=${result.submission_id}` : ''
-      router.push(`/register-business/submitted${ref}`)
+      const destination = params.get('from') === 'audit' ? '/audit/submitted' : '/register-business/submitted'
+      router.push(`${destination}${ref}`)
     })
   }
 

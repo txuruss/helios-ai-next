@@ -8,6 +8,15 @@ import Footer from './Footer'
 import Link from 'next/link'
 import { motion } from 'framer-motion'
 import { capture } from '@/lib/analytics/posthog'
+import {
+  MessageCircle, Zap, ClipboardList, CalendarCheck, LayoutDashboard,
+  Globe, Smartphone, CircleHelp, UserPlus, CalendarDays, BellRing, Handshake,
+  ScrollText, ShieldCheck, TriangleAlert, CirclePause, SlidersHorizontal,
+  Timer, Clock, UserCheck, TrendingUp,
+} from 'lucide-react'
+import type { LucideIcon } from 'lucide-react'
+import { IconBadge } from '@/components/ui/IconBadge'
+import type { IconVariant } from '@/components/ui/IconBadge'
 
 // ─── Problem Section ──────────────────────────────────────────────
 const PROBLEMS = [
@@ -79,12 +88,12 @@ function ProblemSection() {
 }
 
 // ─── How It Works ─────────────────────────────────────────────────
-const HOW_STEPS = [
-  { n: '01', icon: '💬', title: 'Customer messages you',         copy: 'A customer texts your WhatsApp or chats on your website — any time of day.' },
-  { n: '02', icon: '⚡', title: 'Helios AI replies instantly',    copy: 'The AI answers their question, confirms your services, and starts the booking flow.' },
-  { n: '03', icon: '📅', title: 'Booking details are captured',   copy: 'The customer shares their preferred service, time, and details — no back-and-forth.' },
-  { n: '04', icon: '✅', title: 'Booking created or routed',      copy: 'The appointment is booked via Cal.com, or handed to you for manual confirmation.' },
-  { n: '05', icon: '📊', title: 'You see everything in one place',copy: 'Mission Control shows leads, bookings, conversations, and AI status in one dashboard.' },
+const HOW_STEPS: Array<{ n: string; icon: LucideIcon; variant: IconVariant; title: string; copy: string }> = [
+  { n: '01', icon: MessageCircle,   variant: 'gold',   title: 'Customer messages you',          copy: 'A customer texts your WhatsApp or chats on your website — any time of day.' },
+  { n: '02', icon: Zap,             variant: 'orange', title: 'Helios AI replies instantly',     copy: 'The AI answers their question, confirms your services, and starts the booking flow.' },
+  { n: '03', icon: ClipboardList,   variant: 'gold',   title: 'Booking details are captured',    copy: 'The customer shares their preferred service, time, and details — no back-and-forth.' },
+  { n: '04', icon: CalendarCheck,   variant: 'green',  title: 'Booking created or routed',       copy: 'The appointment is booked via Cal.com, or handed to you for manual confirmation.' },
+  { n: '05', icon: LayoutDashboard, variant: 'blue',   title: 'You see everything in one place', copy: 'Mission Control shows leads, bookings, conversations, and AI status in one dashboard.' },
 ]
 
 function HowItWorksSection() {
@@ -112,12 +121,12 @@ function HowItWorksSection() {
               className="flex gap-6 py-6 border-b border-white/[0.06] last:border-b-0 group"
             >
               <div className="flex flex-col items-center gap-2 shrink-0 w-12">
-                <div className="w-10 h-10 rounded-full border border-white/10 bg-[#0f1012]
-                                flex items-center justify-center text-[18px]
-                                group-hover:border-[#ff7a18]/40 group-hover:shadow-[0_0_20px_rgba(255,122,24,0.3)]
-                                transition-all duration-300">
-                  {s.icon}
-                </div>
+                <IconBadge
+                  icon={s.icon}
+                  variant={s.variant}
+                  size="md"
+                  className="group-hover:border-[#ff7a18]/40 group-hover:shadow-[0_0_20px_rgba(255,122,24,0.3)]"
+                />
                 {i < HOW_STEPS.length - 1 && <div className="w-px flex-1 bg-white/[0.06]" />}
               </div>
               <div className="flex flex-col gap-1 pt-1.5">
@@ -136,15 +145,15 @@ function HowItWorksSection() {
 }
 
 // ─── Features Section ──────────────────────────────────────────────
-const FEATURES = [
-  { icon: '🌐', title: 'Website AI Chat',      desc: 'Answers questions, captures leads, and books appointments from your website — 24/7.' },
-  { icon: '✆',  title: 'WhatsApp Assistant',   desc: 'Handles incoming WhatsApp messages automatically. No manual follow-up needed.' },
-  { icon: '❓',  title: 'FAQ Answers',          desc: 'Trained on your services, pricing, hours, and policies — no more repetitive questions.' },
-  { icon: '🎯',  title: 'Lead Capture',         desc: 'Collects name, contact, and service interest from every conversation.' },
-  { icon: '📅',  title: 'Cal.com Booking',      desc: 'Checks real availability and books directly into your calendar.' },
-  { icon: '🔔',  title: 'Owner Notifications',  desc: 'Alerts you instantly when a lead comes in or something needs your attention.' },
-  { icon: '📊',  title: 'Mission Control',      desc: 'One dashboard for leads, bookings, conversations, and system status.' },
-  { icon: '🤝',  title: 'Human Handoff',        desc: 'AI pauses and notifies you the moment a customer needs personal attention.' },
+const FEATURES: Array<{ icon: LucideIcon; variant: IconVariant; title: string; desc: string }> = [
+  { icon: Globe,           variant: 'gold',    title: 'Website AI Chat',      desc: 'Answers questions, captures leads, and books appointments from your website — 24/7.' },
+  { icon: Smartphone,      variant: 'green',   title: 'WhatsApp Assistant',   desc: 'Handles incoming WhatsApp messages automatically. No manual follow-up needed.' },
+  { icon: CircleHelp,      variant: 'orange',  title: 'FAQ Answers',          desc: 'Trained on your services, pricing, hours, and policies — no more repetitive questions.' },
+  { icon: UserPlus,        variant: 'gold',    title: 'Lead Capture',         desc: 'Collects name, contact, and service interest from every conversation.' },
+  { icon: CalendarDays,    variant: 'orange',  title: 'Cal.com Booking',      desc: 'Checks real availability and books directly into your calendar.' },
+  { icon: BellRing,        variant: 'gold',    title: 'Owner Notifications',  desc: 'Alerts you instantly when a lead comes in or something needs your attention.' },
+  { icon: LayoutDashboard, variant: 'blue',    title: 'Mission Control',      desc: 'One dashboard for leads, bookings, conversations, and system status.' },
+  { icon: Handshake,       variant: 'gold',    title: 'Human Handoff',        desc: 'AI pauses and notifies you the moment a customer needs personal attention.' },
 ]
 
 function FeaturesSection() {
@@ -173,10 +182,7 @@ function FeaturesSection() {
                           bg-gradient-to-b from-white/[0.018] to-transparent
                           hover:border-[#ff7a18]/35 hover:-translate-y-1 transition-all duration-300"
             >
-              <div className="w-10 h-10 rounded-xl border border-[#ff7a18]/25 bg-[#ff7a18]/[0.12]
-                              flex items-center justify-center text-[18px]">
-                {f.icon}
-              </div>
+              <IconBadge icon={f.icon} variant={f.variant} size="md" />
               <h3 className="text-[16px] font-semibold">{f.title}</h3>
               <p className="text-[13.5px] text-[#9a9a9d] leading-relaxed flex-1">{f.desc}</p>
             </motion.div>
@@ -188,13 +194,13 @@ function FeaturesSection() {
 }
 
 // ─── Trust and Safety ─────────────────────────────────────────────
-const TRUST_ITEMS = [
-  { icon: '🤝', title: 'Human Handoff',            desc: 'When a customer needs personal attention, AI pauses and notifies the owner instantly.' },
-  { icon: '📋', title: 'Full Conversation Logs',   desc: 'Every message is saved. Nothing gets lost or forgotten.' },
-  { icon: '✅', title: 'Booking Confirmation',     desc: 'Appointments aren\'t confirmed until service, time, and details are all verified.' },
-  { icon: '🔔', title: 'Failed Message Alerts',    desc: 'If anything fails to send, you\'ll be notified immediately.' },
-  { icon: '⏸',  title: 'AI Pause Mode',            desc: 'Pause the AI at any time and take over conversations manually.' },
-  { icon: '🛡',  title: 'Owner Override Controls',  desc: 'You\'re always in control. The AI assists — it doesn\'t replace your judgment.' },
+const TRUST_ITEMS: Array<{ icon: LucideIcon; variant: IconVariant; title: string; desc: string }> = [
+  { icon: Handshake,         variant: 'gold',    title: 'Human Handoff',            desc: 'When a customer needs personal attention, AI pauses and notifies the owner instantly.' },
+  { icon: ScrollText,        variant: 'neutral', title: 'Full Conversation Logs',   desc: 'Every message is saved. Nothing gets lost or forgotten.' },
+  { icon: ShieldCheck,       variant: 'green',   title: 'Booking Confirmation',     desc: 'Appointments aren\'t confirmed until service, time, and details are all verified.' },
+  { icon: TriangleAlert,     variant: 'danger',  title: 'Failed Message Alerts',    desc: 'If anything fails to send, you\'ll be notified immediately.' },
+  { icon: CirclePause,       variant: 'blue',    title: 'AI Pause Mode',            desc: 'Pause the AI at any time and take over conversations manually.' },
+  { icon: SlidersHorizontal, variant: 'neutral', title: 'Owner Override Controls',  desc: 'You\'re always in control. The AI assists — it doesn\'t replace your judgment.' },
 ]
 
 function TrustSafetySection() {
@@ -223,10 +229,7 @@ function TrustSafetySection() {
               className="border border-white/[0.08] rounded-2xl p-5 flex gap-4 bg-white/[0.015]
                           hover:border-[#22d093]/30 hover:bg-[#22d093]/[0.03] transition-all duration-300 cursor-default"
             >
-              <div className="w-9 h-9 rounded-xl border border-[#22d093]/20 bg-[#22d093]/[0.08]
-                              flex items-center justify-center text-[16px] shrink-0">
-                {t.icon}
-              </div>
+              <IconBadge icon={t.icon} variant={t.variant} size="md" />
               <div>
                 <h3 className="text-[15px] font-semibold">{t.title}</h3>
                 <p className="text-[13px] text-[#9a9a9d] mt-1 leading-relaxed">{t.desc}</p>
@@ -240,12 +243,12 @@ function TrustSafetySection() {
 }
 
 // ─── Social Proof Strip ───────────────────────────────────────────
-const PROOF = [
-  { v: '< 1s',   l: 'Reply time'        },
-  { v: '24/7',   l: 'Always available'  },
-  { v: '1',      l: 'Dashboard for all' },
-  { v: 'Human',  l: 'Handoff built-in'  },
-  { v: 'Monthly', l: 'Optimization'     },
+const PROOF: Array<{ icon: LucideIcon; variant: IconVariant; v: string; l: string }> = [
+  { icon: Timer,           variant: 'orange', v: '< 1s',    l: 'Reply time'        },
+  { icon: Clock,           variant: 'gold',   v: '24/7',    l: 'Always available'  },
+  { icon: LayoutDashboard, variant: 'gold',   v: '1',       l: 'Dashboard for all' },
+  { icon: UserCheck,       variant: 'blue',   v: 'Human',   l: 'Handoff built-in'  },
+  { icon: TrendingUp,      variant: 'gold',   v: 'Monthly', l: 'Optimization'      },
 ]
 
 function SocialProofStrip() {
@@ -257,8 +260,7 @@ function SocialProofStrip() {
                         shadow-[0_30px_70px_-40px_rgba(255,122,24,0.3)]">
           {PROOF.map((p, i) => (
             <div key={i} className={`flex items-center gap-3.5 px-1.5 ${i > 0 ? 'border-l border-white/[0.06]' : ''}`}>
-              <div className="w-[42px] h-[42px] rounded-[11px] shrink-0 flex items-center justify-center text-[#ffae3c]
-                              bg-[#ff7a18]/[0.18] border border-[#ff7a18]/25 text-lg">✦</div>
+              <IconBadge icon={p.icon} variant={p.variant} size="md" glow />
               <div>
                 <div className="text-[18px] font-semibold text-white">{p.v}</div>
                 <div className="text-[12px] text-[#9a9a9d] mt-0.5">{p.l}</div>
