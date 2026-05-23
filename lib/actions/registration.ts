@@ -30,6 +30,7 @@
 import { createServiceRoleClient } from '@/lib/supabase/server'
 import { businessRegistrationSchema } from '@/lib/validation/registration'
 import { notifyInternalTeam } from '@/lib/relevance/relevance-service'
+import { sendAuditNotificationEmail } from '@/lib/email/audit-notification'
 
 export interface RegistrationResult {
   ok:             boolean
@@ -135,6 +136,19 @@ export async function submitBusinessRegistration(
         (data.city      ? `, ${data.city}`     : '') +
         (data.industry || data.city ? ')'      : '') +
         (data.selected_plan ? ` — requested ${data.selected_plan}` : ''),
+    })
+    await sendAuditNotificationEmail({
+      submission_id:      submissionId,
+      business_name:      data.business_name,
+      contact_name:       nullIfEmpty(data.contact_name),
+      contact_email:      nullIfEmpty(data.contact_email),
+      industry:           nullIfEmpty(data.industry),
+      city:               nullIfEmpty(data.city),
+      country:            nullIfEmpty(data.country),
+      website:            nullIfEmpty(data.website),
+      biggest_problem:    nullIfEmpty(data.biggest_problem),
+      monthly_leads:      typeof data.monthly_leads === 'number' ? data.monthly_leads : null,
+      preferred_channels: data.preferred_channels,
     })
   } catch (notifyErr) {
     // Internal notification failures do not block the submission.
