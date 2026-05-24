@@ -91,7 +91,7 @@ export default function AdminSidebar({ open, onClose, fullName, email }: Props) 
           })}
         </div>
 
-        <div className="px-2.5 pb-4 pt-2 border-t border-white/[0.06]">
+        <div className="px-2.5 pb-[max(1rem,env(safe-area-inset-bottom,1rem))] pt-2 border-t border-white/[0.06]">
           {ADMIN_NAV.filter((i) => i.group === 'Admin').map((item) => {
             const IconComp = ICONS[item.icon]
             const isActive = pathname.startsWith(item.href)
@@ -126,7 +126,7 @@ export default function AdminSidebar({ open, onClose, fullName, email }: Props) 
               Log Out
             </button>
           </form>
-          <div className="text-[10px] text-[#6a6a6e] px-2.5 mt-2 font-mono">
+          <div className="text-[9.5px] text-[#6a6a6e]/60 px-2.5 mt-2.5 font-mono select-none">
             mission control / v1.0
           </div>
         </div>
