@@ -89,3 +89,34 @@ export async function archiveAuditSubmission(submissionId: string): Promise<Admi
 export async function convertAuditSubmission(submissionId: string): Promise<AdminAuditActionResult> {
   return updateStatus(submissionId, 'converted')
 }
+
+export async function archiveBulkAuditSubmissions(ids: unknown[]): Promise<AdminAuditActionResult> {
+  await requireAdmin({ path: '/admin/audits' })
+
+  if (!Array.isArray(ids) || ids.length === 0) {
+    return { ok: false, error: 'No submissions selected.' }
+  }
+  const validIds = ids.filter((id): id is string => typeof id === 'string' && UUID_RE.test(id))
+  if (validIds.length === 0) return { ok: false, error: 'Invalid submission IDs.' }
+  if (validIds.length > 50)  return { ok: false, error: 'Too many submissions selected at once (max 50).' }
+
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    console.error('[admin-audits] SUPABASE_SERVICE_ROLE_KEY missing')
+    return { ok: false, error: 'Server configuration error.' }
+  }
+
+  const db = createServiceRoleClient()
+  const { error } = await db
+    .from('audit_submissions')
+    .update({ status: 'archived' })
+    .in('id', validIds)
+
+  if (error) {
+    console.error('[admin-audits] bulk archive failed:', error.message, '| code:', error.code)
+    return { ok: false, error: 'Could not archive records. Try again.' }
+  }
+
+  revalidatePath('/admin/audits')
+  revalidatePath('/admin/mission-control')
+  return { ok: true }
+}

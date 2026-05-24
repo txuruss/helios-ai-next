@@ -3,22 +3,16 @@ import { requireAdmin } from '@/lib/auth/require-admin'
 import {
   getAdminAuditMetrics,
   getLatestAdminAuditSubmissions,
-  type AdminAuditRow,
 } from '@/lib/data/admin-audits'
 import { getAdminMissionControlSummary } from '@/lib/data/admin-mission-control'
-import { MOCK_BUSINESSES } from '@/lib/data/mock-businesses'
 import AdminKpiCard from '@/components/admin/ui/AdminKpiCard'
-import StatusPill from '@/components/admin/ui/StatusPill'
-import PlanPill from '@/components/admin/ui/PlanPill'
+import MissionControlAuditTable from './MissionControlAuditTable'
 import {
   CheckCircle2, AlertCircle, ArrowRight, TrendingUp, Zap,
   FileText, Users, Building2, Settings, Activity,
 } from 'lucide-react'
 
 export const metadata = { title: 'Mission Control — Helios AI Admin' }
-
-const PLAN_MONTHLY: Record<string, number> = { starter: 149, pro: 399, scale: 999, free: 0 }
-const PLAN_SETUP:   Record<string, number> = { starter: 997, pro: 2500, scale: 5000, free: 0 }
 
 function fmtUSD(n: number): string {
   if (n >= 1_000_000) return `$${(n / 1_000_000).toFixed(1).replace(/\.0$/, '')}M`
@@ -40,10 +34,11 @@ export default async function AdminMissionControlPage() {
   const stripeReady    = !!process.env.STRIPE_SECRET_KEY
   const relevanceReady = !!process.env.RELEVANCE_API_KEY
 
-  const mrr          = MOCK_BUSINESSES.reduce((s, b) => s + (PLAN_MONTHLY[b.plan] ?? 0), 0)
-  const arr          = mrr * 12
-  const setupRevenue = MOCK_BUSINESSES.reduce((s, b) => s + (PLAN_SETUP[b.plan]   ?? 0), 0)
-  const avgMonthly   = MOCK_BUSINESSES.length > 0 ? Math.round(mrr / MOCK_BUSINESSES.length) : 0
+  // Revenue figures are $0 until real clients are wired to a clients table or Stripe.
+  const mrr          = 0
+  const arr          = 0
+  const setupRevenue = 0
+  const avgMonthly   = 0
 
   const newAudits = auditMetrics.newToday
   const pending   = auditMetrics.pending
@@ -143,64 +138,8 @@ export default async function AdminMissionControlPage() {
 
           {latestAudits.error ? (
             <div className="px-5 py-5 text-[13px] text-[#ff8a7a]">{latestAudits.error}</div>
-          ) : latestAudits.rows.length === 0 ? (
-            <div className="px-5 py-10 flex flex-col items-center gap-2 text-center">
-              <FileText size={24} className="text-[#3a3a3e]" />
-              <p className="text-[13px] text-white">No audit submissions yet</p>
-              <p className="text-[12px] text-[#9a9a9d]">
-                New intake from{' '}
-                <Link href="/audit" className="text-[#ffae3c] hover:underline">/audit</Link>
-                {' '}and{' '}
-                <Link href="/register-business" className="text-[#ffae3c] hover:underline">/register-business</Link>
-                {' '}will appear here.
-              </p>
-            </div>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-[12.5px] min-w-[580px]">
-                <thead className="bg-white/[0.02] text-[10px] uppercase tracking-[0.08em] text-[#6a6a6e]">
-                  <tr>
-                    <th className="text-left px-4 py-2.5">Business</th>
-                    <th className="text-left px-4 py-2.5">Industry</th>
-                    <th className="text-left px-4 py-2.5">Plan</th>
-                    <th className="text-left px-4 py-2.5">Status</th>
-                    <th className="text-right px-4 py-2.5">Score</th>
-                    <th className="text-right px-4 py-2.5">Submitted</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {latestAudits.rows.map((a: AdminAuditRow) => (
-                    <tr key={a.id} className="border-t border-white/[0.04] hover:bg-white/[0.015] transition-colors">
-                      <td className="px-4 py-2.5">
-                        <div className="text-white font-medium">{a.business_name}</div>
-                        {a.contact_name && (
-                          <div className="text-[10.5px] text-[#6a6a6e] mt-0.5">{a.contact_name}</div>
-                        )}
-                      </td>
-                      <td className="px-4 py-2.5 text-[#9a9a9d]">{a.business_type ?? '—'}</td>
-                      <td className="px-4 py-2.5"><PlanPill plan={a.recommended_plan} /></td>
-                      <td className="px-4 py-2.5"><StatusPill status={a.status} /></td>
-                      <td className="px-4 py-2.5 text-right font-mono text-[11.5px]">
-                        {a.qualification_score !== null ? (
-                          <span className={
-                            a.qualification_score >= 70 ? 'text-[#22d093]' :
-                            a.qualification_score >= 40 ? 'text-[#ffae3c]' :
-                            'text-[#ff8a7a]'
-                          }>
-                            {a.qualification_score}
-                          </span>
-                        ) : (
-                          <span className="text-[#6a6a6e]">—</span>
-                        )}
-                      </td>
-                      <td className="px-4 py-2.5 text-right text-[11px] text-[#6a6a6e] whitespace-nowrap">
-                        {new Date(a.created_at).toLocaleDateString()}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <MissionControlAuditTable rows={latestAudits.rows} />
           )}
         </section>
 
@@ -267,11 +206,11 @@ export default async function AdminMissionControlPage() {
             </span>
             {!stripeReady && (
               <span className="text-[11px] text-[#6a6a6e] hidden sm:inline truncate">
-                Estimated from active plans —{' '}
+                No verified revenue yet —{' '}
                 <Link href="/admin/settings" className="text-[#ffae3c]/80 hover:text-[#ffae3c] transition-colors">
                   Connect Stripe
                 </Link>
-                {' '}to verify live revenue
+                {' '}or add real client plans to see revenue
               </span>
             )}
           </div>
@@ -282,7 +221,7 @@ export default async function AdminMissionControlPage() {
           <RevenueCard label="Setup Revenue"     value={fmtUSD(setupRevenue)} sublabel="One-time fees"       tone="neutral" />
           <RevenueCard label="Revenue This Month" value={fmtUSD(mrr)}         sublabel="Recurring only"      tone="neutral" />
           <RevenueCard label="Proj. 12-Month"    value={fmtUSD(arr)}          sublabel="From current MRR"    tone="info"    />
-          <RevenueCard label="Avg / Client"      value={fmtUSD(avgMonthly)}   sublabel={`${MOCK_BUSINESSES.length} active`} tone="info" />
+          <RevenueCard label="Avg / Client"      value={fmtUSD(avgMonthly)}   sublabel={`${summary.activeClients} active`} tone="info" />
         </div>
       </section>
 

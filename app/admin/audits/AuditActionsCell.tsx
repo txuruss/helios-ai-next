@@ -13,21 +13,24 @@
 //     contacted                    → Convert · Archive
 //   • converted                    → Archive
 //   • archived                     → (no actions)
+//
+// Archive is intentionally routed through onArchiveRequest so the
+// parent table can show a confirmation modal before committing.
 
 import { useTransition } from 'react'
 import {
   markAuditReviewed,
-  archiveAuditSubmission,
   convertAuditSubmission,
 } from '@/lib/actions/admin-audits'
 import type { AdminAuditStatus } from '@/lib/data/admin-audits'
 
 interface Props {
-  submissionId: string
-  status:       AdminAuditStatus
+  submissionId:      string
+  status:            AdminAuditStatus
+  onArchiveRequest?: (id: string) => void
 }
 
-export default function AuditActionsCell({ submissionId, status }: Props) {
+export default function AuditActionsCell({ submissionId, status, onArchiveRequest }: Props) {
   const [pending, startTransition] = useTransition()
 
   const canMarkReviewed = status === 'new'
@@ -38,9 +41,6 @@ export default function AuditActionsCell({ submissionId, status }: Props) {
     startTransition(async () => {
       const result = await fn(submissionId)
       if (!result.ok) {
-        // Surfaced as a native alert so we don't depend on a toast
-        // library in this lean pass. Replace with a toast when one
-        // lands in components/ui.
         alert(result.error ?? 'Action failed. Try again.')
       }
     })
@@ -59,7 +59,14 @@ export default function AuditActionsCell({ submissionId, status }: Props) {
         </ActionButton>
       )}
       {canArchive && (
-        <ActionButton disabled={pending} onClick={() => run(archiveAuditSubmission)} tone="muted">
+        <ActionButton
+          disabled={pending}
+          tone="muted"
+          onClick={() => onArchiveRequest ? onArchiveRequest(submissionId) : run(async (id) => {
+            const { archiveAuditSubmission } = await import('@/lib/actions/admin-audits')
+            return archiveAuditSubmission(id)
+          })}
+        >
           Archive
         </ActionButton>
       )}
@@ -77,10 +84,7 @@ const TONE: Record<'info' | 'success' | 'muted', string> = {
 }
 
 function ActionButton({
-  children,
-  onClick,
-  disabled,
-  tone,
+  children, onClick, disabled, tone,
 }: {
   children: React.ReactNode
   onClick:  () => void
@@ -92,7 +96,8 @@ function ActionButton({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`${TONE[tone]} transition-colors disabled:opacity-50 disabled:cursor-not-allowed`}
+      className={`${TONE[tone]} transition-colors disabled:opacity-50 disabled:cursor-not-allowed
+                  focus:outline-none focus:underline`}
     >
       {children}
     </button>
