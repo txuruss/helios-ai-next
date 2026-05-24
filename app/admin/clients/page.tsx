@@ -3,7 +3,7 @@ import { requireAdmin } from '@/lib/auth/require-admin'
 import { MOCK_BUSINESSES } from '@/lib/data/mock-businesses'
 import AdminKpiCard from '@/components/admin/ui/AdminKpiCard'
 import ClientsTableClient from './ClientsTableClient'
-import { ArrowLeft, Users, ExternalLink, Activity } from 'lucide-react'
+import { ArrowLeft, Users, Activity } from 'lucide-react'
 
 export const metadata = { title: 'Clients — Mission Control' }
 
@@ -47,14 +47,12 @@ export default async function AdminClientsPage() {
           <h1 className="text-[24px] font-bold tracking-tight text-white">Active Clients</h1>
           <span className="text-[9.5px] font-medium uppercase tracking-[0.08em]
                            px-2 py-0.5 rounded-full border border-white/[0.10] bg-white/[0.03] text-[#6a6a6e]">
-            Local data
+            Client Ops
           </span>
         </div>
         <p className="text-[13px] text-[#9a9a9d]">
-          Founder view of all active clients across plans and health status.{' '}
-          <Link href="/dashboard/business" className="text-[#ffae3c]/70 hover:text-[#ffae3c] transition-colors inline-flex items-center gap-1">
-            Legacy workspace <ExternalLink size={10} />
-          </Link>
+          Founder view of active clients, plan value, lead flow, bookings, and account health.{' '}
+          {/* TODO: wire to /admin/clients workspace when live client data is connected */}
         </p>
       </header>
 

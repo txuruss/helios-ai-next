@@ -267,11 +267,11 @@ export default async function AdminMissionControlPage() {
             </span>
             {!stripeReady && (
               <span className="text-[11px] text-[#6a6a6e] hidden sm:inline truncate">
-                Scaffold data —{' '}
+                Estimated from active plans —{' '}
                 <Link href="/admin/settings" className="text-[#ffae3c]/80 hover:text-[#ffae3c] transition-colors">
                   Connect Stripe
                 </Link>
-                {' '}for live billing
+                {' '}to verify live revenue
               </span>
             )}
           </div>

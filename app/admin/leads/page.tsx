@@ -3,7 +3,7 @@ import { requireAdmin } from '@/lib/auth/require-admin'
 import { MOCK_PIPELINE } from '@/lib/data/mock-team'
 import AdminKpiCard from '@/components/admin/ui/AdminKpiCard'
 import LeadsTableClient from './LeadsTableClient'
-import { ArrowLeft, TrendingUp, ExternalLink } from 'lucide-react'
+import { ArrowLeft, TrendingUp } from 'lucide-react'
 
 export const metadata = { title: 'Leads — Mission Control' }
 
@@ -32,14 +32,12 @@ export default async function AdminLeadsPage() {
           <h1 className="text-[24px] font-bold tracking-tight text-white">Leads Pipeline</h1>
           <span className="text-[9.5px] font-medium uppercase tracking-[0.08em]
                            px-2 py-0.5 rounded-full border border-white/[0.10] bg-white/[0.03] text-[#6a6a6e]">
-            Local data
+            Pipeline
           </span>
         </div>
         <p className="text-[13px] text-[#9a9a9d]">
-          Founder view of the inbound sales pipeline across all stages.{' '}
-          <Link href="/dashboard/leads" className="text-[#ffae3c]/70 hover:text-[#ffae3c] transition-colors inline-flex items-center gap-1">
-            Legacy CRM <ExternalLink size={10} />
-          </Link>
+          Founder view of inbound and outbound lead opportunities across all stages.{' '}
+          {/* TODO: wire to /admin/leads workspace when live CRM is connected */}
         </p>
       </header>
 
