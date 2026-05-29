@@ -19,8 +19,9 @@ import AdminKpiCard from '@/components/admin/ui/AdminKpiCard'
 import PlanPill from '@/components/admin/ui/PlanPill'
 import ConfirmActionDialog from '@/components/admin/ui/ConfirmActionDialog'
 import {
-  updateClientStatus, updateClientPayment,
+  updateClientStatus, updateClientPayment, loadClientReadiness,
 } from '@/lib/actions/admin-clients'
+import type { ClientHandoffReadiness } from '@/lib/admin/client-handoff-readiness'
 import {
   STATUS_TRANSITIONS, STATUS_CONFIRM_COPY, type ClientLifecycleStatus,
 } from '@/lib/admin/client-status'
@@ -133,6 +134,9 @@ export default function ClientsPageClient({ clients, error, suggestions = {} }: 
   const [statusFilter, setStatusFilter] = useState('all')
   const [modal,        setModal]        = useState<ActionModal>({ open: false })
   const [statusMenuFor, setStatusMenuFor] = useState<string | null>(null)
+  const [readiness, setReadiness]         = useState<ClientHandoffReadiness | null>(null)
+  const [readinessErr, setReadinessErr]   = useState<string | null>(null)
+  const [readinessLoading, setReadinessLoading] = useState(false)
   const [drawerId,     setDrawerId]     = useState<string | null>(null)
   const [drawerKey,    setDrawerKey]    = useState(0)
   const [payClient,    setPayClient]    = useState<AdminClientRow | null>(null)
@@ -188,7 +192,54 @@ export default function ClientsPageClient({ clients, error, suggestions = {} }: 
   function openStatusChange(c: AdminClientRow, to: ClientLifecycleStatus) {
     setStatusMenuFor(null)
     setActionError(null)
+    setReadiness(null)
+    setReadinessErr(null)
     setModal({ open: true, id: c.id, name: c.name, from: c.status, to })
+    // Handoff readiness check only when activating (warning-only, never blocks).
+    if (to === 'active') {
+      setReadinessLoading(true)
+      loadClientReadiness(c.id)
+        .then((res) => { setReadiness(res.readiness); setReadinessErr(res.error) })
+        .catch(() => setReadinessErr('Could not fully verify handoff readiness.'))
+        .finally(() => setReadinessLoading(false))
+    }
+  }
+
+  // Builds the status confirm dialog copy. For 'active' it folds in the
+  // handoff readiness result; for other statuses it uses the base copy.
+  function statusDialogCopy(): { title: string; body: string; confirmLabel: string } {
+    if (!modal.open) return { title: '', body: '', confirmLabel: '' }
+    const base = STATUS_CONFIRM_COPY[modal.to]
+    const errSuffix = actionError ? `\n\n${actionError}` : ''
+
+    if (modal.to !== 'active') {
+      return { title: base.title, body: `${base.body}${errSuffix}`, confirmLabel: base.confirmLabel }
+    }
+
+    if (readinessLoading) {
+      return { title: base.title, body: `Checking handoff readiness…${errSuffix}`, confirmLabel: 'Mark active' }
+    }
+    if (readiness && !readiness.ready) {
+      const items = [...readiness.missingItems, ...readiness.warnings].map((i) => `- ${i}`).join('\n')
+      return {
+        title: base.title,
+        body: `This client may not be fully ready for handoff.\n\nMissing readiness items:\n${items}\n\nYou can still mark this client active, but review these items first.${errSuffix}`,
+        confirmLabel: 'Mark active anyway',
+      }
+    }
+    if (readiness && readiness.ready) {
+      return {
+        title: base.title,
+        body: `This client appears ready to go live. Active clients count toward active client totals and MRR.${errSuffix}`,
+        confirmLabel: 'Mark active',
+      }
+    }
+    // readiness unavailable (error) — warn but still allow.
+    return {
+      title: base.title,
+      body: `${base.body}\n\nCould not fully verify handoff readiness. Review files, tasks, and payment status before activating.${errSuffix}`,
+      confirmLabel: 'Mark active anyway',
+    }
   }
 
   return (
@@ -452,16 +503,12 @@ export default function ClientsPageClient({ clients, error, suggestions = {} }: 
         </aside>
       </div>
 
-      {/* Status-change confirmation dialog */}
+      {/* Status-change confirmation dialog (with handoff readiness for Active) */}
       <ConfirmActionDialog
         open={modal.open}
-        title={modal.open ? STATUS_CONFIRM_COPY[modal.to].title : ''}
-        body={
-          modal.open
-            ? `${STATUS_CONFIRM_COPY[modal.to].body} (Client: "${modal.name}".)${actionError ? `\n\n${actionError}` : ''}`
-            : ''
-        }
-        confirmLabel={modal.open ? STATUS_CONFIRM_COPY[modal.to].confirmLabel : ''}
+        title={statusDialogCopy().title}
+        body={statusDialogCopy().body}
+        confirmLabel={statusDialogCopy().confirmLabel}
         loading={isPending}
         onConfirm={runAction}
         onCancel={() => { setModal({ open: false }); setActionError(null) }}

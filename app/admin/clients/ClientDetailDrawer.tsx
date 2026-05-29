@@ -17,7 +17,7 @@ import type {
 } from '@/lib/data/admin-clients'
 import type { ClientTask, TaskStatus, TaskPriority, TaskCategory } from '@/lib/data/admin-client-tasks'
 import type { ClientFile } from '@/lib/data/admin-client-files'
-import { type ClientFileCategory, CLIENT_FILE_CATEGORIES } from '@/lib/admin/client-files'
+import { type ClientFileCategory, CLIENT_FILE_CATEGORIES, CLIENT_FILE_CATEGORY_LABELS } from '@/lib/admin/client-files'
 import {
   loadClientFiles, createClientFileUploadUrl, recordClientFile,
   getSignedClientFileUrl, updateClientFileMeta, archiveClientFile,
@@ -40,6 +40,7 @@ import {
   STATUS_COLORS as LIFECYCLE_COLORS, STATUS_DESCRIPTIONS, type ClientLifecycleStatus,
 } from '@/lib/admin/client-status'
 import { updateClientStatus } from '@/lib/actions/admin-clients'
+import { getClientHandoffReadiness } from '@/lib/admin/client-handoff-readiness'
 import ConfirmActionDialog from '@/components/admin/ui/ConfirmActionDialog'
 
 const PAYMENT_COLORS: Record<PaymentStatus, string> = {
@@ -174,7 +175,7 @@ export default function ClientDetailDrawer({ clientId, reloadKey, onClose, onUpd
           ) : !detail ? (
             <div className="text-[13px] text-[#ff8a7a]">Client not found or unavailable.</div>
           ) : tab === 'overview' ? (
-            <OverviewTab detail={detail} notes={notes} events={events} tasks={tasks} onGoToTab={setTab} onChanged={reloadDrawer} />
+            <OverviewTab detail={detail} notes={notes} events={events} tasks={tasks} files={files} onGoToTab={setTab} onChanged={reloadDrawer} />
           ) : tab === 'payments' ? (
             <PaymentsTab detail={detail} events={events} migrationNeeded={eventsMig} onUpdatePayment={onUpdatePayment} />
           ) : tab === 'notes' ? (
@@ -198,16 +199,19 @@ const SUGGESTION_COLORS: Record<SuggestionSeverity, string> = {
 }
 
 function OverviewTab({
-  detail, notes, events, tasks, onGoToTab, onChanged,
+  detail, notes, events, tasks, files, onGoToTab, onChanged,
 }: {
   detail: AdminClientDetail; notes: ClientNote[]; events: ClientPaymentEvent[]
-  tasks: ClientTask[]; onGoToTab: (t: Tab) => void; onChanged: () => void
+  tasks: ClientTask[]; files: ClientFile[]; onGoToTab: (t: Tab) => void; onChanged: () => void
 }) {
   const mrr = detail.status === 'active' ? detail.monthly_fee : 0
   const suggestions = getClientSuggestions(detail, tasks)
   const primary = suggestions[0] ?? null
   const secondary = suggestions.slice(1, 4)
   const readyToGoLive = suggestions.some((s) => s.actionType === 'mark_live_review')
+
+  // Handoff readiness (decision-support; never blocks).
+  const readiness = getClientHandoffReadiness(detail, files, tasks)
 
   const curStatus = detail.status as ClientLifecycleStatus
   const [statusTarget, setStatusTarget] = useState<ClientLifecycleStatus | null>(null)
@@ -222,6 +226,26 @@ function OverviewTab({
       if (r.ok) { setStatusTarget(null); onChanged() }
       else setStatusErr(r.error ?? 'Could not update client status. Please try again.')
     })
+  }
+
+  // Confirm copy — folds handoff readiness into the Active transition.
+  function statusCopy(target: ClientLifecycleStatus): { title: string; body: string; confirmLabel: string } {
+    const base = STATUS_CONFIRM_COPY[target]
+    const errSuffix = statusErr ? `\n\n${statusErr}` : ''
+    if (target !== 'active') return { title: base.title, body: `${base.body}${errSuffix}`, confirmLabel: base.confirmLabel }
+    if (!readiness.ready) {
+      const items = [...readiness.missingItems, ...readiness.warnings].map((i) => `- ${i}`).join('\n')
+      return {
+        title: base.title,
+        body: `This client may not be fully ready for handoff.\n\nMissing readiness items:\n${items}\n\nYou can still mark this client active, but review these items first.${errSuffix}`,
+        confirmLabel: 'Mark active anyway',
+      }
+    }
+    return {
+      title: base.title,
+      body: `This client appears ready to go live. Active clients count toward active client totals and MRR.${errSuffix}`,
+      confirmLabel: 'Mark active',
+    }
   }
 
   return (
@@ -248,6 +272,14 @@ function OverviewTab({
             <Pill color={LIFECYCLE_COLORS[curStatus]} label={LIFECYCLE_LABELS[curStatus]} />
           </div>
           <p className="text-[12px] text-[#9a9a9d] leading-snug">{STATUS_DESCRIPTIONS[curStatus]}</p>
+          {curStatus !== 'active' && (
+            <div className="flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: readiness.ready ? '#22d093' : '#ffae3c' }} />
+              <span className="text-[11.5px] text-[#9a9a9d]">
+                Handoff readiness: <span style={{ color: readiness.ready ? '#22d093' : '#ffae3c' }}>{readiness.ready ? 'Ready' : 'Needs review'}</span>
+              </span>
+            </div>
+          )}
           {readyToGoLive && curStatus !== 'active' && (
             <button type="button" onClick={() => { setStatusErr(null); setStatusTarget('active') }}
               className="self-start text-[12px] font-medium px-3 py-1.5 rounded-lg bg-[#22d093]/[0.14] border border-[#22d093]/40 text-[#22d093] hover:bg-[#22d093]/25 hover:text-white transition-all">
@@ -267,9 +299,9 @@ function OverviewTab({
 
       <ConfirmActionDialog
         open={statusTarget !== null}
-        title={statusTarget ? STATUS_CONFIRM_COPY[statusTarget].title : ''}
-        body={statusTarget ? `${STATUS_CONFIRM_COPY[statusTarget].body}${statusErr ? `\n\n${statusErr}` : ''}` : ''}
-        confirmLabel={statusTarget ? STATUS_CONFIRM_COPY[statusTarget].confirmLabel : ''}
+        title={statusTarget ? statusCopy(statusTarget).title : ''}
+        body={statusTarget ? statusCopy(statusTarget).body : ''}
+        confirmLabel={statusTarget ? statusCopy(statusTarget).confirmLabel : ''}
         loading={savingStatus}
         onConfirm={confirmStatus}
         onCancel={() => { setStatusTarget(null); setStatusErr(null) }}
@@ -779,9 +811,12 @@ function TaskModal({
 }
 
 // ── Files & Handoff ────────────────────────────────────────────────
-const FILE_CATEGORY_COLORS: Record<ClientFileCategory, string> = {
-  contract: '#a07cff', invoice: '#ffae3c', deliverable: '#22d093', asset: '#3b9eff',
-  credential: '#ff5247', handoff: '#22d093', general: '#9a9a9d',
+const FILE_CATEGORY_COLORS: Record<string, string> = {
+  handoff_document: '#22d093', setup_document: '#ffae3c', logo: '#a07cff', brand_asset: '#a07cff',
+  service_menu: '#3b9eff', business_info: '#6db4ff', screenshot: '#6db4ff', proposal: '#ff7a18',
+  contract: '#a07cff', general: '#9a9a9d',
+  // legacy
+  asset: '#3b9eff', deliverable: '#22d093', handoff: '#22d093', credential: '#ff5247', invoice: '#ffae3c',
 }
 function fmtBytes(n: number | null): string {
   if (n === null || n < 0) return '—'
@@ -808,11 +843,9 @@ function FilesTab({
   const [archiving, startArchive] = useTransition()
   const [busyId, setBusyId]     = useState<string | null>(null)
 
-  // Handoff readiness — derived from real data, read-only.
-  const tasksComplete = tasks.length > 0 && tasks.every((t) => t.status === 'done')
-  const paymentPaid   = detail.payment_status === 'paid'
-  const hasHandoffDoc = files.some((f) => f.is_handoff)
-  const readyForHandoff = tasksComplete && paymentPaid && hasHandoffDoc
+  // Handoff readiness — same deterministic helper used by the Active-status
+  // gating, so the rules never conflict. Read-only.
+  const readiness = getClientHandoffReadiness(detail, files, tasks)
 
   async function doUpload() {
     setErr(null)
@@ -888,12 +921,17 @@ function FilesTab({
       {/* Handoff readiness */}
       <Section title="Handoff Readiness">
         <div className="flex flex-col gap-2">
-          <ReadyRow ok={tasksComplete} label="Onboarding tasks complete"
-            note={tasks.length === 0 ? 'No tasks yet' : undefined} />
-          <ReadyRow ok={paymentPaid} label="Payment recorded as paid" />
-          <ReadyRow ok={hasHandoffDoc} label="Handoff document uploaded" />
+          <ReadyRow ok={!readiness.missingHandoffDocument} label="Handoff document uploaded" />
+          <ReadyRow ok={!readiness.missingBrandAssets}     label="Brand assets uploaded" />
+          <ReadyRow ok={!readiness.missingSetupDocument}   label="Setup document uploaded" />
+          <ReadyRow
+            ok={tasks.length > 0 && readiness.openTaskCount === 0}
+            label="Onboarding tasks complete"
+            note={tasks.length === 0 ? 'No tasks yet' : (readiness.openTaskCount > 0 ? `${readiness.openTaskCount} open` : undefined)}
+          />
+          <ReadyRow ok={!readiness.paymentWarning} label="Payment recorded" />
           <div className="border-t border-white/[0.06] pt-2.5 mt-0.5">
-            {readyForHandoff ? (
+            {readiness.ready ? (
               <p className="text-[12.5px] text-[#22d093]">Ready for handoff — review and send to the client.</p>
             ) : (
               <p className="text-[12px] text-[#9a9a9d]">Complete the items above to be handoff-ready.</p>
@@ -916,7 +954,7 @@ function FilesTab({
           <div className="grid grid-cols-2 gap-2.5">
             <select value={category} onChange={(e) => setCategory(e.target.value as ClientFileCategory)}
               className="px-3 py-2 rounded-xl border border-white/[0.08] bg-[#0f1012] text-[13px] text-white cursor-pointer focus:outline-none focus:border-[#ff7a18]/40">
-              {CLIENT_FILE_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+              {CLIENT_FILE_CATEGORIES.map((c) => <option key={c} value={c}>{CLIENT_FILE_CATEGORY_LABELS[c] ?? c}</option>)}
             </select>
             <label className="flex items-center gap-2 text-[12px] text-[#9a9a9d] px-1">
               <input type="checkbox" checked={isHandoff} onChange={(e) => setIsHandoff(e.target.checked)}
@@ -945,7 +983,7 @@ function FilesTab({
         ) : (
           <div className="flex flex-col gap-2">
             {files.map((f) => {
-              const color = FILE_CATEGORY_COLORS[f.category]
+              const color = FILE_CATEGORY_COLORS[f.category] ?? '#9a9a9d'
               return (
                 <div key={f.id} className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-3.5 py-2.5">
                   <div className="flex items-start gap-2.5">
@@ -954,7 +992,7 @@ function FilesTab({
                       <p className="text-[12.5px] text-white truncate">{f.label || f.file_name}</p>
                       {f.label && <p className="text-[10.5px] text-[#6a6a6e] truncate">{f.file_name}</p>}
                       <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                        <Pill color={color} label={f.category} />
+                        <Pill color={color} label={CLIENT_FILE_CATEGORY_LABELS[f.category] ?? f.category} />
                         {f.is_handoff && <Pill color="#22d093" label="Handoff" />}
                         <span className="text-[10.5px] text-[#6a6a6e]">{fmtBytes(f.size_bytes)}</span>
                         <span className="text-[10.5px] text-[#6a6a6e] tabular-nums">· {new Date(f.created_at).toLocaleDateString()}</span>
@@ -1049,7 +1087,7 @@ function EditFileModal({ file, onClose, onSaved }: { file: ClientFile; onClose: 
           <div>
             <label className={labelCls}>Category</label>
             <select value={category} onChange={(e) => setCategory(e.target.value as ClientFileCategory)} className={`${inputCls} cursor-pointer`}>
-              {CLIENT_FILE_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+              {CLIENT_FILE_CATEGORIES.map((c) => <option key={c} value={c}>{CLIENT_FILE_CATEGORY_LABELS[c] ?? c}</option>)}
             </select>
           </div>
           <label className="flex items-center gap-2 text-[12.5px] text-[#9a9a9d]">

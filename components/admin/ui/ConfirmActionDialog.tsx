@@ -56,7 +56,7 @@ export default function ConfirmActionDialog({
         </div>
 
         {/* Body */}
-        <p className="px-5 pb-5 text-[13px] text-[#9a9a9d] leading-relaxed">{body}</p>
+        <p className="px-5 pb-5 text-[13px] text-[#9a9a9d] leading-relaxed whitespace-pre-line">{body}</p>
 
         {/* Actions */}
         <div className="flex justify-end gap-2.5 px-5 pb-5">

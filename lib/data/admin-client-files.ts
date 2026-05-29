@@ -11,9 +11,9 @@ import 'server-only'
 
 import { requireAdmin } from '@/lib/auth/require-admin'
 import { createServiceRoleClient } from '@/lib/supabase/server'
-import { type ClientFileCategory, CLIENT_FILE_CATEGORIES } from '@/lib/admin/client-files'
+import { type ClientFileCategory, CLIENT_FILE_CATEGORY_VALUES } from '@/lib/admin/client-files'
 
-export { CLIENT_FILE_CATEGORIES } from '@/lib/admin/client-files'
+export { CLIENT_FILE_CATEGORIES, CLIENT_FILE_CATEGORY_VALUES } from '@/lib/admin/client-files'
 export type { ClientFileCategory } from '@/lib/admin/client-files'
 
 export interface ClientFile {
@@ -42,7 +42,7 @@ function isMissingTable(e: { code?: string; message?: string } | null): boolean 
 }
 
 function normCategory(v: unknown): ClientFileCategory {
-  return (CLIENT_FILE_CATEGORIES as string[]).includes(v as string)
+  return (CLIENT_FILE_CATEGORY_VALUES as string[]).includes(v as string)
     ? (v as ClientFileCategory)
     : 'general'
 }

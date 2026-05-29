@@ -15,6 +15,7 @@ import { createServiceRoleClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { feesForPlan, isAdminPlan, type AdminPlan } from '@/lib/admin/plan-pricing'
 import { getClientDetail, getClientNotes, getClientPaymentEvents } from '@/lib/data/admin-clients'
+import { getClientReadinessForStatusChange } from '@/lib/data/admin-client-readiness'
 
 export interface AdminClientActionResult {
   ok:     boolean
@@ -296,6 +297,13 @@ export async function loadClientDetail(clientId: string) {
   const id = validId(clientId)
   if (!id) return null
   return getClientDetail(id)
+}
+
+// Handoff readiness for a status change (used by the Clients table flow).
+export async function loadClientReadiness(clientId: string) {
+  const id = validId(clientId)
+  if (!id) return { readiness: null, error: 'Invalid client id.' }
+  return getClientReadinessForStatusChange(id)
 }
 
 export async function loadClientNotes(clientId: string) {

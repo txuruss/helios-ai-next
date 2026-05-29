@@ -13,7 +13,8 @@
 import { requireAdmin } from '@/lib/auth/require-admin'
 import { createServiceRoleClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
-import { getClientFiles, CLIENT_FILE_CATEGORIES } from '@/lib/data/admin-client-files'
+import { getClientFiles } from '@/lib/data/admin-client-files'
+import { CLIENT_FILE_CATEGORY_VALUES } from '@/lib/admin/client-files'
 
 const BUCKET = 'client-files'
 const MAX_BYTES = 50 * 1024 * 1024   // 50 MB cap
@@ -137,7 +138,7 @@ export async function recordClientFile(input: RecordFileInput): Promise<FileActi
   const name = cleanText(input.fileName, 200)
   if (!name) return { ok: false, error: 'A file name is required.' }
 
-  const category = CLIENT_FILE_CATEGORIES.includes(input.category as never) ? input.category : 'general'
+  const category = CLIENT_FILE_CATEGORY_VALUES.includes(input.category as never) ? input.category : 'general'
   const size = typeof input.sizeBytes === 'number' && input.sizeBytes >= 0 ? Math.floor(input.sizeBytes) : null
 
   const guard = guardServiceRole()
@@ -219,7 +220,7 @@ export async function updateClientFileMeta(
   const update: Record<string, unknown> = {}
   if (input.label !== undefined)    update.label = cleanText(input.label, 200)
   if (input.category !== undefined) {
-    if (!CLIENT_FILE_CATEGORIES.includes(input.category as never)) return { ok: false, error: 'Invalid category.' }
+    if (!CLIENT_FILE_CATEGORY_VALUES.includes(input.category as never)) return { ok: false, error: 'Invalid category.' }
     update.category = input.category
   }
   if (input.isHandoff !== undefined) update.is_handoff = input.isHandoff === true
