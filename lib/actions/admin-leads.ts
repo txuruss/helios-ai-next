@@ -17,6 +17,7 @@ import { requireAdmin } from '@/lib/auth/require-admin'
 import { createServiceRoleClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { feesForPlan, isAdminPlan } from '@/lib/admin/plan-pricing'
+import { seedDefaultTasksFor } from '@/lib/admin/onboarding-tasks'
 
 export interface AdminLeadActionResult {
   ok:     boolean
@@ -175,6 +176,20 @@ export async function convertLeadToClient(leadId: string): Promise<AdminLeadActi
 
   // Mark the lead won (best-effort).
   await db.from('admin_leads').update({ stage: 'won' }).eq('id', id)
+
+  // Seed the default onboarding checklist (idempotent, non-fatal).
+  try {
+    const clientRow = await db
+      .from('admin_clients')
+      .select('id')
+      .eq('source_lead_id', id)
+      .maybeSingle()
+    if (!clientRow.error && clientRow.data) {
+      await seedDefaultTasksFor(db, clientRow.data.id as string)
+    }
+  } catch (seedErr) {
+    console.error('[convertLeadToClient] task seed failed (non-fatal):', seedErr instanceof Error ? seedErr.message : seedErr)
+  }
 
   revalidatePath('/admin/leads')
   revalidatePath('/admin/clients')

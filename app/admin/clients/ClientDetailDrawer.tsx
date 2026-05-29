@@ -11,10 +11,15 @@ import type {
   AdminClientDetail, ClientNote, ClientPaymentEvent,
   PaymentStatus, AdminClientStatus, OnboardingStage, NoteType,
 } from '@/lib/data/admin-clients'
+import type { ClientTask, TaskStatus, TaskPriority, TaskCategory } from '@/lib/data/admin-client-tasks'
 import {
   loadClientDetail, loadClientNotes, loadClientPaymentEvents,
   addClientNote, updateClientOnboarding,
 } from '@/lib/actions/admin-clients'
+import {
+  loadClientTasks, seedDefaultClientTasks, createClientTask,
+  updateClientTask, completeClientTask, reopenClientTask,
+} from '@/lib/actions/admin-client-tasks'
 
 const PAYMENT_COLORS: Record<PaymentStatus, string> = {
   unpaid: '#ffae3c', deposit_paid: '#3b9eff', paid: '#22d093', overdue: '#ff5247', cancelled: '#6a6a6e',
@@ -61,6 +66,8 @@ export default function ClientDetailDrawer({ clientId, reloadKey, onClose, onUpd
   const [notesMig, setNotesMig] = useState(false)
   const [events,   setEvents]   = useState<ClientPaymentEvent[]>([])
   const [eventsMig, setEventsMig] = useState(false)
+  const [tasks,    setTasks]    = useState<ClientTask[]>([])
+  const [tasksMig, setTasksMig] = useState(false)
   const [loading,  setLoading]  = useState(true)
   const [, startLoad]           = useTransition()
 
@@ -68,15 +75,17 @@ export default function ClientDetailDrawer({ clientId, reloadKey, onClose, onUpd
     let cancelled = false
     setLoading(true)
     startLoad(async () => {
-      const [d, n, e] = await Promise.all([
+      const [d, n, e, t] = await Promise.all([
         loadClientDetail(clientId),
         loadClientNotes(clientId),
         loadClientPaymentEvents(clientId),
+        loadClientTasks(clientId),
       ])
       if (cancelled) return
       setDetail(d)
       setNotes(n.rows); setNotesMig(n.migrationNeeded)
       setEvents(e.rows); setEventsMig(e.migrationNeeded)
+      setTasks(t.rows); setTasksMig(t.migrationNeeded)
       setLoading(false)
     })
     return () => { cancelled = true }
@@ -107,6 +116,11 @@ export default function ClientDetailDrawer({ clientId, reloadKey, onClose, onUpd
               <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                 <Pill color={STATUS_COLORS[detail.status]} label={detail.status} />
                 <Pill color={PAYMENT_COLORS[detail.payment_status]} label={PAYMENT_LABELS[detail.payment_status]} />
+                {tasks.length > 0 && (
+                  <span className="text-[11px] text-[#9a9a9d] tabular-nums">
+                    {tasks.filter((t) => t.status === 'done').length}/{tasks.length} onboarding
+                  </span>
+                )}
                 {detail.plan && (
                   <span className="text-[11px] text-[#9a9a9d]">{PLAN_LABELS[detail.plan] ?? detail.plan}</span>
                 )}
@@ -140,7 +154,7 @@ export default function ClientDetailDrawer({ clientId, reloadKey, onClose, onUpd
           ) : tab === 'notes' ? (
             <NotesTab clientId={clientId} notes={notes} migrationNeeded={notesMig} onChanged={reloadDrawer} />
           ) : (
-            <OnboardingTab clientId={clientId} detail={detail} onChanged={reloadDrawer} />
+            <OnboardingTab clientId={clientId} detail={detail} tasks={tasks} tasksMig={tasksMig} onChanged={reloadDrawer} />
           )}
         </div>
       </div>
@@ -307,17 +321,41 @@ function NotesTab({
 }
 
 // ── Onboarding ─────────────────────────────────────────────────────
+const TASK_STATUS_CFG: Record<TaskStatus, { label: string; color: string }> = {
+  todo:        { label: 'To do',       color: '#6a6a6e' },
+  in_progress: { label: 'In progress', color: '#3b9eff' },
+  blocked:     { label: 'Blocked',     color: '#ff5247' },
+  done:        { label: 'Done',        color: '#22d093' },
+}
+const TASK_PRIORITY_CFG: Record<TaskPriority, { label: string; color: string }> = {
+  low:    { label: 'Low',    color: '#6a6a6e' },
+  normal: { label: 'Normal', color: '#9a9a9d' },
+  high:   { label: 'High',   color: '#ffae3c' },
+  urgent: { label: 'Urgent', color: '#ff5247' },
+}
+const TASK_CATEGORIES: TaskCategory[] = ['onboarding', 'setup', 'automation', 'communication', 'QA', 'handoff', 'support']
+const TASK_STATUS_OPTIONS: TaskStatus[] = ['todo', 'in_progress', 'blocked', 'done']
+const TASK_PRIORITY_OPTIONS: TaskPriority[] = ['low', 'normal', 'high', 'urgent']
+
 function OnboardingTab({
-  clientId, detail, onChanged,
+  clientId, detail, tasks, tasksMig, onChanged,
 }: {
-  clientId: string; detail: AdminClientDetail; onChanged: () => void
+  clientId: string; detail: AdminClientDetail; tasks: ClientTask[]; tasksMig: boolean; onChanged: () => void
 }) {
   const [stage, setStage] = useState<OnboardingStage>(detail.onboarding_stage)
   const [notes, setNotes] = useState(detail.onboarding_notes ?? '')
   const [err,   setErr]   = useState<string | null>(null)
   const [saving, startSave] = useTransition()
+  const [busy,   startBusy]  = useTransition()
+  const [modalTask, setModalTask] = useState<ClientTask | null | undefined>(undefined) // undefined=closed, null=create
 
   const current = ONBOARDING_STEPS.find((s) => s.value === stage) ?? ONBOARDING_STEPS[0]
+
+  const total     = tasks.length
+  const done      = tasks.filter((t) => t.status === 'done').length
+  const blocked   = tasks.filter((t) => t.status === 'blocked').length
+  const pct       = total > 0 ? Math.round((done / total) * 100) : 0
+  const allDone   = total > 0 && done === total
 
   function save() {
     setErr(null)
@@ -328,8 +366,59 @@ function OnboardingTab({
     })
   }
 
+  function markStageComplete() {
+    setErr(null)
+    setStage('complete')
+    startSave(async () => {
+      const result = await updateClientOnboarding(clientId, 'complete', notes)
+      if (result.ok) onChanged()
+      else setErr(result.error ?? 'Could not update onboarding.')
+    })
+  }
+
+  function seed() {
+    setErr(null)
+    startBusy(async () => {
+      const result = await seedDefaultClientTasks(clientId)
+      if (result.ok) onChanged()
+      else setErr(result.error ?? 'Could not create the checklist.')
+    })
+  }
+
   return (
     <div className="flex flex-col gap-5">
+      {/* Progress */}
+      {total > 0 && (
+        <Section title="Onboarding Progress">
+          <div className="flex flex-col gap-2">
+            <div className="flex items-center justify-between text-[12.5px]">
+              <span className="text-[#9a9a9d]">{done} / {total} complete</span>
+              <span className="text-[#ffae3c] font-semibold tabular-nums">{pct}%</span>
+            </div>
+            <div className="h-2 rounded-full bg-white/[0.06] overflow-hidden">
+              <div className="h-full rounded-full transition-all"
+                   style={{ width: `${pct}%`, background: allDone ? '#22d093' : '#ff7a18' }} />
+            </div>
+            {blocked > 0 && (
+              <p className="text-[11.5px] text-[#ff8a7a]">⚠ {blocked} task{blocked !== 1 ? 's' : ''} blocked — onboarding at risk.</p>
+            )}
+            {allDone && (
+              <div className="rounded-xl border border-[#22d093]/25 bg-[#22d093]/[0.05] px-3.5 py-2.5 mt-1">
+                <p className="text-[12.5px] text-[#cfd3dc]">Onboarding checklist complete. Review the client and mark them live when ready.</p>
+                {stage !== 'complete' && (
+                  <button type="button" onClick={markStageComplete} disabled={saving}
+                          className="mt-2 text-[12px] font-medium px-2.5 py-1 rounded-lg bg-[#22d093]/[0.14] border border-[#22d093]/40 text-[#22d093]
+                                     hover:bg-[#22d093]/25 hover:text-white transition-all disabled:opacity-50">
+                    Mark onboarding stage complete
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        </Section>
+      )}
+
+      {/* Stage */}
       <Section title="Onboarding Stage">
         <div className="flex flex-col gap-3">
           <select value={stage} onChange={(e) => setStage(e.target.value as OnboardingStage)}
@@ -346,26 +435,202 @@ function OnboardingTab({
               Completed {new Date(detail.onboarding_completed_at).toLocaleDateString()}
             </p>
           )}
+          <textarea
+            value={notes} onChange={(e) => setNotes(e.target.value)} rows={3}
+            placeholder="Internal onboarding notes…"
+            className="w-full px-3 py-2 rounded-xl border border-white/[0.08] bg-white/[0.03] text-[13px] text-white
+                       placeholder-[#6a6a6e] resize-none focus:outline-none focus:border-[#ff7a18]/40 transition-all"
+          />
+          <button type="button" onClick={save} disabled={saving}
+                  className="self-start text-[12.5px] font-medium px-3.5 py-1.5 rounded-lg
+                             bg-[#ff7a18]/[0.14] border border-[#ff7a18]/40 text-[#ffae3c]
+                             hover:bg-[#ff7a18]/25 hover:text-white transition-all disabled:opacity-50">
+            {saving ? 'Saving…' : 'Update stage & notes'}
+          </button>
         </div>
       </Section>
 
-      <Section title="Onboarding Notes">
-        <textarea
-          value={notes} onChange={(e) => setNotes(e.target.value)} rows={4}
-          placeholder="Internal onboarding notes…"
-          className="w-full px-3 py-2 rounded-xl border border-white/[0.08] bg-white/[0.03] text-[13px] text-white
-                     placeholder-[#6a6a6e] resize-none focus:outline-none focus:border-[#ff7a18]/40 transition-all"
-        />
+      {/* Checklist */}
+      <Section title="Checklist"
+        action={
+          !tasksMig && total > 0 ? (
+            <button type="button" onClick={() => setModalTask(null)}
+              className="inline-flex items-center gap-1 text-[11.5px] font-medium px-2.5 py-1 rounded-lg
+                         bg-white/[0.04] border border-white/[0.10] text-[#cfd3dc] hover:bg-white/[0.08] hover:text-white transition-all">
+              <Plus size={11} /> Add task
+            </button>
+          ) : undefined
+        }>
+        {tasksMig ? (
+          <Empty text="Apply the onboarding tasks migration to enable client task tracking." />
+        ) : total === 0 ? (
+          <div className="flex flex-col items-start gap-3">
+            <Empty text="No onboarding tasks yet. Create a checklist to track client delivery." />
+            <button type="button" onClick={seed} disabled={busy}
+                    className="inline-flex items-center gap-1.5 text-[12.5px] font-medium px-3.5 py-2 rounded-xl
+                               bg-[#ff7a18]/[0.14] border border-[#ff7a18]/40 text-[#ffae3c]
+                               hover:bg-[#ff7a18]/25 hover:text-white transition-all disabled:opacity-50">
+              <Plus size={12} /> {busy ? 'Creating…' : 'Create default checklist'}
+            </button>
+          </div>
+        ) : (
+          <div className="flex flex-col gap-2">
+            {tasks.map((t) => (
+              <TaskRow key={t.id} task={t} onChanged={onChanged} onEdit={() => setModalTask(t)} />
+            ))}
+          </div>
+        )}
       </Section>
 
       {err && <p className="text-[12px] text-[#ff8a7a]">{err}</p>}
 
-      <button type="button" onClick={save} disabled={saving}
-              className="self-start inline-flex items-center gap-1.5 text-[13px] font-medium px-4 py-2 rounded-xl
-                         bg-[#ff7a18]/[0.14] border border-[#ff7a18]/40 text-[#ffae3c]
-                         hover:bg-[#ff7a18]/25 hover:text-white transition-all disabled:opacity-50">
-        {saving ? 'Saving…' : 'Update onboarding stage'}
-      </button>
+      {modalTask !== undefined && (
+        <TaskModal
+          clientId={clientId}
+          task={modalTask}
+          onClose={() => setModalTask(undefined)}
+          onSaved={() => { setModalTask(undefined); onChanged() }}
+        />
+      )}
+    </div>
+  )
+}
+
+function TaskRow({ task, onChanged, onEdit }: { task: ClientTask; onChanged: () => void; onEdit: () => void }) {
+  const [busy, startBusy] = useTransition()
+  const s = TASK_STATUS_CFG[task.status]
+  const p = TASK_PRIORITY_CFG[task.priority]
+
+  function run(fn: () => Promise<{ ok: boolean; error?: string }>) {
+    startBusy(async () => {
+      const r = await fn()
+      if (r.ok) onChanged()
+      else alert(r.error ?? 'Action failed. Try again.')
+    })
+  }
+
+  return (
+    <div className={`rounded-xl border px-3.5 py-2.5 ${task.status === 'done' ? 'border-white/[0.05] bg-white/[0.015] opacity-80' : 'border-white/[0.07] bg-white/[0.02]'}`}>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className={`text-[13px] leading-snug ${task.status === 'done' ? 'text-[#9a9a9d] line-through' : 'text-white'}`}>{task.title}</p>
+          {task.description && <p className="text-[11.5px] text-[#6a6a6e] mt-0.5">{task.description}</p>}
+          <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+            <Pill color={s.color} label={s.label} />
+            <Pill color={p.color} label={p.label} />
+            <span className="text-[10px] text-[#6a6a6e] uppercase tracking-[0.06em]">{task.category}</span>
+            {task.due_date && <span className="text-[10.5px] text-[#6a6a6e] tabular-nums">· due {new Date(task.due_date).toLocaleDateString()}</span>}
+          </div>
+        </div>
+      </div>
+      <div className="flex items-center gap-3 mt-2 text-[11px]">
+        {task.status !== 'done' ? (
+          <>
+            {task.status === 'todo' && (
+              <button type="button" disabled={busy} onClick={() => run(() => updateClientTask(task.id, { status: 'in_progress' }))}
+                      className="text-[#3b9eff] hover:text-[#7ec0ff] transition-colors disabled:opacity-50 focus:outline-none focus:underline">Start</button>
+            )}
+            {task.status !== 'blocked' && (
+              <button type="button" disabled={busy} onClick={() => run(() => updateClientTask(task.id, { status: 'blocked' }))}
+                      className="text-[#ff8a7a] hover:text-[#ffb0a4] transition-colors disabled:opacity-50 focus:outline-none focus:underline">Block</button>
+            )}
+            <button type="button" disabled={busy} onClick={() => run(() => completeClientTask(task.id))}
+                    className="text-[#22d093] hover:text-[#5be4b5] transition-colors disabled:opacity-50 focus:outline-none focus:underline">Done</button>
+          </>
+        ) : (
+          <button type="button" disabled={busy} onClick={() => run(() => reopenClientTask(task.id))}
+                  className="text-[#ffae3c] hover:text-[#ffce7a] transition-colors disabled:opacity-50 focus:outline-none focus:underline">Reopen</button>
+        )}
+        <button type="button" disabled={busy} onClick={onEdit}
+                className="text-[#9a9a9d] hover:text-white transition-colors disabled:opacity-50 focus:outline-none focus:underline ml-auto">Edit</button>
+      </div>
+    </div>
+  )
+}
+
+function TaskModal({
+  clientId, task, onClose, onSaved,
+}: {
+  clientId: string; task: ClientTask | null; onClose: () => void; onSaved: () => void
+}) {
+  const editing = task !== null
+  const [title, setTitle]       = useState(task?.title ?? '')
+  const [desc,  setDesc]        = useState(task?.description ?? '')
+  const [category, setCategory] = useState<TaskCategory>(task?.category ?? 'onboarding')
+  const [priority, setPriority] = useState<TaskPriority>(task?.priority ?? 'normal')
+  const [status, setStatus]     = useState<TaskStatus>(task?.status ?? 'todo')
+  const [due,    setDue]        = useState(task?.due_date ?? '')
+  const [err,    setErr]        = useState<string | null>(null)
+  const [saving, startSave]     = useTransition()
+
+  function save() {
+    setErr(null)
+    startSave(async () => {
+      const r = editing
+        ? await updateClientTask(task!.id, { title, description: desc, status, category, priority, due_date: due })
+        : await createClientTask(clientId, { title, description: desc, category, priority, due_date: due })
+      if (r.ok) onSaved()
+      else setErr(r.error ?? 'Could not save task.')
+    })
+  }
+
+  const inputCls = 'w-full px-3 py-2 rounded-xl border border-white/[0.08] bg-white/[0.03] text-[13px] text-white placeholder-[#6a6a6e] focus:outline-none focus:border-[#ff7a18]/40 transition-all'
+  const labelCls = 'text-[11px] font-medium text-[#9a9a9d] mb-1 block'
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/65 backdrop-blur-sm px-4"
+         role="dialog" aria-modal="true" onClick={(e) => { if (e.target === e.currentTarget) onClose() }}>
+      <div className="w-full max-w-[460px] rounded-2xl border border-white/[0.10] bg-[#0f1012] shadow-2xl max-h-[90vh] overflow-y-auto">
+        <div className="flex items-start justify-between gap-3 px-5 pt-5 pb-1">
+          <h2 className="text-[15px] font-semibold text-white">{editing ? 'Edit task' : 'Add task'}</h2>
+          <button type="button" onClick={onClose} aria-label="Close" className="text-[#6a6a6e] hover:text-white transition-colors mt-0.5"><X size={14} /></button>
+        </div>
+        <div className="px-5 py-4 flex flex-col gap-3.5">
+          <div>
+            <label className={labelCls}>Title</label>
+            <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Task title" className={inputCls} />
+          </div>
+          <div>
+            <label className={labelCls}>Description</label>
+            <textarea value={desc} onChange={(e) => setDesc(e.target.value)} rows={2} placeholder="Optional details…" className={`${inputCls} resize-none`} />
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={labelCls}>Category</label>
+              <select value={category} onChange={(e) => setCategory(e.target.value as TaskCategory)} className={`${inputCls} cursor-pointer`}>
+                {TASK_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className={labelCls}>Priority</label>
+              <select value={priority} onChange={(e) => setPriority(e.target.value as TaskPriority)} className={`${inputCls} cursor-pointer`}>
+                {TASK_PRIORITY_OPTIONS.map((pr) => <option key={pr} value={pr}>{TASK_PRIORITY_CFG[pr].label}</option>)}
+              </select>
+            </div>
+            {editing && (
+              <div>
+                <label className={labelCls}>Status</label>
+                <select value={status} onChange={(e) => setStatus(e.target.value as TaskStatus)} className={`${inputCls} cursor-pointer`}>
+                  {TASK_STATUS_OPTIONS.map((st) => <option key={st} value={st}>{TASK_STATUS_CFG[st].label}</option>)}
+                </select>
+              </div>
+            )}
+            <div>
+              <label className={labelCls}>Due date</label>
+              <input type="date" value={due} onChange={(e) => setDue(e.target.value)} className={inputCls} />
+            </div>
+          </div>
+          {err && <p className="text-[12px] text-[#ff8a7a]">{err}</p>}
+        </div>
+        <div className="flex justify-end gap-2.5 px-5 pb-5">
+          <button type="button" onClick={onClose} disabled={saving}
+                  className="px-4 py-2 rounded-xl text-[13px] font-medium text-[#9a9a9d] border border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.06] hover:text-white transition-all disabled:opacity-50">Cancel</button>
+          <button type="button" onClick={save} disabled={saving || title.trim().length === 0}
+                  className="px-4 py-2 rounded-xl text-[13px] font-medium bg-[#ff7a18]/[0.14] border border-[#ff7a18]/40 text-[#ffae3c] hover:bg-[#ff7a18]/25 hover:text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+            {saving ? 'Saving…' : editing ? 'Save task' : 'Add task'}
+          </button>
+        </div>
+      </div>
     </div>
   )
 }

@@ -1,0 +1,201 @@
+'use server'
+
+// ── Founder admin actions: client onboarding tasks ─────────────────
+//
+// Behind the onboarding checklist in the client detail drawer. Every
+// action re-derives founder identity (requireAdmin), uses the service
+// role client, validates IDs/enums/lengths, and revalidates affected
+// routes. No hard deletes — task removal would use a status pattern.
+
+import { requireAdmin } from '@/lib/auth/require-admin'
+import { createServiceRoleClient } from '@/lib/supabase/server'
+import { revalidatePath } from 'next/cache'
+import { getClientTasks } from '@/lib/data/admin-client-tasks'
+import { seedDefaultTasksFor } from '@/lib/admin/onboarding-tasks'
+
+export interface TaskActionResult {
+  ok:      boolean
+  error?:  string
+  warning?: string
+}
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
+
+const STATUSES   = ['todo', 'in_progress', 'blocked', 'done'] as const
+const PRIORITIES = ['low', 'normal', 'high', 'urgent'] as const
+const CATEGORIES = ['onboarding', 'setup', 'automation', 'communication', 'QA', 'handoff', 'support'] as const
+
+const MIGRATION_HINT =
+  'Apply the onboarding tasks migration (20260531120000_add_admin_client_tasks.sql) to enable client task tracking.'
+
+function validId(raw: unknown): string | null {
+  return typeof raw === 'string' && UUID_RE.test(raw) ? raw : null
+}
+function isMissingTable(e: { code?: string; message?: string } | null): boolean {
+  if (!e) return false
+  if (e.code === '42P01') return true
+  const m = (e.message ?? '').toLowerCase()
+  return m.includes('relation') && m.includes('does not exist')
+}
+function guardServiceRole(): TaskActionResult | null {
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    console.error('[admin-client-tasks] SUPABASE_SERVICE_ROLE_KEY missing')
+    return { ok: false, error: 'Server configuration error.' }
+  }
+  return null
+}
+// '' → null (clear); valid date → string; invalid → undefined (reject)
+function parseDate(raw: string | null | undefined): string | null | undefined {
+  if (raw === null || raw === undefined) return null
+  const t = raw.trim()
+  if (t === '') return null
+  if (!DATE_RE.test(t) || Number.isNaN(Date.parse(t))) return undefined
+  return t
+}
+function cleanText(raw: string | null | undefined, max: number): string | null {
+  if (typeof raw !== 'string') return null
+  const t = raw.trim()
+  return t.length === 0 ? null : t.slice(0, max)
+}
+function revalidate() {
+  revalidatePath('/admin/clients')
+  revalidatePath('/admin/mission-control')
+}
+
+// ── Read wrapper (callable from the client drawer) ─────────────────
+export async function loadClientTasks(clientId: string) {
+  const id = validId(clientId)
+  if (!id) return { rows: [], migrationNeeded: false, error: 'Invalid client id.' }
+  return getClientTasks(id)
+}
+
+// ── Seed the default checklist (idempotent) ────────────────────────
+export async function seedDefaultClientTasks(clientId: string): Promise<TaskActionResult> {
+  await requireAdmin({ path: '/admin/clients' })
+  const id = validId(clientId)
+  if (!id) return { ok: false, error: 'Invalid client id.' }
+
+  const guard = guardServiceRole()
+  if (guard) return guard
+
+  const db = createServiceRoleClient()
+  const res = await seedDefaultTasksFor(db, id)
+
+  if (res.missingTable) return { ok: false, error: MIGRATION_HINT }
+  if (res.error)        return { ok: false, error: 'Could not create the default checklist. Try again.' }
+
+  revalidate()
+  return { ok: true, ...(res.skipped ? { warning: 'Checklist already exists.' } : {}) }
+}
+
+// ── Create a task ──────────────────────────────────────────────────
+export interface CreateTaskInput {
+  title:        string
+  description?: string | null
+  category?:    string
+  priority?:    string
+  due_date?:    string | null
+}
+
+export async function createClientTask(clientId: string, input: CreateTaskInput): Promise<TaskActionResult> {
+  await requireAdmin({ path: '/admin/clients' })
+  const id = validId(clientId)
+  if (!id) return { ok: false, error: 'Invalid client id.' }
+
+  const title = typeof input.title === 'string' ? input.title.trim() : ''
+  if (title.length === 0)  return { ok: false, error: 'Task title is required.' }
+  if (title.length > 200)  return { ok: false, error: 'Task title is too long (max 200).' }
+
+  const category = CATEGORIES.includes(input.category as (typeof CATEGORIES)[number]) ? input.category : 'onboarding'
+  const priority = PRIORITIES.includes(input.priority as (typeof PRIORITIES)[number]) ? input.priority : 'normal'
+  const due = parseDate(input.due_date)
+  if (due === undefined) return { ok: false, error: 'Invalid due date.' }
+
+  const guard = guardServiceRole()
+  if (guard) return guard
+
+  const db = createServiceRoleClient()
+  const { error } = await db.from('admin_client_tasks').insert({
+    client_id:   id,
+    title:       title.slice(0, 200),
+    description: cleanText(input.description, 4000),
+    category, priority, status: 'todo', due_date: due,
+  })
+
+  if (error) {
+    if (isMissingTable(error)) return { ok: false, error: MIGRATION_HINT }
+    console.error('[createClientTask]', error.message, '| code:', error.code)
+    return { ok: false, error: 'Could not create task. Try again.' }
+  }
+  revalidate()
+  return { ok: true }
+}
+
+// ── Update a task ──────────────────────────────────────────────────
+export interface UpdateTaskInput {
+  title?:       string
+  description?: string | null
+  status?:      string
+  category?:    string
+  priority?:    string
+  due_date?:    string | null
+}
+
+export async function updateClientTask(taskId: string, input: UpdateTaskInput): Promise<TaskActionResult> {
+  await requireAdmin({ path: '/admin/clients' })
+  const id = validId(taskId)
+  if (!id) return { ok: false, error: 'Invalid task id.' }
+
+  const update: Record<string, unknown> = {}
+
+  if (input.title !== undefined) {
+    const title = input.title.trim()
+    if (title.length === 0) return { ok: false, error: 'Task title is required.' }
+    if (title.length > 200) return { ok: false, error: 'Task title is too long (max 200).' }
+    update.title = title.slice(0, 200)
+  }
+  if (input.description !== undefined) update.description = cleanText(input.description, 4000)
+  if (input.category !== undefined) {
+    if (!CATEGORIES.includes(input.category as (typeof CATEGORIES)[number])) return { ok: false, error: 'Invalid category.' }
+    update.category = input.category
+  }
+  if (input.priority !== undefined) {
+    if (!PRIORITIES.includes(input.priority as (typeof PRIORITIES)[number])) return { ok: false, error: 'Invalid priority.' }
+    update.priority = input.priority
+  }
+  if (input.due_date !== undefined) {
+    const due = parseDate(input.due_date)
+    if (due === undefined) return { ok: false, error: 'Invalid due date.' }
+    update.due_date = due
+  }
+  if (input.status !== undefined) {
+    if (!STATUSES.includes(input.status as (typeof STATUSES)[number])) return { ok: false, error: 'Invalid status.' }
+    update.status = input.status
+    update.completed_at = input.status === 'done' ? new Date().toISOString() : null
+  }
+
+  if (Object.keys(update).length === 0) return { ok: true }
+
+  const guard = guardServiceRole()
+  if (guard) return guard
+
+  const db = createServiceRoleClient()
+  const { error } = await db.from('admin_client_tasks').update(update).eq('id', id)
+
+  if (error) {
+    if (isMissingTable(error)) return { ok: false, error: MIGRATION_HINT }
+    console.error('[updateClientTask]', error.message, '| code:', error.code)
+    return { ok: false, error: 'Could not update task. Try again.' }
+  }
+  revalidate()
+  return { ok: true }
+}
+
+// ── Complete / reopen shortcuts ────────────────────────────────────
+export async function completeClientTask(taskId: string): Promise<TaskActionResult> {
+  return updateClientTask(taskId, { status: 'done' })
+}
+export async function reopenClientTask(taskId: string): Promise<TaskActionResult> {
+  return updateClientTask(taskId, { status: 'todo' })
+}

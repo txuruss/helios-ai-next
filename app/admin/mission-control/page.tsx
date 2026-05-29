@@ -6,11 +6,12 @@ import {
 } from '@/lib/data/admin-audits'
 import { getAdminMissionControlSummary } from '@/lib/data/admin-mission-control'
 import { getAdminClientRevenue, getAdminClientPaymentHealth } from '@/lib/data/admin-clients'
+import { getClientsOnboardingSummary } from '@/lib/data/admin-client-tasks'
 import AdminKpiCard from '@/components/admin/ui/AdminKpiCard'
 import MissionControlAuditTable from './MissionControlAuditTable'
 import {
   CheckCircle2, AlertCircle, ArrowRight, TrendingUp, Zap,
-  FileText, Users, Building2, Settings, Activity, Wallet,
+  FileText, Users, Building2, Settings, Activity, Wallet, ClipboardList,
 } from 'lucide-react'
 
 export const metadata = { title: 'Mission Control — Helios AI Admin' }
@@ -24,12 +25,13 @@ function fmtUSD(n: number): string {
 export default async function AdminMissionControlPage() {
   const session = await requireAdmin({ path: '/admin/mission-control' })
 
-  const [auditMetrics, latestAudits, summary, revenue, payments] = await Promise.all([
+  const [auditMetrics, latestAudits, summary, revenue, payments, onboarding] = await Promise.all([
     getAdminAuditMetrics(),
     getLatestAdminAuditSubmissions(6),
     getAdminMissionControlSummary(),
     getAdminClientRevenue(),
     getAdminClientPaymentHealth(),
+    getClientsOnboardingSummary(),
   ])
 
   const firstName      = (session.fullName ?? session.email).split(' ')[0]
@@ -203,6 +205,27 @@ export default async function AdminMissionControlPage() {
                   tone="warning"
                 />
               )}
+              {onboarding.blockedTasks > 0 && (
+                <FocusItem
+                  label="Review blocked onboarding tasks."
+                  href="/admin/clients"
+                  tone="danger"
+                />
+              )}
+              {onboarding.dueSoonTasks > 0 && (
+                <FocusItem
+                  label="Complete upcoming client onboarding tasks."
+                  href="/admin/clients"
+                  tone="warning"
+                />
+              )}
+              {onboarding.readyToGoLive > 0 && (
+                <FocusItem
+                  label={`Mark ready client live (${onboarding.readyToGoLive}).`}
+                  href="/admin/clients"
+                  tone="success"
+                />
+              )}
               <FocusItem
                 label={relevanceReady ? 'Audit Qualifier Agent active' : 'Connect Relevance AI'}
                 href={relevanceReady ? '/admin/relevance-ai' : '/admin/settings'}
@@ -281,6 +304,34 @@ export default async function AdminMissionControlPage() {
             <RevenueCard label="Unpaid Clients"   value={String(payments.unpaid)}  sublabel="Unpaid / deposit" tone="orange" />
             <RevenueCard label="Overdue Payments" value={String(payments.overdue)} sublabel="Past due"       tone="neutral" />
             <RevenueCard label="Next Payment Due" value={String(payments.dueSoon)} sublabel="Within 7 days"  tone="info"    />
+          </div>
+        )}
+      </section>
+
+      {/* ── Client Onboarding (from admin_client_tasks) ───────────── */}
+      <section className="rounded-2xl border border-white/[0.08] bg-[#0f1012]/80 overflow-hidden">
+        <header className="flex items-center justify-between px-5 py-3 border-b border-white/[0.04]">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <ClipboardList size={13} className="text-[#6a6a6e] shrink-0" />
+            <h2 className="text-[13.5px] font-semibold text-white">Client Onboarding</h2>
+          </div>
+          <Link
+            href="/admin/clients"
+            className="text-[12px] text-[#ffae3c] hover:text-white inline-flex items-center gap-1.5 transition-colors shrink-0"
+          >
+            Manage <ArrowRight size={11} />
+          </Link>
+        </header>
+        {onboarding.clientsOnboarding === 0 && onboarding.blockedTasks === 0 && onboarding.dueSoonTasks === 0 ? (
+          <div className="px-5 py-5 text-[12.5px] text-[#9a9a9d]">
+            Onboarding tracking will appear after clients are converted.
+          </div>
+        ) : (
+          <div className="px-4 py-3.5 grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+            <RevenueCard label="Clients Onboarding" value={String(onboarding.clientsOnboarding)} sublabel="In progress"     tone="info"    />
+            <RevenueCard label="Blocked Tasks"      value={String(onboarding.blockedTasks)}      sublabel="Need attention"  tone="neutral" />
+            <RevenueCard label="Tasks Due Soon"     value={String(onboarding.dueSoonTasks)}      sublabel="Within 7 days"   tone="orange"  />
+            <RevenueCard label="Ready To Go Live"   value={String(onboarding.readyToGoLive)}     sublabel="All tasks done"  tone="info"    />
           </div>
         )}
       </section>

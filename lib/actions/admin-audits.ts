@@ -35,6 +35,7 @@ import {
   feesForPlan,
   PLAN_FEES,
 } from '@/lib/admin/plan-pricing'
+import { seedDefaultTasksFor } from '@/lib/admin/onboarding-tasks'
 
 export interface AdminAuditActionResult {
   ok:    boolean
@@ -283,6 +284,21 @@ export async function convertAuditToClient(submissionId: string): Promise<AdminA
     if (sourceLeadId) {
       await db.from('admin_leads').update({ stage: 'won' }).eq('id', sourceLeadId)
     }
+  }
+
+  // Seed the default onboarding checklist (idempotent, non-fatal). A
+  // failure here never blocks the conversion.
+  try {
+    const clientRow = await db
+      .from('admin_clients')
+      .select('id')
+      .eq('source_audit_id', id)
+      .maybeSingle()
+    if (!clientRow.error && clientRow.data) {
+      await seedDefaultTasksFor(db, clientRow.data.id as string)
+    }
+  } catch (seedErr) {
+    console.error('[convertAuditToClient] task seed failed (non-fatal):', seedErr instanceof Error ? seedErr.message : seedErr)
   }
 
   await db.from('audit_submissions').update({ status: 'converted' }).eq('id', id)
