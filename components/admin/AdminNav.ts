@@ -19,9 +19,12 @@ export const ADMIN_NAV: AdminNavItem[] = [
   { id: 'leads',           label: 'Leads',           href: '/admin/leads',           icon: 'Users',     group: 'Sales' },
   { id: 'clients',         label: 'Clients',         href: '/admin/clients',         icon: 'Building2', group: 'Sales' },
 
+  // Operations
+  { id: 'delivery',        label: 'Delivery',        href: '/admin/delivery',        icon: 'ClipboardList', group: 'Operations' },
+
   // Admin
   { id: 'settings',        label: 'Settings',        href: '/admin/settings',        icon: 'Settings',  group: 'Admin' },
 ]
 
 export const ADMIN_NAV_GROUPS: ReadonlyArray<AdminNavItem['group']> =
-  ['Overview', 'Sales', 'Admin']
+  ['Overview', 'Sales', 'Operations', 'Admin']
