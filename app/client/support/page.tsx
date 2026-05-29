@@ -19,7 +19,7 @@ export default async function ClientSupportPage() {
           <p className="text-[13.5px] text-[#9a9a9d]">
             We reply within one business day. For urgent issues, mark your email with <span className="text-white">[URGENT]</span>.
           </p>
-          <a href="mailto:support@helios.ai" className="btn-primary self-start">Email support@helios.ai</a>
+          <a href="mailto:hello@heliosai.agency" className="btn-primary self-start">Email hello@heliosai.agency</a>
         </div>
 
         <div className="rounded-2xl border border-white/[0.06] bg-white/[0.015] p-5 text-[13.5px] text-[#9a9a9d]">

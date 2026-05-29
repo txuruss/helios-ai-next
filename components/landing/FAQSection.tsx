@@ -91,8 +91,8 @@ export default function FAQSection() {
         <div className="flex items-center justify-center gap-5 p-7 rounded-xl
                         bg-white/[0.02] border border-white/[0.06] flex-wrap">
           <span className="text-[15px] text-[#9a9a9d]">Still have questions?</span>
-          <Link href="/login" className="btn-primary btn-sm">
-            Book a Strategy Call
+          <Link href="/audit" className="btn-primary btn-sm">
+            Start Free Audit
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
           </Link>
         </div>

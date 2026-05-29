@@ -122,7 +122,7 @@ export async function submitBusinessRegistration(
 
     const userMessage = isMissingTableError(insertErr)
       ? 'Audit intake is currently unavailable. Please try again in a few minutes — our team has been notified.'
-      : 'We could not save your submission. Please try again, or email us at support@helios.ai.'
+      : 'We could not save your submission. Please try again, or email us at hello@heliosai.agency.'
 
     return { ok: false, error: userMessage }
   }

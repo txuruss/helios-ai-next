@@ -25,8 +25,8 @@ export default function Footer() {
             <p className="text-[14px] text-[#9a9a9d] leading-relaxed">
               Practical AI systems for local service businesses — lead capture, AI booking, WhatsApp automation, and operations dashboards.
             </p>
-            <Link href="/login" className="btn-primary btn-sm self-start mt-2">
-              Book a Strategy Call
+            <Link href="/audit" className="btn-primary btn-sm self-start mt-2">
+              Start Free Audit
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><path d="M5 12h14M13 5l7 7-7 7"/></svg>
             </Link>
           </div>
@@ -73,8 +73,23 @@ export default function Footer() {
                 </li>
               ))}
               <li>
-                <a href="mailto:hello@helios.ai" className="text-[13.5px] text-[#9a9a9d] hover:text-white transition-colors">
-                  hello@helios.ai
+                <a href="mailto:hello@heliosai.agency" className="text-[13.5px] text-[#9a9a9d] hover:text-white transition-colors">
+                  hello@heliosai.agency
+                </a>
+              </li>
+              <li>
+                <a
+                  href="https://www.instagram.com/heliosai.agency/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 text-[13.5px] text-[#9a9a9d] hover:text-white transition-colors"
+                >
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="2" y="2" width="20" height="20" rx="5" ry="5"/>
+                    <circle cx="12" cy="12" r="4"/>
+                    <circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none"/>
+                  </svg>
+                  @heliosai.agency
                 </a>
               </li>
             </ul>
@@ -83,7 +98,22 @@ export default function Footer() {
 
         <div className="border-t border-white/[0.06] pt-7 flex justify-between items-center flex-wrap gap-4">
           <span className="text-[12.5px] text-[#6a6a6e]">© 2026 Helios AI · Built in Jamaica</span>
-          <span className="font-mono text-[12px] text-[#6a6a6e]">helios.ai / v2.0</span>
+          <div className="flex items-center gap-4">
+            <a
+              href="https://www.instagram.com/heliosai.agency/"
+              target="_blank"
+              rel="noopener noreferrer"
+              aria-label="Helios AI on Instagram"
+              className="text-[#6a6a6e] hover:text-white transition-colors"
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect x="2" y="2" width="20" height="20" rx="5" ry="5"/>
+                <circle cx="12" cy="12" r="4"/>
+                <circle cx="17.5" cy="6.5" r="1" fill="currentColor" stroke="none"/>
+              </svg>
+            </a>
+            <span className="font-mono text-[12px] text-[#6a6a6e]">heliosai.agency</span>
+          </div>
         </div>
       </div>
     </footer>

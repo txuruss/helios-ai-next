@@ -125,7 +125,7 @@
       '    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.5" stroke-linecap="round"><path d="M5 12h14M13 5l7 7-7 7"/></svg>',
       '  </button>',
       '</div>',
-      cfg.show_powered_by ? '<div id="helios-widget-powered">Powered by <a href="https://helios.ai" target="_blank" rel="noopener">Helios AI</a></div>' : '',
+      cfg.show_powered_by ? '<div id="helios-widget-powered">Powered by <a href="https://heliosai.agency" target="_blank" rel="noopener">Helios AI</a></div>' : '',
     ].join('');
     document.body.appendChild(panel);
 
