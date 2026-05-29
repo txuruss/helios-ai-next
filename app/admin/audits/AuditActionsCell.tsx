@@ -8,19 +8,22 @@
 //
 // The visible button set is gated by the submission's current status
 // so the founder is never offered an action that's a no-op:
-//   • new                          → Mark reviewed · Convert · Archive
-//   • in_review / qualified /
-//     contacted                    → Convert · Archive
+//   • new                          → Mark reviewed · Qualify · Convert · Archive
+//   • in_review                    → Qualify · Convert · Archive
+//   • qualified / contacted        → Convert · Archive
 //   • converted                    → Archive
 //   • archived                     → (no actions)
 //
-// Archive is intentionally routed through onArchiveRequest so the
-// parent table can show a confirmation modal before committing.
+// Qualify  → creates an admin_leads row (sales pipeline).
+// Convert  → creates an admin_clients row (signed/onboarding client).
+// Archive is routed through onArchiveRequest so the parent table can
+// show a confirmation modal before committing.
 
 import { useTransition } from 'react'
 import {
   markAuditReviewed,
-  convertAuditSubmission,
+  qualifyAuditToLead,
+  convertAuditToClient,
 } from '@/lib/actions/admin-audits'
 import type { AdminAuditStatus } from '@/lib/data/admin-audits'
 
@@ -34,6 +37,7 @@ export default function AuditActionsCell({ submissionId, status, onArchiveReques
   const [pending, startTransition] = useTransition()
 
   const canMarkReviewed = status === 'new'
+  const canQualify      = status === 'new' || status === 'in_review'
   const canConvert      = status !== 'converted' && status !== 'archived'
   const canArchive      = status !== 'archived'
 
@@ -53,8 +57,13 @@ export default function AuditActionsCell({ submissionId, status, onArchiveReques
           Mark reviewed
         </ActionButton>
       )}
+      {canQualify && (
+        <ActionButton disabled={pending} onClick={() => run(qualifyAuditToLead)} tone="info">
+          Qualify
+        </ActionButton>
+      )}
       {canConvert && (
-        <ActionButton disabled={pending} onClick={() => run(convertAuditSubmission)} tone="success">
+        <ActionButton disabled={pending} onClick={() => run(convertAuditToClient)} tone="success">
           Convert
         </ActionButton>
       )}

@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { requireAdmin } from '@/lib/auth/require-admin'
+import { getAdminLeads } from '@/lib/data/admin-leads'
 import LeadsPageClient from './LeadsPageClient'
 import { ArrowLeft } from 'lucide-react'
 
@@ -7,6 +8,8 @@ export const metadata = { title: 'Leads — Mission Control' }
 
 export default async function AdminLeadsPage() {
   await requireAdmin({ path: '/admin/leads' })
+
+  const { rows, error } = await getAdminLeads()
 
   return (
     <div className="flex flex-col gap-5">
@@ -31,7 +34,7 @@ export default async function AdminLeadsPage() {
         </p>
       </header>
 
-      <LeadsPageClient deals={[]} />
+      <LeadsPageClient leads={rows} error={error} />
 
     </div>
   )

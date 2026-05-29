@@ -5,6 +5,7 @@ import {
   getLatestAdminAuditSubmissions,
 } from '@/lib/data/admin-audits'
 import { getAdminMissionControlSummary } from '@/lib/data/admin-mission-control'
+import { getAdminClientRevenue } from '@/lib/data/admin-clients'
 import AdminKpiCard from '@/components/admin/ui/AdminKpiCard'
 import MissionControlAuditTable from './MissionControlAuditTable'
 import {
@@ -23,10 +24,11 @@ function fmtUSD(n: number): string {
 export default async function AdminMissionControlPage() {
   const session = await requireAdmin({ path: '/admin/mission-control' })
 
-  const [auditMetrics, latestAudits, summary] = await Promise.all([
+  const [auditMetrics, latestAudits, summary, revenue] = await Promise.all([
     getAdminAuditMetrics(),
     getLatestAdminAuditSubmissions(6),
     getAdminMissionControlSummary(),
+    getAdminClientRevenue(),
   ])
 
   const firstName      = (session.fullName ?? session.email).split(' ')[0]
@@ -34,11 +36,15 @@ export default async function AdminMissionControlPage() {
   const stripeReady    = !!process.env.STRIPE_SECRET_KEY
   const relevanceReady = !!process.env.RELEVANCE_API_KEY
 
-  // Revenue figures are $0 until real clients are wired to a clients table or Stripe.
-  const mrr          = 0
-  const arr          = 0
-  const setupRevenue = 0
-  const avgMonthly   = 0
+  // Revenue figures are computed from REAL stored client fees (admin_clients).
+  // They are $0 until clients are converted, and labelled "Estimated"
+  // until Stripe is connected. Never fabricated.
+  const activeClients  = revenue.activeClients
+  const mrr            = revenue.mrr
+  const arr            = revenue.arr
+  const setupRevenue   = revenue.setupRevenue
+  const avgMonthly     = revenue.avgMonthly
+  const projected12mo  = revenue.projected12mo
 
   const newAudits = auditMetrics.newToday
   const pending   = auditMetrics.pending
@@ -82,9 +88,9 @@ export default async function AdminMissionControlPage() {
         />
         <AdminKpiCard
           label="Active Clients"
-          value={summary.activeClients}
+          value={activeClients}
           tone="info"
-          sublabel="Live from Supabase"
+          sublabel="From client CRM"
         />
         <AdminKpiCard
           label="Leads (7d)"
@@ -155,7 +161,7 @@ export default async function AdminMissionControlPage() {
             <nav className="divide-y divide-white/[0.04]">
               <QuickAction href="/admin/audits"   icon={<FileText size={13} />}  label="Review Audit Intake"  note={pending > 0 ? `${pending} pending` : 'Queue clear'} />
               <QuickAction href="/admin/leads"    icon={<Users size={13} />}     label="View Leads Pipeline"  note={`${summary.recentLeads} leads (7d)`} />
-              <QuickAction href="/admin/clients"  icon={<Building2 size={13} />} label="Active Clients"       note={`${summary.activeClients} total`} />
+              <QuickAction href="/admin/clients"  icon={<Building2 size={13} />} label="Active Clients"       note={`${activeClients} total`} />
               <QuickAction href="/admin/settings" icon={<Settings size={13} />}  label="Platform Settings"    note="Config & integrations" />
             </nav>
           </section>
@@ -216,12 +222,12 @@ export default async function AdminMissionControlPage() {
           </div>
         </header>
         <div className="px-4 py-3.5 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
-          <RevenueCard label="MRR"               value={fmtUSD(mrr)}          sublabel="Monthly recurring"   tone="orange"  />
-          <RevenueCard label="ARR"               value={fmtUSD(arr)}          sublabel="MRR × 12"            tone="orange"  />
-          <RevenueCard label="Setup Revenue"     value={fmtUSD(setupRevenue)} sublabel="One-time fees"       tone="neutral" />
-          <RevenueCard label="Revenue This Month" value={fmtUSD(mrr)}         sublabel="Recurring only"      tone="neutral" />
-          <RevenueCard label="Proj. 12-Month"    value={fmtUSD(arr)}          sublabel="From current MRR"    tone="info"    />
-          <RevenueCard label="Avg / Client"      value={fmtUSD(avgMonthly)}   sublabel={`${summary.activeClients} active`} tone="info" />
+          <RevenueCard label="MRR"               value={fmtUSD(mrr)}           sublabel="Monthly recurring"  tone="orange"  />
+          <RevenueCard label="ARR"               value={fmtUSD(arr)}           sublabel="MRR × 12"           tone="orange"  />
+          <RevenueCard label="Setup Revenue"     value={fmtUSD(setupRevenue)}  sublabel="One-time fees"      tone="neutral" />
+          <RevenueCard label="Revenue This Month" value={fmtUSD(mrr)}          sublabel="Recurring only"     tone="neutral" />
+          <RevenueCard label="Proj. 12-Month"    value={fmtUSD(projected12mo)} sublabel="ARR + setup"        tone="info"    />
+          <RevenueCard label="Avg / Client"      value={fmtUSD(avgMonthly)}    sublabel={`${activeClients} active`} tone="info" />
         </div>
       </section>
 
