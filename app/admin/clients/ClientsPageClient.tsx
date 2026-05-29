@@ -21,6 +21,7 @@ import ConfirmActionDialog from '@/components/admin/ui/ConfirmActionDialog'
 import {
   archiveClient, updateClientStatus, updateClientPayment,
 } from '@/lib/actions/admin-clients'
+import ClientDetailDrawer from './ClientDetailDrawer'
 
 type HealthStatus = 'Healthy' | 'Watch' | 'At Risk' | 'Unknown'
 
@@ -116,7 +117,8 @@ export default function ClientsPageClient({ clients, error }: Props) {
   const [planFilter,   setPlanFilter]   = useState('all')
   const [statusFilter, setStatusFilter] = useState('all')
   const [modal,        setModal]        = useState<ActionModal>({ open: false })
-  const [details,      setDetails]      = useState<AdminClientRow | null>(null)
+  const [drawerId,     setDrawerId]     = useState<string | null>(null)
+  const [drawerKey,    setDrawerKey]    = useState(0)
   const [payClient,    setPayClient]    = useState<AdminClientRow | null>(null)
   const [isPending,    startTransition] = useTransition()
   const [actionError,  setActionError]  = useState<string | null>(null)
@@ -276,7 +278,15 @@ export default function ClientsPageClient({ clients, error }: Props) {
                       const payCfg      = overdue ? PAYMENT_STATUS_CONFIG.overdue : PAYMENT_STATUS_CONFIG[c.payment_status]
                       return (
                         <tr key={c.id} className="border-t border-white/[0.04] transition-colors hover:bg-white/[0.015]">
-                          <td className="px-4 py-3 text-white font-medium whitespace-nowrap">{c.name}</td>
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            <button
+                              type="button"
+                              onClick={() => setDrawerId(c.id)}
+                              className="text-white font-medium hover:text-[#ffae3c] transition-colors focus:outline-none focus:underline text-left"
+                            >
+                              {c.name}
+                            </button>
+                          </td>
                           <td className="px-4 py-3 text-[#9a9a9d] whitespace-nowrap">{c.industry}</td>
                           <td className="px-4 py-3"><PlanPill plan={c.plan} /></td>
                           <td className="px-4 py-3">
@@ -323,7 +333,7 @@ export default function ClientsPageClient({ clients, error }: Props) {
                               </button>
                               <button
                                 type="button"
-                                onClick={() => setDetails(c)}
+                                onClick={() => setDrawerId(c.id)}
                                 className="text-[#9a9a9d] hover:text-white transition-colors focus:outline-none focus:underline"
                               >
                                 View
@@ -440,15 +450,26 @@ export default function ClientsPageClient({ clients, error }: Props) {
         onCancel={() => { setModal({ open: false }); setActionError(null) }}
       />
 
-      {/* Read-only details modal */}
-      {details && <ClientDetails client={details} onClose={() => setDetails(null)} />}
+      {/* Client detail drawer */}
+      {drawerId && (
+        <ClientDetailDrawer
+          clientId={drawerId}
+          reloadKey={drawerKey}
+          onClose={() => setDrawerId(null)}
+          onUpdatePayment={() => {
+            const c = clients.find((x) => x.id === drawerId)
+            if (c) { setActionError(null); setPayClient(c) }
+          }}
+          onChanged={() => { setDrawerKey((k) => k + 1); router.refresh() }}
+        />
+      )}
 
       {/* Manual payment update modal */}
       {payClient && (
         <PaymentModal
           client={payClient}
           onClose={() => { setPayClient(null); setActionError(null) }}
-          onSaved={() => { setPayClient(null); router.refresh() }}
+          onSaved={() => { setPayClient(null); router.refresh(); setDrawerKey((k) => k + 1) }}
         />
       )}
     </>
@@ -589,48 +610,4 @@ function LegendRow({ color, label }: { color: string; label: string }) {
   )
 }
 
-function ClientDetails({ client, onClose }: { client: AdminClientRow; onClose: () => void }) {
-  return (
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 backdrop-blur-sm px-4"
-      role="dialog" aria-modal="true"
-      onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
-    >
-      <div className="w-full max-w-[440px] rounded-2xl border border-white/[0.10] bg-[#0f1012] shadow-2xl">
-        <div className="flex items-start justify-between gap-3 px-5 pt-5 pb-3">
-          <h2 className="text-[15px] font-semibold text-white leading-snug">{client.name}</h2>
-          <button type="button" onClick={onClose} aria-label="Close" className="text-[#6a6a6e] hover:text-white transition-colors shrink-0 mt-0.5">
-            <X size={14} />
-          </button>
-        </div>
-        <div className="px-5 pb-5 flex flex-col gap-2 text-[13px]">
-          <DetailRow label="Industry"      value={client.industry} />
-          <DetailRow label="City"          value={client.city} />
-          <DetailRow label="Plan"          value={client.plan || '—'} />
-          <DetailRow label="Status"        value={STATUS_CONFIG[client.status].label} />
-          <DetailRow label="Setup fee"     value={`$${client.setup_fee.toLocaleString()}`} />
-          <DetailRow label="Monthly fee"   value={`$${client.monthly_fee.toLocaleString()}/mo`} />
-          <DetailRow label="Leads / mo"    value={String(client.monthly_leads)} />
-          <DetailRow label="Bookings / mo" value={String(client.monthly_bookings)} />
-          <DetailRow label="Client since"  value={new Date(client.created_at).toLocaleDateString()} />
-          <div className="border-t border-white/[0.06] my-1" />
-          <DetailRow label="Payment"       value={PAYMENT_STATUS_CONFIG[client.payment_status].label} />
-          <DetailRow label="Method"        value={client.payment_method ? (PAYMENT_METHOD_SELECT.find((m) => m.value === client.payment_method)?.label ?? client.payment_method) : '—'} />
-          <DetailRow label="Last payment"  value={client.last_payment_date ? new Date(client.last_payment_date).toLocaleDateString() : '—'} />
-          <DetailRow label="Next due"      value={client.next_payment_due ? new Date(client.next_payment_due).toLocaleDateString() : '—'} />
-          <DetailRow label="PayPal invoice" value={client.paypal_invoice_id ?? '—'} />
-          {client.payment_notes && <DetailRow label="Notes" value={client.payment_notes} />}
-        </div>
-      </div>
-    </div>
-  )
-}
-
-function DetailRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-start justify-between gap-4">
-      <span className="text-[#6a6a6e]">{label}</span>
-      <span className="text-white text-right">{value}</span>
-    </div>
-  )
-}
+// Full client detail now lives in the right-side ClientDetailDrawer.

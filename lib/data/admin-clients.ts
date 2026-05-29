@@ -28,6 +28,65 @@ export type AdminClientStatus = 'active' | 'onboarding' | 'paused' | 'churned'
 export type PaymentStatus = 'unpaid' | 'deposit_paid' | 'paid' | 'overdue' | 'cancelled'
 export type PaymentMethod = 'paypal' | 'bank_transfer' | 'cash' | 'other'
 
+export type OnboardingStage =
+  | 'not_started' | 'intake_needed' | 'setup_in_progress' | 'testing' | 'live' | 'complete'
+
+export type NoteType = 'general' | 'payment' | 'onboarding' | 'support' | 'retention'
+
+// Full client record for the detail drawer (superset of AdminClientRow).
+export interface AdminClientDetail {
+  id:               string
+  business_name:    string
+  contact_name:     string | null
+  email:            string | null
+  phone:            string | null
+  website:          string | null
+  industry:         string | null
+  city:             string | null
+  plan:             string
+  setup_fee:        number
+  monthly_fee:      number
+  status:           AdminClientStatus
+  monthly_leads:    number
+  monthly_bookings: number
+  client_since:     string | null
+  created_at:       string
+  source_audit_id:  string | null
+  source_lead_id:   string | null
+  payment_status:   PaymentStatus
+  payment_method:   PaymentMethod | null
+  last_payment_date: string | null
+  next_payment_due:  string | null
+  paypal_invoice_id: string | null
+  payment_notes:     string | null
+  onboarding_stage:  OnboardingStage
+  onboarding_notes:  string | null
+  onboarding_completed_at: string | null
+  legacy_notes:      string | null   // admin_clients.notes free-text field
+}
+
+export interface ClientNote {
+  id:         string
+  note:       string
+  note_type:  NoteType
+  created_at: string
+}
+
+export interface ClientPaymentEvent {
+  id:                string
+  payment_status:    PaymentStatus
+  payment_method:    PaymentMethod | null
+  amount:            number | null
+  payment_date:      string | null
+  next_payment_due:  string | null
+  paypal_invoice_id: string | null
+  notes:             string | null
+  created_at:        string
+}
+
+export interface ClientNotesResult         { rows: ClientNote[];         migrationNeeded: boolean; error: string | null }
+export interface ClientPaymentEventsResult  { rows: ClientPaymentEvent[]; migrationNeeded: boolean; error: string | null }
+
 // UI-facing row. Field names match what ClientsPageClient consumes
 // (name / industry / city / plan / monthly_leads / monthly_bookings /
 // created_at) plus the stored commercial fields.
@@ -306,5 +365,156 @@ export async function getAdminClientPaymentHealth(): Promise<AdminClientPaymentH
   } catch (err) {
     console.error('[getAdminClientPaymentHealth]', err instanceof Error ? err.message : err)
     return { ...empty, error: 'Payment health unavailable.' }
+  }
+}
+
+// ── Detail drawer reads ────────────────────────────────────────────
+
+function normalizeOnboarding(raw: unknown): OnboardingStage {
+  if (
+    raw === 'not_started' || raw === 'intake_needed' || raw === 'setup_in_progress' ||
+    raw === 'testing' || raw === 'live' || raw === 'complete'
+  ) return raw
+  return 'not_started'
+}
+
+function normalizeNoteType(raw: unknown): NoteType {
+  if (
+    raw === 'general' || raw === 'payment' || raw === 'onboarding' ||
+    raw === 'support' || raw === 'retention'
+  ) return raw
+  return 'general'
+}
+
+function str(raw: unknown): string | null {
+  return typeof raw === 'string' && raw.length > 0 ? raw : null
+}
+
+// Full client record. Uses select('*') so it is naturally resilient to
+// the payment / onboarding migrations not being applied (missing columns
+// simply come back undefined and default via the normalizers).
+export async function getClientDetail(clientId: string): Promise<AdminClientDetail | null> {
+  await requireAdmin({ path: '/admin/clients' })
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) return null
+
+  try {
+    const db = createServiceRoleClient()
+    const { data, error } = await db
+      .from('admin_clients')
+      .select('*')
+      .eq('id', clientId)
+      .maybeSingle()
+
+    if (error) {
+      if (isMissingTable(error)) return null
+      throw error
+    }
+    if (!data) return null
+
+    const r = data as Record<string, unknown>
+    return {
+      id:               String(r.id ?? ''),
+      business_name:    typeof r.business_name === 'string' ? r.business_name : '(unknown)',
+      contact_name:     str(r.contact_name),
+      email:            str(r.email),
+      phone:            str(r.phone),
+      website:          str(r.website),
+      industry:         str(r.industry),
+      city:             str(r.city),
+      plan:             typeof r.plan === 'string' ? r.plan : '',
+      setup_fee:        typeof r.setup_fee === 'number' ? r.setup_fee : 0,
+      monthly_fee:      typeof r.monthly_fee === 'number' ? r.monthly_fee : 0,
+      status:           normalizeStatus(r.status),
+      monthly_leads:    typeof r.leads_this_month === 'number' ? r.leads_this_month : 0,
+      monthly_bookings: typeof r.bookings_this_month === 'number' ? r.bookings_this_month : 0,
+      client_since:     dateStr(r.client_since),
+      created_at:       typeof r.created_at === 'string' ? r.created_at : new Date(0).toISOString(),
+      source_audit_id:  str(r.source_audit_id),
+      source_lead_id:   str(r.source_lead_id),
+      payment_status:   normalizePaymentStatus(r.payment_status),
+      payment_method:   normalizePaymentMethod(r.payment_method),
+      last_payment_date: dateStr(r.last_payment_date),
+      next_payment_due:  dateStr(r.next_payment_due),
+      paypal_invoice_id: str(r.paypal_invoice_id),
+      payment_notes:     str(r.payment_notes),
+      onboarding_stage:  normalizeOnboarding(r.onboarding_stage),
+      onboarding_notes:  str(r.onboarding_notes),
+      onboarding_completed_at: str(r.onboarding_completed_at),
+      legacy_notes:      str(r.notes),
+    }
+  } catch (err) {
+    console.error('[getClientDetail]', err instanceof Error ? err.message : err)
+    return null
+  }
+}
+
+export async function getClientNotes(clientId: string): Promise<ClientNotesResult> {
+  await requireAdmin({ path: '/admin/clients' })
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    return { rows: [], migrationNeeded: false, error: 'Service role key not configured.' }
+  }
+
+  try {
+    const db = createServiceRoleClient()
+    const { data, error } = await db
+      .from('admin_client_notes')
+      .select('id, note, note_type, created_at')
+      .eq('client_id', clientId)
+      .order('created_at', { ascending: false })
+      .limit(200)
+
+    if (error) {
+      if (isMissingTable(error)) return { rows: [], migrationNeeded: true, error: null }
+      throw error
+    }
+
+    const rows = ((data ?? []) as Record<string, unknown>[]).map((r) => ({
+      id:         String(r.id ?? ''),
+      note:       typeof r.note === 'string' ? r.note : '',
+      note_type:  normalizeNoteType(r.note_type),
+      created_at: typeof r.created_at === 'string' ? r.created_at : new Date(0).toISOString(),
+    }))
+    return { rows, migrationNeeded: false, error: null }
+  } catch (err) {
+    console.error('[getClientNotes]', err instanceof Error ? err.message : err)
+    return { rows: [], migrationNeeded: false, error: 'Notes are temporarily unavailable.' }
+  }
+}
+
+export async function getClientPaymentEvents(clientId: string): Promise<ClientPaymentEventsResult> {
+  await requireAdmin({ path: '/admin/clients' })
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    return { rows: [], migrationNeeded: false, error: 'Service role key not configured.' }
+  }
+
+  try {
+    const db = createServiceRoleClient()
+    const { data, error } = await db
+      .from('admin_client_payment_events')
+      .select('id, payment_status, payment_method, amount, payment_date, next_payment_due, paypal_invoice_id, notes, created_at')
+      .eq('client_id', clientId)
+      .order('created_at', { ascending: false })
+      .limit(200)
+
+    if (error) {
+      if (isMissingTable(error)) return { rows: [], migrationNeeded: true, error: null }
+      throw error
+    }
+
+    const rows = ((data ?? []) as Record<string, unknown>[]).map((r) => ({
+      id:                String(r.id ?? ''),
+      payment_status:    normalizePaymentStatus(r.payment_status),
+      payment_method:    normalizePaymentMethod(r.payment_method),
+      amount:            typeof r.amount === 'number' ? r.amount : null,
+      payment_date:      dateStr(r.payment_date),
+      next_payment_due:  dateStr(r.next_payment_due),
+      paypal_invoice_id: str(r.paypal_invoice_id),
+      notes:             str(r.notes),
+      created_at:        typeof r.created_at === 'string' ? r.created_at : new Date(0).toISOString(),
+    }))
+    return { rows, migrationNeeded: false, error: null }
+  } catch (err) {
+    console.error('[getClientPaymentEvents]', err instanceof Error ? err.message : err)
+    return { rows: [], migrationNeeded: false, error: 'Payment history is temporarily unavailable.' }
   }
 }

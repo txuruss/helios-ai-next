@@ -14,6 +14,7 @@ import { requireAdmin } from '@/lib/auth/require-admin'
 import { createServiceRoleClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import { feesForPlan, isAdminPlan, type AdminPlan } from '@/lib/admin/plan-pricing'
+import { getClientDetail, getClientNotes, getClientPaymentEvents } from '@/lib/data/admin-clients'
 
 export interface AdminClientActionResult {
   ok:     boolean
@@ -202,6 +203,9 @@ export async function updateClientPayment(
   const guard = guardServiceRole()
   if (guard) return guard
 
+  const invoice = cleanText(input.paypal_invoice_id, 120)
+  const pnotes  = cleanText(input.payment_notes, 2000)
+
   const db = createServiceRoleClient()
   const { error } = await db
     .from('admin_clients')
@@ -210,8 +214,8 @@ export async function updateClientPayment(
       payment_method:    method,
       last_payment_date: lastPaid,
       next_payment_due:  nextDue,
-      paypal_invoice_id: cleanText(input.paypal_invoice_id, 120),
-      payment_notes:     cleanText(input.payment_notes, 2000),
+      paypal_invoice_id: invoice,
+      payment_notes:     pnotes,
     })
     .eq('id', id)
 
@@ -222,6 +226,132 @@ export async function updateClientPayment(
     }
     console.error('[updateClientPayment]', error.message, '| code:', error.code)
     return { ok: false, error: 'Could not update payment. Try again.' }
+  }
+
+  // Append a payment-history event (non-fatal). If the events table is
+  // not yet created, this is silently skipped — the payment update above
+  // already succeeded and must not be rolled back.
+  try {
+    const { error: evErr } = await db.from('admin_client_payment_events').insert({
+      client_id:         id,
+      payment_status:    input.payment_status,
+      payment_method:    method,
+      payment_date:      lastPaid,
+      next_payment_due:  nextDue,
+      paypal_invoice_id: invoice,
+      notes:             pnotes,
+    })
+    if (evErr && evErr.code !== '42P01') {
+      console.error('[updateClientPayment] event insert failed (non-fatal):', evErr.message)
+    }
+  } catch (evErr) {
+    console.error('[updateClientPayment] event insert threw (non-fatal):', evErr instanceof Error ? evErr.message : evErr)
+  }
+
+  revalidate()
+  return { ok: true }
+}
+
+// ── Detail-drawer read wrappers (callable from the client drawer) ──
+// Thin 'use server' wrappers around the server-only data helpers so the
+// client component can fetch detail/notes/events on demand.
+export async function loadClientDetail(clientId: string) {
+  const id = validId(clientId)
+  if (!id) return null
+  return getClientDetail(id)
+}
+
+export async function loadClientNotes(clientId: string) {
+  const id = validId(clientId)
+  if (!id) return { rows: [], migrationNeeded: false, error: 'Invalid client id.' }
+  return getClientNotes(id)
+}
+
+export async function loadClientPaymentEvents(clientId: string) {
+  const id = validId(clientId)
+  if (!id) return { rows: [], migrationNeeded: false, error: 'Invalid client id.' }
+  return getClientPaymentEvents(id)
+}
+
+// ── Add a client note ──────────────────────────────────────────────
+const NOTE_TYPES = ['general', 'payment', 'onboarding', 'support', 'retention'] as const
+
+export async function addClientNote(
+  clientId: string,
+  note:     string,
+  noteType: string = 'general',
+): Promise<AdminClientActionResult> {
+  await requireAdmin({ path: '/admin/clients' })
+
+  const id = validId(clientId)
+  if (!id) return { ok: false, error: 'Invalid client id.' }
+
+  const text = typeof note === 'string' ? note.trim() : ''
+  if (text.length === 0)     return { ok: false, error: 'Note cannot be empty.' }
+  if (text.length > 4000)    return { ok: false, error: 'Note is too long (max 4000 characters).' }
+
+  const type = NOTE_TYPES.includes(noteType as (typeof NOTE_TYPES)[number]) ? noteType : 'general'
+
+  const guard = guardServiceRole()
+  if (guard) return guard
+
+  const db = createServiceRoleClient()
+  const { error } = await db.from('admin_client_notes').insert({
+    client_id: id,
+    note:      text.slice(0, 4000),
+    note_type: type,
+  })
+
+  if (error) {
+    if (error.code === '42P01' || isMissingTable(error)) {
+      return { ok: false, error: 'Apply the notes migration (20260530120000_add_client_crm_detail.sql) to enable client notes.' }
+    }
+    console.error('[addClientNote]', error.message, '| code:', error.code)
+    return { ok: false, error: 'Could not save note. Try again.' }
+  }
+
+  revalidate()
+  return { ok: true }
+}
+
+// ── Update onboarding stage ────────────────────────────────────────
+const ONBOARDING_STAGES = [
+  'not_started', 'intake_needed', 'setup_in_progress', 'testing', 'live', 'complete',
+] as const
+
+export async function updateClientOnboarding(
+  clientId: string,
+  stage:    string,
+  notes?:   string | null,
+): Promise<AdminClientActionResult> {
+  await requireAdmin({ path: '/admin/clients' })
+
+  const id = validId(clientId)
+  if (!id) return { ok: false, error: 'Invalid client id.' }
+  if (!ONBOARDING_STAGES.includes(stage as (typeof ONBOARDING_STAGES)[number])) {
+    return { ok: false, error: 'Invalid onboarding stage.' }
+  }
+
+  const guard = guardServiceRole()
+  if (guard) return guard
+
+  const update: Record<string, unknown> = {
+    onboarding_stage: stage,
+    onboarding_notes: cleanText(notes, 2000),
+  }
+  // Stamp completion when reaching 'complete'; clear it otherwise.
+  update.onboarding_completed_at = stage === 'complete' ? new Date().toISOString() : null
+
+  const db = createServiceRoleClient()
+  const { error } = await db.from('admin_clients').update(update).eq('id', id)
+
+  if (error) {
+    if (isMissingTable(error)) return { ok: false, error: MIGRATION_HINT }
+    if (error.code === '42703') {
+      return { ok: false, error: 'Onboarding fields not found. Apply migration 20260530120000_add_client_crm_detail.sql in Supabase, then retry.' }
+    }
+    console.error('[updateClientOnboarding]', error.message, '| code:', error.code)
+    return { ok: false, error: 'Could not update onboarding. Try again.' }
   }
 
   revalidate()
