@@ -21,6 +21,7 @@ export const ADMIN_NAV: AdminNavItem[] = [
 
   // Operations
   { id: 'delivery',        label: 'Delivery',        href: '/admin/delivery',        icon: 'ClipboardList', group: 'Operations' },
+  { id: 'launch-readiness', label: 'Launch Readiness', href: '/admin/launch-readiness', icon: 'Rocket', group: 'Operations' },
 
   // Admin
   { id: 'settings',        label: 'Settings',        href: '/admin/settings',        icon: 'Settings',  group: 'Admin' },

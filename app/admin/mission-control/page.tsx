@@ -12,7 +12,7 @@ import AdminKpiCard from '@/components/admin/ui/AdminKpiCard'
 import MissionControlAuditTable from './MissionControlAuditTable'
 import {
   CheckCircle2, AlertCircle, ArrowRight, TrendingUp, Zap,
-  FileText, Users, Building2, Settings, Activity, Wallet, ClipboardList,
+  FileText, Users, Building2, Settings, Activity, Wallet, ClipboardList, Rocket,
 } from 'lucide-react'
 
 export const metadata = { title: 'Mission Control — Helios AI Admin' }
@@ -196,6 +196,7 @@ export default async function AdminMissionControlPage() {
               <QuickAction href="/admin/audits"   icon={<FileText size={13} />}  label="Review Audit Intake"  note={pending > 0 ? `${pending} pending` : 'Queue clear'} />
               <QuickAction href="/admin/leads"    icon={<Users size={13} />}     label="View Leads Pipeline"  note={`${summary.recentLeads} leads (7d)`} />
               <QuickAction href="/admin/clients"  icon={<Building2 size={13} />} label="Active Clients"       note={`${activeClients} total`} />
+              <QuickAction href="/admin/launch-readiness" icon={<Rocket size={13} />} label="Launch Readiness" note="Pre-launch checks" />
               <QuickAction href="/admin/settings" icon={<Settings size={13} />}  label="Platform Settings"    note="Config & integrations" />
             </nav>
           </section>

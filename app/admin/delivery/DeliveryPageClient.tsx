@@ -9,7 +9,7 @@ import { useState, useMemo, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import {
-  ArrowLeft, Search, RotateCcw, Activity, X,
+  ArrowLeft, Search, RotateCcw, Activity, X, ArrowRight,
 } from 'lucide-react'
 import type {
   AdminDeliveryTaskRow, AdminDeliverySummary, DeliveryDueFilter,
@@ -172,6 +172,10 @@ export default function DeliveryPageClient({ tasks, summary, migrationNeeded, er
                            px-2.5 py-1 rounded-full border border-[#22d093]/30 bg-[#22d093]/[0.07] text-[#22d093]">
             Live task data
           </span>
+          <Link href="/admin/launch-readiness"
+            className="text-[12px] text-[#ffae3c] hover:text-white inline-flex items-center gap-1.5 transition-colors">
+            Open Launch Readiness <ArrowRight size={11} />
+          </Link>
         </div>
         <p className="text-[13.5px] text-[#9a9a9d]">
           Track onboarding tasks, blocked work, upcoming deadlines, and clients ready to go live.

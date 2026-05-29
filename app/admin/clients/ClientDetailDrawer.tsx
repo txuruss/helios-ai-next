@@ -79,10 +79,11 @@ interface Props {
   onClose:         () => void
   onUpdatePayment: () => void       // ask parent to open the payment modal
   onChanged:       () => void       // bubble up so the list/KPIs refresh
+  initialTab?:     Tab              // optional deep-link to a tab on open
 }
 
-export default function ClientDetailDrawer({ clientId, reloadKey, onClose, onUpdatePayment, onChanged }: Props) {
-  const [tab,      setTab]      = useState<Tab>('overview')
+export default function ClientDetailDrawer({ clientId, reloadKey, onClose, onUpdatePayment, onChanged, initialTab }: Props) {
+  const [tab,      setTab]      = useState<Tab>(initialTab ?? 'overview')
   const [detail,   setDetail]   = useState<AdminClientDetail | null>(null)
   const [notes,    setNotes]    = useState<ClientNote[]>([])
   const [notesMig, setNotesMig] = useState(false)
