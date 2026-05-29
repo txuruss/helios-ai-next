@@ -7,6 +7,7 @@ import {
 import { getAdminMissionControlSummary } from '@/lib/data/admin-mission-control'
 import { getAdminClientRevenue, getAdminClientPaymentHealth } from '@/lib/data/admin-clients'
 import { getOnboardingAlertSummary } from '@/lib/data/admin-client-tasks'
+import { getTopClientSuggestions } from '@/lib/data/admin-client-suggestions'
 import AdminKpiCard from '@/components/admin/ui/AdminKpiCard'
 import MissionControlAuditTable from './MissionControlAuditTable'
 import {
@@ -25,6 +26,7 @@ function fmtUSD(n: number): string {
 const TASK_PRIORITY_TONE: Record<string, string> = { low: '#6a6a6e', normal: '#9a9a9d', high: '#ffae3c', urgent: '#ff5247' }
 const TASK_STATUS_TONE:   Record<string, string> = { todo: '#6a6a6e', in_progress: '#3b9eff', blocked: '#ff5247', done: '#22d093' }
 const TASK_STATUS_LABEL:  Record<string, string> = { todo: 'To do', in_progress: 'In progress', blocked: 'Blocked', done: 'Done' }
+const SUGGESTION_DOT:     Record<string, string> = { critical: '#ff5247', warning: '#ffae3c', info: '#6db4ff', success: '#22d093' }
 
 // Colored mini stat for the Onboarding Alerts panel.
 function AlertStat({ label, value, sub, color }: { label: string; value: number; sub: string; color: string }) {
@@ -49,13 +51,14 @@ function MiniPill({ color, label }: { color: string; label: string }) {
 export default async function AdminMissionControlPage() {
   const session = await requireAdmin({ path: '/admin/mission-control' })
 
-  const [auditMetrics, latestAudits, summary, revenue, payments, onboarding] = await Promise.all([
+  const [auditMetrics, latestAudits, summary, revenue, payments, onboarding, clientSuggestions] = await Promise.all([
     getAdminAuditMetrics(),
     getLatestAdminAuditSubmissions(6),
     getAdminMissionControlSummary(),
     getAdminClientRevenue(),
     getAdminClientPaymentHealth(),
     getOnboardingAlertSummary(),
+    getTopClientSuggestions(3),
   ])
 
   const firstName      = (session.fullName ?? session.email).split(' ')[0]
@@ -401,6 +404,47 @@ export default async function AdminMissionControlPage() {
               )}
             </div>
           </>
+        )}
+      </section>
+
+      {/* ── Client Suggestions (top priority across clients) ──────── */}
+      <section className="rounded-2xl border border-white/[0.08] bg-[#0f1012]/80 overflow-hidden">
+        <header className="flex items-center justify-between px-5 py-3 border-b border-white/[0.04]">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <Activity size={13} className="text-[#6a6a6e] shrink-0" />
+            <h2 className="text-[13.5px] font-semibold text-white">Client Suggestions</h2>
+          </div>
+          <Link
+            href="/admin/clients"
+            className="text-[12px] text-[#ffae3c] hover:text-white inline-flex items-center gap-1.5 transition-colors shrink-0"
+          >
+            Open Clients <ArrowRight size={11} />
+          </Link>
+        </header>
+        {clientSuggestions.items.length === 0 ? (
+          <div className="px-5 py-5 text-[12.5px] text-[#9a9a9d]">
+            {clientSuggestions.migrationNeeded
+              ? 'Task-based suggestions will appear after onboarding tasks are enabled.'
+              : 'No client suggestions need attention.'}
+          </div>
+        ) : (
+          <div className="flex flex-col divide-y divide-white/[0.04]">
+            {clientSuggestions.items.map((s) => (
+              <Link key={s.client_id} href="/admin/clients"
+                className="flex items-center gap-3 px-5 py-2.5 hover:bg-white/[0.02] transition-colors group">
+                <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: SUGGESTION_DOT[s.severity] ?? '#6a6a6e' }} />
+                <div className="min-w-0 flex-1">
+                  <p className="text-[12.5px] text-white truncate group-hover:text-[#ffae3c] transition-colors">{s.business_name}</p>
+                  <p className="text-[11.5px] text-[#9a9a9d] truncate">{s.recommendedAction}</p>
+                </div>
+                <span className="text-[10px] font-semibold px-2 py-[2px] rounded-full border whitespace-nowrap hidden sm:inline"
+                  style={{ color: SUGGESTION_DOT[s.severity] ?? '#6a6a6e', borderColor: `${SUGGESTION_DOT[s.severity] ?? '#6a6a6e'}33`, background: `${SUGGESTION_DOT[s.severity] ?? '#6a6a6e'}12` }}>
+                  {s.title}
+                </span>
+                <ArrowRight size={11} className="text-[#6a6a6e] shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
+              </Link>
+            ))}
+          </div>
         )}
       </section>
 

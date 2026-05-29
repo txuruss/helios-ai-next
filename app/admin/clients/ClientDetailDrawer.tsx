@@ -21,6 +21,10 @@ import {
   updateClientTask, completeClientTask, reopenClientTask,
 } from '@/lib/actions/admin-client-tasks'
 import { getTemplateInfoForPlan } from '@/lib/admin/onboarding-task-templates'
+import {
+  getClientSuggestions, getSuggestionTab,
+  type ClientSuggestion, type SuggestionSeverity,
+} from '@/lib/admin/client-suggestions'
 
 const PAYMENT_COLORS: Record<PaymentStatus, string> = {
   unpaid: '#ffae3c', deposit_paid: '#3b9eff', paid: '#22d093', overdue: '#ff5247', cancelled: '#6a6a6e',
@@ -149,7 +153,7 @@ export default function ClientDetailDrawer({ clientId, reloadKey, onClose, onUpd
           ) : !detail ? (
             <div className="text-[13px] text-[#ff8a7a]">Client not found or unavailable.</div>
           ) : tab === 'overview' ? (
-            <OverviewTab detail={detail} notes={notes} events={events} />
+            <OverviewTab detail={detail} notes={notes} events={events} tasks={tasks} onGoToTab={setTab} />
           ) : tab === 'payments' ? (
             <PaymentsTab detail={detail} events={events} migrationNeeded={eventsMig} onUpdatePayment={onUpdatePayment} />
           ) : tab === 'notes' ? (
@@ -166,10 +170,37 @@ export default function ClientDetailDrawer({ clientId, reloadKey, onClose, onUpd
 }
 
 // ── Overview ───────────────────────────────────────────────────────
-function OverviewTab({ detail, notes, events }: { detail: AdminClientDetail; notes: ClientNote[]; events: ClientPaymentEvent[] }) {
+const SUGGESTION_COLORS: Record<SuggestionSeverity, string> = {
+  critical: '#ff5247', warning: '#ffae3c', info: '#3b9eff', success: '#22d093',
+}
+
+function OverviewTab({
+  detail, notes, events, tasks, onGoToTab,
+}: {
+  detail: AdminClientDetail; notes: ClientNote[]; events: ClientPaymentEvent[]
+  tasks: ClientTask[]; onGoToTab: (t: Tab) => void
+}) {
   const mrr = detail.status === 'active' ? detail.monthly_fee : 0
+  const suggestions = getClientSuggestions(detail, tasks)
+  const primary = suggestions[0] ?? null
+  const secondary = suggestions.slice(1, 4)
+
   return (
     <div className="flex flex-col gap-5">
+      {/* Suggestions (read-only recommendations) */}
+      <Section title="Client Suggestions">
+        {!primary ? (
+          <p className="text-[12.5px] text-[#9a9a9d]">No client suggestions need attention.</p>
+        ) : (
+          <div className="flex flex-col gap-2.5">
+            <SuggestionCard s={primary} onGoToTab={onGoToTab} primary />
+            {secondary.map((s) => (
+              <SuggestionCard key={s.id} s={s} onGoToTab={onGoToTab} />
+            ))}
+          </div>
+        )}
+      </Section>
+
       <Section title="Client Overview">
         <Field label="Contact"   value={detail.contact_name} />
         <Field label="Email"     value={detail.email} />
@@ -707,6 +738,36 @@ function Timeline({ detail, notes, events }: { detail: AdminClientDetail; notes:
           </div>
         </div>
       ))}
+    </div>
+  )
+}
+
+// Read-only suggestion card. The button only switches drawer tabs — it
+// never performs a backend change.
+function SuggestionCard({ s, onGoToTab, primary }: { s: ClientSuggestion; onGoToTab: (t: Tab) => void; primary?: boolean }) {
+  const color = SUGGESTION_COLORS[s.severity]
+  return (
+    <div className="rounded-xl border px-3.5 py-3"
+         style={{ borderColor: `${color}33`, background: primary ? `${color}10` : 'rgba(255,255,255,0.02)' }}>
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="inline-flex items-center text-[10px] font-semibold px-2 py-[2px] rounded-full border capitalize"
+              style={{ color, borderColor: `${color}33`, background: `${color}12` }}>
+          {s.severity}
+        </span>
+        <span className="text-[13px] font-semibold text-white">{s.title}</span>
+      </div>
+      <p className="text-[12px] text-[#9a9a9d] mt-1.5 leading-snug">{s.description}</p>
+      <p className="text-[12px] text-[#cfd3dc] mt-1.5">
+        <span className="text-[#6a6a6e]">Recommended: </span>{s.recommendedAction}
+      </p>
+      <button
+        type="button"
+        onClick={() => onGoToTab(getSuggestionTab(s.actionType))}
+        className="mt-2.5 inline-flex items-center gap-1.5 text-[11.5px] font-medium px-2.5 py-1 rounded-lg
+                   bg-white/[0.04] border border-white/[0.12] text-[#cfd3dc] hover:bg-white/[0.08] hover:text-white transition-all"
+      >
+        Go to {getSuggestionTab(s.actionType)}
+      </button>
     </div>
   )
 }

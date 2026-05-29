@@ -370,6 +370,15 @@ function DeliveryTaskRow({
       <td className="px-3 py-2.5">
         <div className={`leading-snug ${task.status === 'done' ? 'text-[#9a9a9d] line-through' : 'text-white'}`}>{task.title}</div>
         {task.description && <div className="text-[10.5px] text-[#6a6a6e] mt-0.5 max-w-[280px] truncate">{task.description}</div>}
+        <div className="flex items-center gap-2 mt-1 flex-wrap">
+          {task.status === 'blocked' && <span className="text-[10px] text-[#ff8a7a]">Action: Review blocker</span>}
+          {task.status !== 'blocked' && overdue && <span className="text-[10px] text-[#ffae3c]">Action: Complete overdue task</span>}
+          {task.client_payment_status === 'unpaid' && (
+            <span className="text-[10px] font-semibold px-1.5 py-[1px] rounded-full border border-[#ffae3c]/30 bg-[#ffae3c]/[0.10] text-[#ffae3c]">
+              Payment not recorded
+            </span>
+          )}
+        </div>
       </td>
       <td className="px-3 py-2.5 text-[#9a9a9d] uppercase text-[10px] tracking-[0.06em] whitespace-nowrap">{task.category}</td>
       <td className="px-3 py-2.5"><MiniPill color={s.color} label={s.label} /></td>

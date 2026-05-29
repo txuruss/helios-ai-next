@@ -106,12 +106,24 @@ type ActionModal =
   | { open: false }
   | { open: true; kind: 'archive' | 'pause' | 'activate'; id: string; name: string }
 
+interface ClientSuggestionSummary {
+  label:      string
+  title:      string
+  severity:   'critical' | 'warning' | 'info' | 'success'
+  actionType: string
+}
+
+const SUGGESTION_TONE: Record<ClientSuggestionSummary['severity'], string> = {
+  critical: '#ff5247', warning: '#ffae3c', info: '#6db4ff', success: '#22d093',
+}
+
 interface Props {
   clients: AdminClientRow[]
   error?: string | null
+  suggestions?: Record<string, ClientSuggestionSummary>
 }
 
-export default function ClientsPageClient({ clients, error }: Props) {
+export default function ClientsPageClient({ clients, error, suggestions = {} }: Props) {
   const router = useRouter()
   const [search,       setSearch]       = useState('')
   const [planFilter,   setPlanFilter]   = useState('all')
@@ -286,6 +298,12 @@ export default function ClientsPageClient({ clients, error }: Props) {
                             >
                               {c.name}
                             </button>
+                            {suggestions[c.id] && (
+                              <div className="text-[10.5px] mt-0.5 flex items-center gap-1.5">
+                                <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: SUGGESTION_TONE[suggestions[c.id].severity] }} />
+                                <span className="text-[#9a9a9d]">Next: {suggestions[c.id].label}</span>
+                              </div>
+                            )}
                           </td>
                           <td className="px-4 py-3 text-[#9a9a9d] whitespace-nowrap">{c.industry}</td>
                           <td className="px-4 py-3"><PlanPill plan={c.plan} /></td>

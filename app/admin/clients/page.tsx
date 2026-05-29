@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { requireAdmin } from '@/lib/auth/require-admin'
 import { getAdminClients } from '@/lib/data/admin-clients'
+import { getClientSuggestionMap } from '@/lib/data/admin-client-suggestions'
 import ClientsPageClient from './ClientsPageClient'
 import { ArrowLeft } from 'lucide-react'
 
@@ -9,7 +10,10 @@ export const metadata = { title: 'Clients — Mission Control' }
 export default async function AdminClientsPage() {
   await requireAdmin({ path: '/admin/clients' })
 
-  const { rows, error } = await getAdminClients()
+  const [{ rows, error }, suggestions] = await Promise.all([
+    getAdminClients(),
+    getClientSuggestionMap(),
+  ])
 
   return (
     <div className="flex flex-col gap-5">
@@ -34,7 +38,7 @@ export default async function AdminClientsPage() {
         </p>
       </header>
 
-      <ClientsPageClient clients={rows} error={error} />
+      <ClientsPageClient clients={rows} error={error} suggestions={suggestions} />
 
     </div>
   )

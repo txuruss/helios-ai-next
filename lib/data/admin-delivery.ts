@@ -18,11 +18,12 @@ export type { TaskStatus, TaskPriority, TaskCategory } from '@/lib/admin/onboard
 export type DeliveryDueFilter = 'all' | 'overdue' | 'due_today' | 'due_week' | 'no_due_date'
 
 export interface AdminDeliveryTaskRow {
-  id:                   string
-  client_id:            string
-  client_business_name: string
-  client_plan:          string
-  title:                string
+  id:                    string
+  client_id:             string
+  client_business_name:  string
+  client_plan:           string
+  client_payment_status: string | null
+  title:                 string
   description:          string | null
   category:             TaskCategory
   status:               TaskStatus
@@ -94,18 +95,26 @@ export async function getDeliveryData(): Promise<AdminDeliveryData> {
   try {
     const db = createServiceRoleClient()
 
+    // select('*') keeps this resilient to optional columns (onboarding_stage,
+    // payment_status) that depend on later migrations — missing columns just
+    // come back undefined rather than erroring.
     const clientsRes = await db
       .from('admin_clients')
-      .select('id, business_name, plan, status, onboarding_stage')
+      .select('*')
       .neq('status', 'archived')
 
     if (clientsRes.error) {
       if (isMissingTable(clientsRes.error)) return empty   // pipeline not applied
       throw clientsRes.error
     }
-    const clients = (clientsRes.data ?? []) as {
-      id: string; business_name: string; plan: string | null; status: string; onboarding_stage: string | null
-    }[]
+    const clients = ((clientsRes.data ?? []) as Record<string, unknown>[]).map((c) => ({
+      id:               String(c.id ?? ''),
+      business_name:    typeof c.business_name === 'string' ? c.business_name : '(unknown)',
+      plan:             typeof c.plan === 'string' ? c.plan : null,
+      status:           typeof c.status === 'string' ? c.status : 'onboarding',
+      onboarding_stage: typeof c.onboarding_stage === 'string' ? c.onboarding_stage : null,
+      payment_status:   typeof c.payment_status === 'string' ? c.payment_status : null,
+    }))
     const clientMap = new Map(clients.map((c) => [c.id, c]))
 
     // Clients in onboarding: status onboarding OR stage not complete/live.
@@ -134,9 +143,10 @@ export async function getDeliveryData(): Promise<AdminDeliveryData> {
       return {
         id:                   String(r.id ?? ''),
         client_id:            cid,
-        client_business_name: c?.business_name ?? '(unknown)',
-        client_plan:          (c?.plan ?? '') || '',
-        title:                typeof r.title === 'string' ? r.title : '(untitled)',
+        client_business_name:  c?.business_name ?? '(unknown)',
+        client_plan:           (c?.plan ?? '') || '',
+        client_payment_status: c?.payment_status ?? null,
+        title:                 typeof r.title === 'string' ? r.title : '(untitled)',
         description:          typeof r.description === 'string' && r.description ? r.description : null,
         category:             normCategory(r.category),
         status:               normStatus(r.status),
