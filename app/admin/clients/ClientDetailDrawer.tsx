@@ -5,13 +5,23 @@
 // Overview · Payments · Notes · Onboarding. All reads/writes degrade
 // gracefully when the CRM-detail migration is not applied.
 
-import { useEffect, useState, useTransition } from 'react'
-import { X, Plus, FileText, CreditCard, ClipboardList, Activity } from 'lucide-react'
+import { useEffect, useState, useRef, useTransition } from 'react'
+import {
+  X, Plus, FileText, CreditCard, ClipboardList, Activity,
+  FolderOpen, Upload, ExternalLink, Archive, CheckCircle2, Circle,
+} from 'lucide-react'
+import { createClient as createBrowserSupabase } from '@/lib/supabase/client'
 import type {
   AdminClientDetail, ClientNote, ClientPaymentEvent,
   PaymentStatus, AdminClientStatus, OnboardingStage, NoteType,
 } from '@/lib/data/admin-clients'
 import type { ClientTask, TaskStatus, TaskPriority, TaskCategory } from '@/lib/data/admin-client-tasks'
+import type { ClientFile } from '@/lib/data/admin-client-files'
+import { type ClientFileCategory, CLIENT_FILE_CATEGORIES } from '@/lib/admin/client-files'
+import {
+  loadClientFiles, createClientFileUploadUrl, recordClientFile,
+  getSignedClientFileUrl, updateClientFileMeta, archiveClientFile,
+} from '@/lib/actions/admin-client-files'
 import {
   loadClientDetail, loadClientNotes, loadClientPaymentEvents,
   addClientNote, updateClientOnboarding,
@@ -60,7 +70,7 @@ const NOTE_TYPE_OPTIONS: { value: NoteType; label: string }[] = [
   { value: 'retention',  label: 'Retention'  },
 ]
 
-type Tab = 'overview' | 'payments' | 'notes' | 'onboarding'
+type Tab = 'overview' | 'payments' | 'notes' | 'onboarding' | 'files'
 
 interface Props {
   clientId:        string
@@ -79,6 +89,8 @@ export default function ClientDetailDrawer({ clientId, reloadKey, onClose, onUpd
   const [eventsMig, setEventsMig] = useState(false)
   const [tasks,    setTasks]    = useState<ClientTask[]>([])
   const [tasksMig, setTasksMig] = useState(false)
+  const [files,    setFiles]    = useState<ClientFile[]>([])
+  const [filesMig, setFilesMig] = useState(false)
   const [loading,  setLoading]  = useState(true)
   const [, startLoad]           = useTransition()
 
@@ -86,17 +98,19 @@ export default function ClientDetailDrawer({ clientId, reloadKey, onClose, onUpd
     let cancelled = false
     setLoading(true)
     startLoad(async () => {
-      const [d, n, e, t] = await Promise.all([
+      const [d, n, e, t, f] = await Promise.all([
         loadClientDetail(clientId),
         loadClientNotes(clientId),
         loadClientPaymentEvents(clientId),
         loadClientTasks(clientId),
+        loadClientFiles(clientId),
       ])
       if (cancelled) return
       setDetail(d)
       setNotes(n.rows); setNotesMig(n.migrationNeeded)
       setEvents(e.rows); setEventsMig(e.migrationNeeded)
       setTasks(t.rows); setTasksMig(t.migrationNeeded)
+      setFiles(f.rows); setFilesMig(f.migrationNeeded)
       setLoading(false)
     })
     return () => { cancelled = true }
@@ -150,6 +164,7 @@ export default function ClientDetailDrawer({ clientId, reloadKey, onClose, onUpd
           <TabButton icon={<CreditCard size={13} />}    label="Payments"   active={tab === 'payments'}   onClick={() => setTab('payments')} />
           <TabButton icon={<FileText size={13} />}      label="Notes"      active={tab === 'notes'}      onClick={() => setTab('notes')} />
           <TabButton icon={<Activity size={13} />}      label="Onboarding" active={tab === 'onboarding'} onClick={() => setTab('onboarding')} />
+          <TabButton icon={<FolderOpen size={13} />}    label="Files & Handoff" active={tab === 'files'}      onClick={() => setTab('files')} />
         </div>
 
         {/* Body */}
@@ -164,8 +179,10 @@ export default function ClientDetailDrawer({ clientId, reloadKey, onClose, onUpd
             <PaymentsTab detail={detail} events={events} migrationNeeded={eventsMig} onUpdatePayment={onUpdatePayment} />
           ) : tab === 'notes' ? (
             <NotesTab clientId={clientId} notes={notes} migrationNeeded={notesMig} onChanged={reloadDrawer} />
-          ) : (
+          ) : tab === 'onboarding' ? (
             <OnboardingTab clientId={clientId} detail={detail} tasks={tasks} tasksMig={tasksMig} onChanged={reloadDrawer} />
+          ) : (
+            <FilesTab clientId={clientId} detail={detail} tasks={tasks} files={files} migrationNeeded={filesMig} onChanged={reloadDrawer} />
           )}
         </div>
       </div>
@@ -754,6 +771,300 @@ function TaskModal({
           <button type="button" onClick={save} disabled={saving || title.trim().length === 0}
                   className="px-4 py-2 rounded-xl text-[13px] font-medium bg-[#ff7a18]/[0.14] border border-[#ff7a18]/40 text-[#ffae3c] hover:bg-[#ff7a18]/25 hover:text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed">
             {saving ? 'Saving…' : editing ? 'Save task' : 'Add task'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Files & Handoff ────────────────────────────────────────────────
+const FILE_CATEGORY_COLORS: Record<ClientFileCategory, string> = {
+  contract: '#a07cff', invoice: '#ffae3c', deliverable: '#22d093', asset: '#3b9eff',
+  credential: '#ff5247', handoff: '#22d093', general: '#9a9a9d',
+}
+function fmtBytes(n: number | null): string {
+  if (n === null || n < 0) return '—'
+  if (n < 1024) return `${n} B`
+  if (n < 1024 * 1024) return `${(n / 1024).toFixed(1)} KB`
+  return `${(n / (1024 * 1024)).toFixed(1)} MB`
+}
+
+function FilesTab({
+  clientId, detail, tasks, files, migrationNeeded, onChanged,
+}: {
+  clientId: string; detail: AdminClientDetail; tasks: ClientTask[]
+  files: ClientFile[]; migrationNeeded: boolean; onChanged: () => void
+}) {
+  const inputRef = useRef<HTMLInputElement>(null)
+  const [category, setCategory] = useState<ClientFileCategory>('general')
+  const [label, setLabel]       = useState('')
+  const [isHandoff, setIsHandoff] = useState(false)
+  const [fileName, setFileName] = useState<string | null>(null)
+  const [uploading, setUploading] = useState(false)
+  const [err, setErr]           = useState<string | null>(null)
+  const [editFile, setEditFile] = useState<ClientFile | null>(null)
+  const [archiveTarget, setArchiveTarget] = useState<ClientFile | null>(null)
+  const [archiving, startArchive] = useTransition()
+  const [busyId, setBusyId]     = useState<string | null>(null)
+
+  // Handoff readiness — derived from real data, read-only.
+  const tasksComplete = tasks.length > 0 && tasks.every((t) => t.status === 'done')
+  const paymentPaid   = detail.payment_status === 'paid'
+  const hasHandoffDoc = files.some((f) => f.is_handoff)
+  const readyForHandoff = tasksComplete && paymentPaid && hasHandoffDoc
+
+  async function doUpload() {
+    setErr(null)
+    const file = inputRef.current?.files?.[0]
+    if (!file) { setErr('Choose a file to upload.'); return }
+
+    setUploading(true)
+    try {
+      // 1. Sign a one-time upload URL server-side.
+      const signed = await createClientFileUploadUrl(clientId, file.name, file.size)
+      if (!signed.ok || !signed.path || !signed.token) {
+        setErr(signed.error ?? 'Could not start the upload.'); setUploading(false); return
+      }
+      // 2. Upload the binary directly to Storage (no base64, no server hop).
+      const supabase = createBrowserSupabase()
+      const up = await supabase.storage
+        .from('client-files')
+        .uploadToSignedUrl(signed.path, signed.token, file, { contentType: file.type || undefined })
+      if (up.error) {
+        setErr('Upload failed. Please try again.'); setUploading(false); return
+      }
+      // 3. Record metadata.
+      const rec = await recordClientFile({
+        clientId, path: signed.path, fileName: file.name,
+        contentType: file.type || null, sizeBytes: file.size,
+        category, label: label || null, isHandoff,
+      })
+      if (!rec.ok) { setErr(rec.error ?? 'Could not save the file record.'); setUploading(false); return }
+
+      // Reset form + reload.
+      if (inputRef.current) inputRef.current.value = ''
+      setFileName(null); setLabel(''); setIsHandoff(false); setCategory('general')
+      setUploading(false)
+      onChanged()
+    } catch {
+      setErr('Upload failed. Please try again.'); setUploading(false)
+    }
+  }
+
+  async function view(f: ClientFile) {
+    setBusyId(f.id)
+    const r = await getSignedClientFileUrl(f.id)
+    setBusyId(null)
+    if (r.ok && r.url) window.open(r.url, '_blank', 'noopener')
+    else alert(r.error ?? 'Could not open the file.')
+  }
+
+  function toggleHandoff(f: ClientFile) {
+    setBusyId(f.id)
+    startArchive(async () => {
+      const r = await updateClientFileMeta(f.id, { isHandoff: !f.is_handoff })
+      setBusyId(null)
+      if (r.ok) onChanged()
+      else alert(r.error ?? 'Could not update the file.')
+    })
+  }
+
+  function confirmArchive() {
+    if (!archiveTarget) return
+    startArchive(async () => {
+      const r = await archiveClientFile(archiveTarget.id)
+      if (r.ok) { setArchiveTarget(null); onChanged() }
+      else { alert(r.error ?? 'Could not archive the file.'); setArchiveTarget(null) }
+    })
+  }
+
+  if (migrationNeeded) {
+    return <Empty text="Apply the client files migration and create the client-files Storage bucket to enable file uploads." />
+  }
+
+  return (
+    <div className="flex flex-col gap-5">
+      {/* Handoff readiness */}
+      <Section title="Handoff Readiness">
+        <div className="flex flex-col gap-2">
+          <ReadyRow ok={tasksComplete} label="Onboarding tasks complete"
+            note={tasks.length === 0 ? 'No tasks yet' : undefined} />
+          <ReadyRow ok={paymentPaid} label="Payment recorded as paid" />
+          <ReadyRow ok={hasHandoffDoc} label="Handoff document uploaded" />
+          <div className="border-t border-white/[0.06] pt-2.5 mt-0.5">
+            {readyForHandoff ? (
+              <p className="text-[12.5px] text-[#22d093]">Ready for handoff — review and send to the client.</p>
+            ) : (
+              <p className="text-[12px] text-[#9a9a9d]">Complete the items above to be handoff-ready.</p>
+            )}
+          </div>
+        </div>
+      </Section>
+
+      {/* Upload */}
+      <Section title="Upload File">
+        <div className="flex flex-col gap-2.5">
+          <input
+            ref={inputRef} type="file"
+            onChange={(e) => setFileName(e.target.files?.[0]?.name ?? null)}
+            className="block w-full text-[12px] text-[#9a9a9d]
+                       file:mr-3 file:rounded-lg file:border file:border-white/[0.12] file:bg-white/[0.04]
+                       file:px-3 file:py-1.5 file:text-[12px] file:text-[#cfd3dc] hover:file:bg-white/[0.08]
+                       file:cursor-pointer"
+          />
+          <div className="grid grid-cols-2 gap-2.5">
+            <select value={category} onChange={(e) => setCategory(e.target.value as ClientFileCategory)}
+              className="px-3 py-2 rounded-xl border border-white/[0.08] bg-[#0f1012] text-[13px] text-white cursor-pointer focus:outline-none focus:border-[#ff7a18]/40">
+              {CLIENT_FILE_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
+            <label className="flex items-center gap-2 text-[12px] text-[#9a9a9d] px-1">
+              <input type="checkbox" checked={isHandoff} onChange={(e) => setIsHandoff(e.target.checked)}
+                style={{ accentColor: '#ff7a18', width: 14, height: 14 }} />
+              Part of handoff
+            </label>
+          </div>
+          <input type="text" value={label} onChange={(e) => setLabel(e.target.value)}
+            placeholder="Optional label (e.g. Signed contract)"
+            className="w-full px-3 py-2 rounded-xl border border-white/[0.08] bg-white/[0.03] text-[13px] text-white placeholder-[#6a6a6e] focus:outline-none focus:border-[#ff7a18]/40 transition-all" />
+          {err && <p className="text-[12px] text-[#ff8a7a]">{err}</p>}
+          <button type="button" onClick={doUpload} disabled={uploading || !fileName}
+            className="self-start inline-flex items-center gap-1.5 text-[12.5px] font-medium px-3.5 py-2 rounded-xl
+                       bg-[#ff7a18]/[0.14] border border-[#ff7a18]/40 text-[#ffae3c] hover:bg-[#ff7a18]/25 hover:text-white
+                       transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+            <Upload size={12} /> {uploading ? 'Uploading…' : 'Upload file'}
+          </button>
+          <p className="text-[10.5px] text-[#6a6a6e]">Stored privately in Supabase Storage. Max 50 MB. Files are never deleted, only archived.</p>
+        </div>
+      </Section>
+
+      {/* File list */}
+      <Section title="Files">
+        {files.length === 0 ? (
+          <Empty text="No files yet. Upload contracts, deliverables, or handoff documents above." />
+        ) : (
+          <div className="flex flex-col gap-2">
+            {files.map((f) => {
+              const color = FILE_CATEGORY_COLORS[f.category]
+              return (
+                <div key={f.id} className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-3.5 py-2.5">
+                  <div className="flex items-start gap-2.5">
+                    <FileText size={14} className="text-[#6a6a6e] shrink-0 mt-0.5" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[12.5px] text-white truncate">{f.label || f.file_name}</p>
+                      {f.label && <p className="text-[10.5px] text-[#6a6a6e] truncate">{f.file_name}</p>}
+                      <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                        <Pill color={color} label={f.category} />
+                        {f.is_handoff && <Pill color="#22d093" label="Handoff" />}
+                        <span className="text-[10.5px] text-[#6a6a6e]">{fmtBytes(f.size_bytes)}</span>
+                        <span className="text-[10.5px] text-[#6a6a6e] tabular-nums">· {new Date(f.created_at).toLocaleDateString()}</span>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 mt-2 text-[11px]">
+                    <button type="button" disabled={busyId === f.id} onClick={() => view(f)}
+                      className="inline-flex items-center gap-1 text-[#3b9eff] hover:text-[#7ec0ff] transition-colors disabled:opacity-50 focus:outline-none focus:underline">
+                      <ExternalLink size={11} /> View
+                    </button>
+                    <button type="button" disabled={busyId === f.id} onClick={() => toggleHandoff(f)}
+                      className="text-[#9a9a9d] hover:text-white transition-colors disabled:opacity-50 focus:outline-none focus:underline">
+                      {f.is_handoff ? 'Unmark handoff' : 'Mark handoff'}
+                    </button>
+                    <button type="button" onClick={() => setEditFile(f)}
+                      className="text-[#9a9a9d] hover:text-white transition-colors focus:outline-none focus:underline">Edit</button>
+                    <button type="button" onClick={() => setArchiveTarget(f)}
+                      className="inline-flex items-center gap-1 text-[#9a9a9d] hover:text-[#ff8a7a] transition-colors focus:outline-none focus:underline ml-auto">
+                      <Archive size={11} /> Archive
+                    </button>
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
+      </Section>
+
+      {editFile && (
+        <EditFileModal file={editFile} onClose={() => setEditFile(null)} onSaved={() => { setEditFile(null); onChanged() }} />
+      )}
+
+      <ConfirmActionDialog
+        open={archiveTarget !== null}
+        title="Archive this file?"
+        body={archiveTarget
+          ? `This removes "${archiveTarget.label || archiveTarget.file_name}" from the file list. The stored file is retained — not deleted.`
+          : ''}
+        confirmLabel="Archive file"
+        loading={archiving}
+        onConfirm={confirmArchive}
+        onCancel={() => setArchiveTarget(null)}
+      />
+    </div>
+  )
+}
+
+function ReadyRow({ ok, label, note }: { ok: boolean; label: string; note?: string }) {
+  return (
+    <div className="flex items-center gap-2.5">
+      {ok ? <CheckCircle2 size={14} className="text-[#22d093] shrink-0" /> : <Circle size={14} className="text-[#6a6a6e] shrink-0" />}
+      <span className={`text-[12.5px] ${ok ? 'text-[#cfd3dc]' : 'text-[#9a9a9d]'}`}>{label}</span>
+      {note && <span className="text-[10.5px] text-[#6a6a6e]">({note})</span>}
+    </div>
+  )
+}
+
+function EditFileModal({ file, onClose, onSaved }: { file: ClientFile; onClose: () => void; onSaved: () => void }) {
+  const [label, setLabel]       = useState(file.label ?? '')
+  const [category, setCategory] = useState<ClientFileCategory>(file.category)
+  const [isHandoff, setIsHandoff] = useState(file.is_handoff)
+  const [err, setErr]           = useState<string | null>(null)
+  const [saving, startSave]     = useTransition()
+
+  function save() {
+    setErr(null)
+    startSave(async () => {
+      const r = await updateClientFileMeta(file.id, { label, category, isHandoff })
+      if (r.ok) onSaved()
+      else setErr(r.error ?? 'Could not update the file.')
+    })
+  }
+
+  const inputCls = 'w-full px-3 py-2 rounded-xl border border-white/[0.08] bg-white/[0.03] text-[13px] text-white placeholder-[#6a6a6e] focus:outline-none focus:border-[#ff7a18]/40 transition-all'
+  const labelCls = 'text-[11px] font-medium text-[#9a9a9d] mb-1 block'
+
+  return (
+    <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/65 backdrop-blur-sm px-4"
+      role="dialog" aria-modal="true" onClick={(e) => { if (e.target === e.currentTarget) onClose() }}>
+      <div className="w-full max-w-[440px] rounded-2xl border border-white/[0.10] bg-[#0f1012] shadow-2xl">
+        <div className="flex items-start justify-between gap-3 px-5 pt-5 pb-1">
+          <h2 className="text-[15px] font-semibold text-white">Edit file</h2>
+          <button type="button" onClick={onClose} aria-label="Close" className="text-[#6a6a6e] hover:text-white transition-colors mt-0.5"><X size={14} /></button>
+        </div>
+        <div className="px-5 py-4 flex flex-col gap-3.5">
+          <p className="text-[11.5px] text-[#6a6a6e] truncate">{file.file_name}</p>
+          <div>
+            <label className={labelCls}>Label</label>
+            <input type="text" value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Optional label" className={inputCls} />
+          </div>
+          <div>
+            <label className={labelCls}>Category</label>
+            <select value={category} onChange={(e) => setCategory(e.target.value as ClientFileCategory)} className={`${inputCls} cursor-pointer`}>
+              {CLIENT_FILE_CATEGORIES.map((c) => <option key={c} value={c}>{c}</option>)}
+            </select>
+          </div>
+          <label className="flex items-center gap-2 text-[12.5px] text-[#9a9a9d]">
+            <input type="checkbox" checked={isHandoff} onChange={(e) => setIsHandoff(e.target.checked)}
+              style={{ accentColor: '#ff7a18', width: 14, height: 14 }} />
+            Part of handoff package
+          </label>
+          {err && <p className="text-[12px] text-[#ff8a7a]">{err}</p>}
+        </div>
+        <div className="flex justify-end gap-2.5 px-5 pb-5">
+          <button type="button" onClick={onClose} disabled={saving}
+            className="px-4 py-2 rounded-xl text-[13px] font-medium text-[#9a9a9d] border border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.06] hover:text-white transition-all disabled:opacity-50">Cancel</button>
+          <button type="button" onClick={save} disabled={saving}
+            className="px-4 py-2 rounded-xl text-[13px] font-medium bg-[#ff7a18]/[0.14] border border-[#ff7a18]/40 text-[#ffae3c] hover:bg-[#ff7a18]/25 hover:text-white transition-all disabled:opacity-50">
+            {saving ? 'Saving…' : 'Save file'}
           </button>
         </div>
       </div>
