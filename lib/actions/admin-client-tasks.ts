@@ -60,6 +60,7 @@ function cleanText(raw: string | null | undefined, max: number): string | null {
 }
 function revalidate() {
   revalidatePath('/admin/clients')
+  revalidatePath('/admin/delivery')
   revalidatePath('/admin/mission-control')
 }
 
@@ -235,4 +236,49 @@ export async function completeClientTask(taskId: string): Promise<TaskActionResu
 }
 export async function reopenClientTask(taskId: string): Promise<TaskActionResult> {
   return updateClientTask(taskId, { status: 'todo' })
+}
+
+// ── Bulk status update (Delivery board) ────────────────────────────
+// No hard deletes — status changes only. Validates every id + the
+// target status. Partial failures are reported but never roll back.
+export interface BulkTaskResult extends TaskActionResult {
+  updated?: number
+}
+
+export async function bulkUpdateClientTasks(
+  taskIds: unknown[],
+  status:  string,
+): Promise<BulkTaskResult> {
+  await requireAdmin({ path: '/admin/delivery' })
+
+  if (!Array.isArray(taskIds) || taskIds.length === 0) {
+    return { ok: false, error: 'No tasks selected.' }
+  }
+  if (!STATUSES.includes(status as (typeof STATUSES)[number])) {
+    return { ok: false, error: 'Invalid status.' }
+  }
+  const ids = taskIds.filter((v): v is string => typeof v === 'string' && UUID_RE.test(v))
+  if (ids.length === 0)  return { ok: false, error: 'Invalid task IDs.' }
+  if (ids.length > 100)  return { ok: false, error: 'Too many tasks selected at once (max 100).' }
+
+  const guard = guardServiceRole()
+  if (guard) return guard
+
+  const db = createServiceRoleClient()
+  const { error, count } = await db
+    .from('admin_client_tasks')
+    .update(
+      { status, completed_at: status === 'done' ? new Date().toISOString() : null },
+      { count: 'exact' },
+    )
+    .in('id', ids)
+
+  if (error) {
+    if (isMissingTable(error)) return { ok: false, error: MIGRATION_HINT }
+    console.error('[bulkUpdateClientTasks]', error.message, '| code:', error.code)
+    return { ok: false, error: 'Could not update the selected tasks. Try again.' }
+  }
+
+  revalidate()
+  return { ok: true, updated: count ?? ids.length }
 }

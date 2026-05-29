@@ -350,10 +350,10 @@ export default async function AdminMissionControlPage() {
             <h2 className="text-[13.5px] font-semibold text-white">Onboarding Alerts</h2>
           </div>
           <Link
-            href="/admin/clients"
+            href="/admin/delivery"
             className="text-[12px] text-[#ffae3c] hover:text-white inline-flex items-center gap-1.5 transition-colors shrink-0"
           >
-            Manage <ArrowRight size={11} />
+            Open Delivery Dashboard <ArrowRight size={11} />
           </Link>
         </header>
 

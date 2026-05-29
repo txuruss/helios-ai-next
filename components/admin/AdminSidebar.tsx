@@ -6,11 +6,11 @@ import { logout } from '@/lib/auth/actions'
 import { ADMIN_NAV, ADMIN_NAV_GROUPS } from './AdminNav'
 import { cn } from '@/components/ui/cn'
 import {
-  Compass, BarChart2, Users, Building2, Settings, LogOut, X,
+  Compass, BarChart2, Users, Building2, Settings, LogOut, X, ClipboardList,
 } from 'lucide-react'
 
 const ICONS: Record<string, React.ComponentType<{ size?: number; className?: string }>> = {
-  Compass, BarChart2, Users, Building2, Settings,
+  Compass, BarChart2, Users, Building2, Settings, ClipboardList,
 }
 
 interface Props {
