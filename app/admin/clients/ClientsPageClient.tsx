@@ -12,11 +12,15 @@
 import { useState, useMemo, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { Search, Activity, X } from 'lucide-react'
-import type { AdminClientRow, AdminClientStatus } from '@/lib/data/admin-clients'
+import type {
+  AdminClientRow, AdminClientStatus, PaymentStatus, PaymentMethod,
+} from '@/lib/data/admin-clients'
 import AdminKpiCard from '@/components/admin/ui/AdminKpiCard'
 import PlanPill from '@/components/admin/ui/PlanPill'
 import ConfirmActionDialog from '@/components/admin/ui/ConfirmActionDialog'
-import { archiveClient, updateClientStatus } from '@/lib/actions/admin-clients'
+import {
+  archiveClient, updateClientStatus, updateClientPayment,
+} from '@/lib/actions/admin-clients'
 
 type HealthStatus = 'Healthy' | 'Watch' | 'At Risk' | 'Unknown'
 
@@ -40,6 +44,46 @@ const STATUS_CONFIG: Record<AdminClientStatus, { label: string; color: string }>
   onboarding: { label: 'Onboarding', color: '#3b9eff' },
   paused:     { label: 'Paused',     color: '#ffae3c' },
   churned:    { label: 'Churned',    color: '#ff8a7a' },
+}
+
+const PAYMENT_STATUS_CONFIG: Record<PaymentStatus, { label: string; color: string }> = {
+  unpaid:       { label: 'Unpaid',       color: '#ffae3c' },
+  deposit_paid: { label: 'Deposit Paid', color: '#3b9eff' },
+  paid:         { label: 'Paid',         color: '#22d093' },
+  overdue:      { label: 'Overdue',      color: '#ff5247' },
+  cancelled:    { label: 'Cancelled',    color: '#6a6a6e' },
+}
+
+const PAYMENT_STATUS_SELECT: { value: PaymentStatus; label: string }[] = [
+  { value: 'unpaid',       label: 'Unpaid'        },
+  { value: 'deposit_paid', label: 'Deposit Paid'  },
+  { value: 'paid',         label: 'Paid'          },
+  { value: 'overdue',      label: 'Overdue'       },
+  { value: 'cancelled',    label: 'Cancelled'     },
+]
+
+const PAYMENT_METHOD_SELECT: { value: PaymentMethod; label: string }[] = [
+  { value: 'paypal',        label: 'PayPal'        },
+  { value: 'bank_transfer', label: 'Bank Transfer' },
+  { value: 'cash',          label: 'Cash'          },
+  { value: 'other',         label: 'Other'         },
+]
+
+const todayIso = () => new Date().toISOString().slice(0, 10)
+
+// A client is "effectively overdue" if explicitly flagged, or its due date
+// has passed and it isn't settled. Mirrors the Mission Control rollup.
+function isOverdue(c: AdminClientRow): boolean {
+  if (c.payment_status === 'paid' || c.payment_status === 'cancelled') return false
+  if (c.payment_status === 'overdue') return true
+  return c.next_payment_due !== null && c.next_payment_due < todayIso()
+}
+
+function isDueSoon(c: AdminClientRow): boolean {
+  if (c.payment_status === 'paid' || c.payment_status === 'cancelled') return false
+  if (c.next_payment_due === null) return false
+  const soon = new Date(Date.now() + 7 * 86_400_000).toISOString().slice(0, 10)
+  return c.next_payment_due >= todayIso() && c.next_payment_due <= soon
 }
 
 const PLAN_OPTIONS = [
@@ -73,6 +117,7 @@ export default function ClientsPageClient({ clients, error }: Props) {
   const [statusFilter, setStatusFilter] = useState('all')
   const [modal,        setModal]        = useState<ActionModal>({ open: false })
   const [details,      setDetails]      = useState<AdminClientRow | null>(null)
+  const [payClient,    setPayClient]    = useState<AdminClientRow | null>(null)
   const [isPending,    startTransition] = useTransition()
   const [actionError,  setActionError]  = useState<string | null>(null)
 
@@ -100,6 +145,12 @@ export default function ClientsPageClient({ clients, error }: Props) {
   const totalMRR    = activeList.reduce((s, c) => s + c.monthly_fee,   0)
   const avgMRR      = active > 0 ? Math.round(totalMRR / active) : 0
   const atRisk      = clients.filter((c) => computeHealth(c.monthly_leads, c.monthly_bookings) === 'At Risk').length
+
+  // Payment insight — from real stored payment fields only.
+  const paidCount    = clients.filter((c) => c.payment_status === 'paid').length
+  const unpaidCount   = clients.filter((c) => c.payment_status === 'unpaid' || c.payment_status === 'deposit_paid').length
+  const overdueCount  = clients.filter(isOverdue).length
+  const dueSoonCount  = clients.filter(isDueSoon).length
 
   function runAction() {
     if (!modal.open) return
@@ -198,13 +249,15 @@ export default function ClientsPageClient({ clients, error }: Props) {
           ) : (
             <div className="rounded-2xl border border-white/[0.08] bg-[#0f1012]/80 overflow-hidden">
               <div className="overflow-x-auto">
-                <table className="w-full text-[12.5px] min-w-[980px]">
+                <table className="w-full text-[12.5px] min-w-[1180px]">
                   <thead className="bg-white/[0.02] text-[10px] uppercase tracking-[0.08em] text-[#6a6a6e]">
                     <tr>
                       <th className="text-left px-4 py-2.5 min-w-[150px]">Business</th>
                       <th className="text-left px-4 py-2.5">Industry</th>
                       <th className="text-left px-4 py-2.5">Plan</th>
                       <th className="text-left px-4 py-2.5">Status</th>
+                      <th className="text-left px-4 py-2.5">Payment</th>
+                      <th className="text-right px-4 py-2.5 whitespace-nowrap">Next Due</th>
                       <th className="text-right px-4 py-2.5 whitespace-nowrap">Leads/mo</th>
                       <th className="text-right px-4 py-2.5 whitespace-nowrap">Bookings/mo</th>
                       <th className="text-right px-4 py-2.5 whitespace-nowrap">Est. MRR</th>
@@ -217,6 +270,10 @@ export default function ClientsPageClient({ clients, error }: Props) {
                       const health      = computeHealth(c.monthly_leads, c.monthly_bookings)
                       const healthColor = HEALTH_COLORS[health]
                       const statusCfg   = STATUS_CONFIG[c.status]
+                      const overdue     = isOverdue(c)
+                      // Reflect "effectively overdue" in the pill even if the
+                      // stored status hasn't been flipped to 'overdue' yet.
+                      const payCfg      = overdue ? PAYMENT_STATUS_CONFIG.overdue : PAYMENT_STATUS_CONFIG[c.payment_status]
                       return (
                         <tr key={c.id} className="border-t border-white/[0.04] transition-colors hover:bg-white/[0.015]">
                           <td className="px-4 py-3 text-white font-medium whitespace-nowrap">{c.name}</td>
@@ -229,6 +286,18 @@ export default function ClientsPageClient({ clients, error }: Props) {
                             >
                               {statusCfg.label}
                             </span>
+                          </td>
+                          <td className="px-4 py-3">
+                            <span
+                              className="inline-flex items-center text-[10.5px] font-semibold px-2.5 py-[3px] rounded-full border whitespace-nowrap"
+                              style={{ color: payCfg.color, borderColor: `${payCfg.color}33`, background: `${payCfg.color}12` }}
+                            >
+                              {payCfg.label}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-right text-[11.5px] whitespace-nowrap tabular-nums"
+                              style={{ color: overdue ? '#ff5247' : '#9a9a9d' }}>
+                            {c.next_payment_due ? new Date(c.next_payment_due).toLocaleDateString() : '—'}
                           </td>
                           <td className="px-4 py-3 text-right font-mono text-white tabular-nums">{c.monthly_leads}</td>
                           <td className="px-4 py-3 text-right font-mono text-white tabular-nums">{c.monthly_bookings}</td>
@@ -245,6 +314,13 @@ export default function ClientsPageClient({ clients, error }: Props) {
                           </td>
                           <td className="px-4 py-3">
                             <div className="flex justify-end gap-3 text-[11.5px] whitespace-nowrap">
+                              <button
+                                type="button"
+                                onClick={() => { setActionError(null); setPayClient(c) }}
+                                className="text-[#3b9eff] hover:text-[#7ec0ff] transition-colors focus:outline-none focus:underline"
+                              >
+                                Payment
+                              </button>
                               <button
                                 type="button"
                                 onClick={() => setDetails(c)}
@@ -308,6 +384,15 @@ export default function ClientsPageClient({ clients, error }: Props) {
                   <span className="text-[#9a9a9d]">Active clients</span>
                   <span className="text-[#ffae3c] font-semibold tabular-nums">{active}</span>
                 </div>
+
+                {/* Payment insight — manual tracking, not PayPal-verified */}
+                <div className="border-t border-white/[0.06] pt-2.5 flex flex-col gap-3">
+                  <p className="text-[10px] font-semibold uppercase tracking-[0.09em] text-[#6a6a6e]">Payments (manual)</p>
+                  <HealthRow label="Paid"      count={paidCount}    color="#22d093" note="Recorded paid" />
+                  <HealthRow label="Unpaid"    count={unpaidCount}  color="#ffae3c" note="Unpaid / deposit" />
+                  <HealthRow label="Overdue"   count={overdueCount} color="#ff5247" note="Past due" />
+                  <HealthRow label="Due soon"  count={dueSoonCount} color="#3b9eff" note="Next 7 days" />
+                </div>
               </div>
             )}
           </section>
@@ -357,7 +442,130 @@ export default function ClientsPageClient({ clients, error }: Props) {
 
       {/* Read-only details modal */}
       {details && <ClientDetails client={details} onClose={() => setDetails(null)} />}
+
+      {/* Manual payment update modal */}
+      {payClient && (
+        <PaymentModal
+          client={payClient}
+          onClose={() => { setPayClient(null); setActionError(null) }}
+          onSaved={() => { setPayClient(null); router.refresh() }}
+        />
+      )}
     </>
+  )
+}
+
+function PaymentModal({
+  client, onClose, onSaved,
+}: {
+  client:  AdminClientRow
+  onClose: () => void
+  onSaved: () => void
+}) {
+  const [status,  setStatus]  = useState<PaymentStatus>(client.payment_status)
+  const [method,  setMethod]  = useState<PaymentMethod | ''>(client.payment_method ?? '')
+  const [lastPay, setLastPay] = useState(client.last_payment_date ?? '')
+  const [nextDue, setNextDue] = useState(client.next_payment_due ?? '')
+  const [invoice, setInvoice] = useState(client.paypal_invoice_id ?? '')
+  const [notes,   setNotes]   = useState(client.payment_notes ?? '')
+  const [err,     setErr]     = useState<string | null>(null)
+  const [saving,  startSave]  = useTransition()
+
+  function save() {
+    setErr(null)
+    startSave(async () => {
+      const result = await updateClientPayment(client.id, {
+        payment_status:    status,
+        payment_method:    method === '' ? null : method,
+        last_payment_date: lastPay,
+        next_payment_due:  nextDue,
+        paypal_invoice_id: invoice,
+        payment_notes:     notes,
+      })
+      if (result.ok) onSaved()
+      else setErr(result.error ?? 'Could not save. Please try again.')
+    })
+  }
+
+  const inputCls =
+    'w-full px-3 py-2 rounded-xl border border-white/[0.08] bg-white/[0.03] text-[13px] text-white ' +
+    'placeholder-[#6a6a6e] focus:outline-none focus:border-[#ff7a18]/40 focus:bg-white/[0.04] transition-all'
+  const labelCls = 'text-[11px] font-medium text-[#9a9a9d] mb-1 block'
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/65 backdrop-blur-sm px-4"
+      role="dialog" aria-modal="true"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
+    >
+      <div className="w-full max-w-[460px] rounded-2xl border border-white/[0.10] bg-[#0f1012] shadow-2xl max-h-[90vh] overflow-y-auto">
+        <div className="flex items-start justify-between gap-3 px-5 pt-5 pb-1">
+          <div>
+            <h2 className="text-[15px] font-semibold text-white leading-snug">Update payment</h2>
+            <p className="text-[12px] text-[#6a6a6e] mt-0.5">{client.name}</p>
+          </div>
+          <button type="button" onClick={onClose} aria-label="Close" className="text-[#6a6a6e] hover:text-white transition-colors shrink-0 mt-0.5">
+            <X size={14} />
+          </button>
+        </div>
+
+        <div className="px-5 py-4 flex flex-col gap-3.5">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className={labelCls}>Payment status</label>
+              <select value={status} onChange={(e) => setStatus(e.target.value as PaymentStatus)}
+                      className={`${inputCls} cursor-pointer`}>
+                {PAYMENT_STATUS_SELECT.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className={labelCls}>Payment method</label>
+              <select value={method} onChange={(e) => setMethod(e.target.value as PaymentMethod | '')}
+                      className={`${inputCls} cursor-pointer`}>
+                <option value="">—</option>
+                {PAYMENT_METHOD_SELECT.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className={labelCls}>Last payment date</label>
+              <input type="date" value={lastPay} onChange={(e) => setLastPay(e.target.value)} className={inputCls} />
+            </div>
+            <div>
+              <label className={labelCls}>Next payment due</label>
+              <input type="date" value={nextDue} onChange={(e) => setNextDue(e.target.value)} className={inputCls} />
+            </div>
+          </div>
+          <div>
+            <label className={labelCls}>PayPal invoice ID</label>
+            <input type="text" value={invoice} onChange={(e) => setInvoice(e.target.value)}
+                   placeholder="e.g. INV2-XXXX-XXXX-XXXX" className={inputCls} />
+          </div>
+          <div>
+            <label className={labelCls}>Payment notes</label>
+            <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3}
+                      placeholder="Manual notes — e.g. paid deposit via PayPal, balance due on launch"
+                      className={`${inputCls} resize-none`} />
+          </div>
+          <p className="text-[10.5px] text-[#6a6a6e] leading-relaxed">
+            Manual record only — this does not verify any payment or contact PayPal.
+          </p>
+          {err && <p className="text-[12px] text-[#ff8a7a]">{err}</p>}
+        </div>
+
+        <div className="flex justify-end gap-2.5 px-5 pb-5">
+          <button type="button" onClick={onClose} disabled={saving}
+                  className="px-4 py-2 rounded-xl text-[13px] font-medium text-[#9a9a9d] border border-white/[0.08] bg-white/[0.03]
+                             hover:bg-white/[0.06] hover:text-white transition-all disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-white/20">
+            Cancel
+          </button>
+          <button type="button" onClick={save} disabled={saving}
+                  className="px-4 py-2 rounded-xl text-[13px] font-medium bg-[#ff7a18]/[0.14] border border-[#ff7a18]/40 text-[#ffae3c]
+                             hover:bg-[#ff7a18]/25 hover:text-white transition-all disabled:opacity-50 focus:outline-none focus:ring-2 focus:ring-[#ff7a18]/40">
+            {saving ? 'Saving…' : 'Save payment update'}
+          </button>
+        </div>
+      </div>
+    </div>
   )
 }
 
@@ -405,6 +613,13 @@ function ClientDetails({ client, onClose }: { client: AdminClientRow; onClose: (
           <DetailRow label="Leads / mo"    value={String(client.monthly_leads)} />
           <DetailRow label="Bookings / mo" value={String(client.monthly_bookings)} />
           <DetailRow label="Client since"  value={new Date(client.created_at).toLocaleDateString()} />
+          <div className="border-t border-white/[0.06] my-1" />
+          <DetailRow label="Payment"       value={PAYMENT_STATUS_CONFIG[client.payment_status].label} />
+          <DetailRow label="Method"        value={client.payment_method ? (PAYMENT_METHOD_SELECT.find((m) => m.value === client.payment_method)?.label ?? client.payment_method) : '—'} />
+          <DetailRow label="Last payment"  value={client.last_payment_date ? new Date(client.last_payment_date).toLocaleDateString() : '—'} />
+          <DetailRow label="Next due"      value={client.next_payment_due ? new Date(client.next_payment_due).toLocaleDateString() : '—'} />
+          <DetailRow label="PayPal invoice" value={client.paypal_invoice_id ?? '—'} />
+          {client.payment_notes && <DetailRow label="Notes" value={client.payment_notes} />}
         </div>
       </div>
     </div>

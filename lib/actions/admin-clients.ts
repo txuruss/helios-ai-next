@@ -137,3 +137,93 @@ export async function updateClientPlan(
   revalidate()
   return { ok: true }
 }
+
+// ── Manual payment tracking ────────────────────────────────────────
+// Records payment state by hand. This NEVER calls the PayPal API and
+// never verifies a payment — it only stores what the founder enters.
+
+const PAYMENT_STATUSES = ['unpaid', 'deposit_paid', 'paid', 'overdue', 'cancelled'] as const
+const PAYMENT_METHODS  = ['paypal', 'bank_transfer', 'cash', 'other'] as const
+
+export interface ClientPaymentInput {
+  payment_status:    string
+  payment_method?:   string | null
+  last_payment_date?: string | null   // 'YYYY-MM-DD' or '' / null
+  next_payment_due?:  string | null   // 'YYYY-MM-DD' or '' / null
+  paypal_invoice_id?: string | null
+  payment_notes?:     string | null
+}
+
+const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
+
+// Normalize a date-ish input to 'YYYY-MM-DD' or null. Invalid → undefined
+// (signals "reject"); empty → null (clear the field).
+function parseDate(raw: string | null | undefined): string | null | undefined {
+  if (raw === null || raw === undefined) return null
+  const t = raw.trim()
+  if (t === '') return null
+  if (!DATE_RE.test(t) || Number.isNaN(Date.parse(t))) return undefined
+  return t
+}
+
+function cleanText(raw: string | null | undefined, max: number): string | null {
+  if (typeof raw !== 'string') return null
+  const t = raw.trim()
+  return t.length === 0 ? null : t.slice(0, max)
+}
+
+export async function updateClientPayment(
+  clientId: string,
+  input:    ClientPaymentInput,
+): Promise<AdminClientActionResult> {
+  await requireAdmin({ path: '/admin/clients' })
+
+  const id = validId(clientId)
+  if (!id) return { ok: false, error: 'Invalid client id.' }
+
+  // Validate enums.
+  if (!PAYMENT_STATUSES.includes(input.payment_status as (typeof PAYMENT_STATUSES)[number])) {
+    return { ok: false, error: 'Invalid payment status.' }
+  }
+  const method =
+    input.payment_method == null || input.payment_method === ''
+      ? null
+      : input.payment_method
+  if (method !== null && !PAYMENT_METHODS.includes(method as (typeof PAYMENT_METHODS)[number])) {
+    return { ok: false, error: 'Invalid payment method.' }
+  }
+
+  // Validate dates.
+  const lastPaid = parseDate(input.last_payment_date)
+  if (lastPaid === undefined) return { ok: false, error: 'Invalid last payment date.' }
+  const nextDue = parseDate(input.next_payment_due)
+  if (nextDue === undefined) return { ok: false, error: 'Invalid next payment due date.' }
+
+  const guard = guardServiceRole()
+  if (guard) return guard
+
+  const db = createServiceRoleClient()
+  const { error } = await db
+    .from('admin_clients')
+    .update({
+      payment_status:    input.payment_status,
+      payment_method:    method,
+      last_payment_date: lastPaid,
+      next_payment_due:  nextDue,
+      paypal_invoice_id: cleanText(input.paypal_invoice_id, 120),
+      payment_notes:     cleanText(input.payment_notes, 2000),
+    })
+    .eq('id', id)
+
+  if (error) {
+    if (isMissingTable(error)) return { ok: false, error: MIGRATION_HINT }
+    if (error.code === '42703') {
+      return { ok: false, error: 'Payment fields not found. Apply migration 20260529120000_add_admin_clients_payment_tracking.sql in Supabase, then retry.' }
+    }
+    console.error('[updateClientPayment]', error.message, '| code:', error.code)
+    return { ok: false, error: 'Could not update payment. Try again.' }
+  }
+
+  revalidate()
+  return { ok: true }
+}

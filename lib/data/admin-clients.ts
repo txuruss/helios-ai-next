@@ -25,6 +25,9 @@ import { createServiceRoleClient } from '@/lib/supabase/server'
 
 export type AdminClientStatus = 'active' | 'onboarding' | 'paused' | 'churned'
 
+export type PaymentStatus = 'unpaid' | 'deposit_paid' | 'paid' | 'overdue' | 'cancelled'
+export type PaymentMethod = 'paypal' | 'bank_transfer' | 'cash' | 'other'
+
 // UI-facing row. Field names match what ClientsPageClient consumes
 // (name / industry / city / plan / monthly_leads / monthly_bookings /
 // created_at) plus the stored commercial fields.
@@ -40,6 +43,14 @@ export interface AdminClientRow {
   monthly_leads:    number
   monthly_bookings: number
   created_at:       string             // client_since || created_at (display only)
+  // Manual payment tracking (null when the payment migration is not yet
+  // applied — all reads are resilient to the missing columns).
+  payment_status:   PaymentStatus
+  payment_method:   PaymentMethod | null
+  last_payment_date: string | null     // YYYY-MM-DD
+  next_payment_due:  string | null     // YYYY-MM-DD
+  paypal_invoice_id: string | null
+  payment_notes:     string | null
 }
 
 export interface AdminClientsResult {
@@ -63,6 +74,23 @@ function normalizeStatus(raw: unknown): AdminClientStatus {
   return 'onboarding'
 }
 
+function normalizePaymentStatus(raw: unknown): PaymentStatus {
+  if (
+    raw === 'unpaid' || raw === 'deposit_paid' || raw === 'paid' ||
+    raw === 'overdue' || raw === 'cancelled'
+  ) return raw
+  return 'unpaid'
+}
+
+function normalizePaymentMethod(raw: unknown): PaymentMethod | null {
+  if (raw === 'paypal' || raw === 'bank_transfer' || raw === 'cash' || raw === 'other') return raw
+  return null
+}
+
+function dateStr(raw: unknown): string | null {
+  return typeof raw === 'string' && raw.length > 0 ? raw.slice(0, 10) : null
+}
+
 function toRow(raw: Record<string, unknown>): AdminClientRow {
   return {
     id:               String(raw.id ?? ''),
@@ -79,7 +107,21 @@ function toRow(raw: Record<string, unknown>): AdminClientRow {
       (typeof raw.client_since === 'string' && raw.client_since) ||
       (typeof raw.created_at === 'string' && raw.created_at) ||
       new Date(0).toISOString(),
+    payment_status:    normalizePaymentStatus(raw.payment_status),
+    payment_method:    normalizePaymentMethod(raw.payment_method),
+    last_payment_date: dateStr(raw.last_payment_date),
+    next_payment_due:  dateStr(raw.next_payment_due),
+    paypal_invoice_id: typeof raw.paypal_invoice_id === 'string' && raw.paypal_invoice_id ? raw.paypal_invoice_id : null,
+    payment_notes:     typeof raw.payment_notes === 'string' && raw.payment_notes ? raw.payment_notes : null,
   }
+}
+
+// "column does not exist" → the payment migration is not applied yet.
+function isMissingColumn(e: { code?: string; message?: string } | null): boolean {
+  if (!e) return false
+  if (e.code === '42703') return true
+  const m = (e.message ?? '').toLowerCase()
+  return m.includes('column') && m.includes('does not exist')
 }
 
 function isMissingTable(e: { code?: string; message?: string } | null): boolean {
@@ -89,11 +131,20 @@ function isMissingTable(e: { code?: string; message?: string } | null): boolean 
   return m.includes('relation') && m.includes('does not exist')
 }
 
-const SELECT_COLS =
+const BASE_COLS =
   'id, business_name, industry, city, plan, setup_fee, monthly_fee, status, ' +
   'leads_this_month, bookings_this_month, client_since, created_at'
 
+const PAYMENT_COLS =
+  'payment_status, payment_method, last_payment_date, next_payment_due, ' +
+  'paypal_invoice_id, payment_notes'
+
+const SELECT_COLS = `${BASE_COLS}, ${PAYMENT_COLS}`
+
 // All non-archived clients (active workbook for the Clients page).
+// Resilient to the payment migration not being applied: if the payment
+// columns are missing, retry with the base columns (toRow defaults the
+// payment fields), so the page never breaks.
 export async function getAdminClients(): Promise<AdminClientsResult> {
   await requireAdmin({ path: '/admin/clients' })
 
@@ -103,12 +154,23 @@ export async function getAdminClients(): Promise<AdminClientsResult> {
 
   try {
     const db = createServiceRoleClient()
-    const { data, error } = await db
+
+    let { data, error } = await db
       .from('admin_clients')
       .select(SELECT_COLS)
       .neq('status', 'archived')
       .order('created_at', { ascending: false })
       .limit(500)
+
+    // Payment migration not applied yet → retry without payment columns.
+    if (error && isMissingColumn(error)) {
+      ({ data, error } = await db
+        .from('admin_clients')
+        .select(BASE_COLS)
+        .neq('status', 'archived')
+        .order('created_at', { ascending: false })
+        .limit(500))
+    }
 
     if (error) {
       if (isMissingTable(error)) return { rows: [], error: null }
@@ -182,5 +244,67 @@ export async function getAdminClientRevenue(): Promise<AdminClientRevenue> {
   } catch (err) {
     console.error('[getAdminClientRevenue]', err instanceof Error ? err.message : err)
     return { ...empty, error: 'Revenue rollup unavailable.' }
+  }
+}
+
+export interface AdminClientPaymentHealth {
+  paid:     number   // payment_status = 'paid'
+  unpaid:   number   // payment_status in ('unpaid','deposit_paid')
+  overdue:  number   // payment_status = 'overdue' OR past-due & not paid/cancelled
+  dueSoon:  number   // next_payment_due within 7 days & not paid/cancelled
+  tracked:  number   // total non-archived clients considered
+  error:    string | null
+}
+
+// Manual payment-health rollup from real admin_clients fields only.
+// Returns all-zero (error: null) when the table OR the payment columns
+// are missing, so Mission Control never breaks before the migration.
+export async function getAdminClientPaymentHealth(): Promise<AdminClientPaymentHealth> {
+  await requireAdmin({ path: '/admin/mission-control' })
+
+  const empty: AdminClientPaymentHealth = {
+    paid: 0, unpaid: 0, overdue: 0, dueSoon: 0, tracked: 0, error: null,
+  }
+
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) return empty
+
+  try {
+    const db = createServiceRoleClient()
+    const { data, error } = await db
+      .from('admin_clients')
+      .select('payment_status, next_payment_due')
+      .neq('status', 'archived')
+
+    if (error) {
+      // No table or payment columns yet → treat as "nothing tracked".
+      if (isMissingTable(error) || isMissingColumn(error)) return empty
+      throw error
+    }
+
+    const rows = (data ?? []) as { payment_status?: string; next_payment_due?: string }[]
+    const today   = new Date().toISOString().slice(0, 10)
+    const soonIso = new Date(Date.now() + 7 * 86_400_000).toISOString().slice(0, 10)
+
+    let paid = 0, unpaid = 0, overdue = 0, dueSoon = 0
+
+    for (const r of rows) {
+      const status = normalizePaymentStatus(r.payment_status)
+      const due    = dateStr(r.next_payment_due)
+      const settled = status === 'paid' || status === 'cancelled'
+
+      if (status === 'paid') paid += 1
+      if (status === 'unpaid' || status === 'deposit_paid') unpaid += 1
+
+      // Overdue: explicitly flagged, or a past due-date that isn't settled.
+      if (status === 'overdue' || (!settled && due !== null && due < today)) overdue += 1
+
+      // Due soon: due within the next 7 days and not yet settled/overdue.
+      if (!settled && due !== null && due >= today && due <= soonIso) dueSoon += 1
+    }
+
+    return { paid, unpaid, overdue, dueSoon, tracked: rows.length, error: null }
+  } catch (err) {
+    console.error('[getAdminClientPaymentHealth]', err instanceof Error ? err.message : err)
+    return { ...empty, error: 'Payment health unavailable.' }
   }
 }

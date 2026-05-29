@@ -5,12 +5,12 @@ import {
   getLatestAdminAuditSubmissions,
 } from '@/lib/data/admin-audits'
 import { getAdminMissionControlSummary } from '@/lib/data/admin-mission-control'
-import { getAdminClientRevenue } from '@/lib/data/admin-clients'
+import { getAdminClientRevenue, getAdminClientPaymentHealth } from '@/lib/data/admin-clients'
 import AdminKpiCard from '@/components/admin/ui/AdminKpiCard'
 import MissionControlAuditTable from './MissionControlAuditTable'
 import {
   CheckCircle2, AlertCircle, ArrowRight, TrendingUp, Zap,
-  FileText, Users, Building2, Settings, Activity,
+  FileText, Users, Building2, Settings, Activity, Wallet,
 } from 'lucide-react'
 
 export const metadata = { title: 'Mission Control — Helios AI Admin' }
@@ -24,11 +24,12 @@ function fmtUSD(n: number): string {
 export default async function AdminMissionControlPage() {
   const session = await requireAdmin({ path: '/admin/mission-control' })
 
-  const [auditMetrics, latestAudits, summary, revenue] = await Promise.all([
+  const [auditMetrics, latestAudits, summary, revenue, payments] = await Promise.all([
     getAdminAuditMetrics(),
     getLatestAdminAuditSubmissions(6),
     getAdminMissionControlSummary(),
     getAdminClientRevenue(),
+    getAdminClientPaymentHealth(),
   ])
 
   const firstName      = (session.fullName ?? session.email).split(' ')[0]
@@ -188,13 +189,27 @@ export default async function AdminMissionControlPage() {
                   tone="danger"
                 />
               )}
+              {payments.overdue > 0 && (
+                <FocusItem
+                  label="Review overdue client payments."
+                  href="/admin/clients"
+                  tone="danger"
+                />
+              )}
+              {payments.unpaid > 0 && (
+                <FocusItem
+                  label="Follow up on unpaid client accounts."
+                  href="/admin/clients"
+                  tone="warning"
+                />
+              )}
               <FocusItem
                 label={relevanceReady ? 'Audit Qualifier Agent active' : 'Connect Relevance AI'}
                 href={relevanceReady ? '/admin/relevance-ai' : '/admin/settings'}
                 tone={relevanceReady ? 'success' : 'neutral'}
               />
               <FocusItem
-                label={paypalReady ? 'PayPal configured — verification pending' : 'Connect PayPal for revenue verification'}
+                label={paypalReady ? 'PayPal configured — verification pending' : 'PayPal verification is not connected yet.'}
                 href="/admin/settings"
                 tone={paypalReady ? 'success' : 'neutral'}
               />
@@ -236,6 +251,38 @@ export default async function AdminMissionControlPage() {
           <RevenueCard label="Proj. 12-Month"    value={fmtUSD(projected12mo)} sublabel="ARR + setup"        tone="info"    />
           <RevenueCard label="Avg / Client"      value={fmtUSD(avgMonthly)}    sublabel={`${activeClients} active`} tone="info" />
         </div>
+      </section>
+
+      {/* ── Payment Tracking (manual — not PayPal-verified) ───────── */}
+      <section className="rounded-2xl border border-white/[0.08] bg-[#0f1012]/80 overflow-hidden">
+        <header className="flex items-center justify-between px-5 py-3 border-b border-white/[0.04]">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <Wallet size={13} className="text-[#6a6a6e] shrink-0" />
+            <h2 className="text-[13.5px] font-semibold text-white">Payment Tracking</h2>
+            <span className="text-[9.5px] font-semibold uppercase tracking-[0.1em] px-1.5 py-0.5 rounded-full
+                             border border-white/[0.12] bg-white/[0.04] text-[#9a9a9d] shrink-0">
+              Manual
+            </span>
+          </div>
+          <Link
+            href="/admin/clients"
+            className="text-[12px] text-[#ffae3c] hover:text-white inline-flex items-center gap-1.5 transition-colors shrink-0"
+          >
+            Manage <ArrowRight size={11} />
+          </Link>
+        </header>
+        {payments.tracked === 0 ? (
+          <div className="px-5 py-5 text-[12.5px] text-[#9a9a9d]">
+            Payment tracking will appear after clients are added.
+          </div>
+        ) : (
+          <div className="px-4 py-3.5 grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+            <RevenueCard label="Paid Clients"     value={String(payments.paid)}    sublabel="Recorded paid"  tone="neutral" />
+            <RevenueCard label="Unpaid Clients"   value={String(payments.unpaid)}  sublabel="Unpaid / deposit" tone="orange" />
+            <RevenueCard label="Overdue Payments" value={String(payments.overdue)} sublabel="Past due"       tone="neutral" />
+            <RevenueCard label="Next Payment Due" value={String(payments.dueSoon)} sublabel="Within 7 days"  tone="info"    />
+          </div>
+        )}
       </section>
 
       {/* ── Service Health ────────────────────────────────────────── */}
