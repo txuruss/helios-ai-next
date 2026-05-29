@@ -6,7 +6,7 @@ import {
 } from '@/lib/data/admin-audits'
 import { getAdminMissionControlSummary } from '@/lib/data/admin-mission-control'
 import { getAdminClientRevenue, getAdminClientPaymentHealth } from '@/lib/data/admin-clients'
-import { getClientsOnboardingSummary } from '@/lib/data/admin-client-tasks'
+import { getOnboardingAlertSummary } from '@/lib/data/admin-client-tasks'
 import AdminKpiCard from '@/components/admin/ui/AdminKpiCard'
 import MissionControlAuditTable from './MissionControlAuditTable'
 import {
@@ -22,6 +22,30 @@ function fmtUSD(n: number): string {
   return `$${n}`
 }
 
+const TASK_PRIORITY_TONE: Record<string, string> = { low: '#6a6a6e', normal: '#9a9a9d', high: '#ffae3c', urgent: '#ff5247' }
+const TASK_STATUS_TONE:   Record<string, string> = { todo: '#6a6a6e', in_progress: '#3b9eff', blocked: '#ff5247', done: '#22d093' }
+const TASK_STATUS_LABEL:  Record<string, string> = { todo: 'To do', in_progress: 'In progress', blocked: 'Blocked', done: 'Done' }
+
+// Colored mini stat for the Onboarding Alerts panel.
+function AlertStat({ label, value, sub, color }: { label: string; value: number; sub: string; color: string }) {
+  return (
+    <div className="rounded-xl border px-3.5 py-2.5" style={{ borderColor: `${color}33`, background: `${color}0f` }}>
+      <div className="text-[10px] font-semibold uppercase tracking-[0.09em] text-[#6a6a6e] truncate">{label}</div>
+      <div className="text-[16px] font-bold tabular-nums mt-1 leading-none" style={{ color }}>{value}</div>
+      <div className="text-[10px] text-[#6a6a6e] mt-0.5 truncate">{sub}</div>
+    </div>
+  )
+}
+
+function MiniPill({ color, label }: { color: string; label: string }) {
+  return (
+    <span className="inline-flex items-center text-[10px] font-semibold px-2 py-[2px] rounded-full border whitespace-nowrap capitalize"
+          style={{ color, borderColor: `${color}33`, background: `${color}12` }}>
+      {label}
+    </span>
+  )
+}
+
 export default async function AdminMissionControlPage() {
   const session = await requireAdmin({ path: '/admin/mission-control' })
 
@@ -31,10 +55,11 @@ export default async function AdminMissionControlPage() {
     getAdminMissionControlSummary(),
     getAdminClientRevenue(),
     getAdminClientPaymentHealth(),
-    getClientsOnboardingSummary(),
+    getOnboardingAlertSummary(),
   ])
 
   const firstName      = (session.fullName ?? session.email).split(' ')[0]
+  const todayStr       = new Date().toISOString().slice(0, 10)
   const hasCritical    = !!auditMetrics.error || !!summary.error
   // PayPal is the primary payment provider. "Configured" = credentials
   // present; it does NOT mean payments are verified (no transaction
@@ -191,6 +216,36 @@ export default async function AdminMissionControlPage() {
                   tone="danger"
                 />
               )}
+              {/* Onboarding delivery alerts — highest priority first. */}
+              {onboarding.overdueTasks > 0 && (
+                <FocusItem
+                  label={`Review overdue onboarding tasks (${onboarding.overdueTasks}).`}
+                  href="/admin/clients"
+                  tone="danger"
+                />
+              )}
+              {onboarding.blockedTasks > 0 && (
+                <FocusItem
+                  label={`Unblock client delivery tasks (${onboarding.blockedTasks}).`}
+                  href="/admin/clients"
+                  tone="danger"
+                />
+              )}
+              {onboarding.dueSoonTasks > 0 && (
+                <FocusItem
+                  label={`Complete upcoming onboarding tasks (${onboarding.dueSoonTasks}).`}
+                  href="/admin/clients"
+                  tone="warning"
+                />
+              )}
+              {onboarding.readyToGoLiveClients > 0 && (
+                <FocusItem
+                  label={`Review clients ready to go live (${onboarding.readyToGoLiveClients}).`}
+                  href="/admin/clients"
+                  tone="success"
+                />
+              )}
+              {/* Revenue / payment warnings. */}
               {payments.overdue > 0 && (
                 <FocusItem
                   label="Review overdue client payments."
@@ -203,27 +258,6 @@ export default async function AdminMissionControlPage() {
                   label="Follow up on unpaid client accounts."
                   href="/admin/clients"
                   tone="warning"
-                />
-              )}
-              {onboarding.blockedTasks > 0 && (
-                <FocusItem
-                  label="Review blocked onboarding tasks."
-                  href="/admin/clients"
-                  tone="danger"
-                />
-              )}
-              {onboarding.dueSoonTasks > 0 && (
-                <FocusItem
-                  label="Complete upcoming client onboarding tasks."
-                  href="/admin/clients"
-                  tone="warning"
-                />
-              )}
-              {onboarding.readyToGoLive > 0 && (
-                <FocusItem
-                  label={`Mark ready client live (${onboarding.readyToGoLive}).`}
-                  href="/admin/clients"
-                  tone="success"
                 />
               )}
               <FocusItem
@@ -308,12 +342,12 @@ export default async function AdminMissionControlPage() {
         )}
       </section>
 
-      {/* ── Client Onboarding (from admin_client_tasks) ───────────── */}
+      {/* ── Onboarding Alerts (from admin_client_tasks) ───────────── */}
       <section className="rounded-2xl border border-white/[0.08] bg-[#0f1012]/80 overflow-hidden">
         <header className="flex items-center justify-between px-5 py-3 border-b border-white/[0.04]">
           <div className="flex items-center gap-2.5 min-w-0">
             <ClipboardList size={13} className="text-[#6a6a6e] shrink-0" />
-            <h2 className="text-[13.5px] font-semibold text-white">Client Onboarding</h2>
+            <h2 className="text-[13.5px] font-semibold text-white">Onboarding Alerts</h2>
           </div>
           <Link
             href="/admin/clients"
@@ -322,17 +356,51 @@ export default async function AdminMissionControlPage() {
             Manage <ArrowRight size={11} />
           </Link>
         </header>
-        {onboarding.clientsOnboarding === 0 && onboarding.blockedTasks === 0 && onboarding.dueSoonTasks === 0 ? (
+
+        {onboarding.migrationNeeded ? (
           <div className="px-5 py-5 text-[12.5px] text-[#9a9a9d]">
-            Onboarding tracking will appear after clients are converted.
+            Apply the onboarding tasks migration to enable deadline alerts.
+          </div>
+        ) : onboarding.clientsOnboarding === 0 && onboarding.totalOpenTasks === 0 ? (
+          <div className="px-5 py-5 text-[12.5px] text-[#9a9a9d]">
+            Onboarding alerts will appear after clients are added.
           </div>
         ) : (
-          <div className="px-4 py-3.5 grid grid-cols-2 sm:grid-cols-4 gap-2.5">
-            <RevenueCard label="Clients Onboarding" value={String(onboarding.clientsOnboarding)} sublabel="In progress"     tone="info"    />
-            <RevenueCard label="Blocked Tasks"      value={String(onboarding.blockedTasks)}      sublabel="Need attention"  tone="neutral" />
-            <RevenueCard label="Tasks Due Soon"     value={String(onboarding.dueSoonTasks)}      sublabel="Within 7 days"   tone="orange"  />
-            <RevenueCard label="Ready To Go Live"   value={String(onboarding.readyToGoLive)}     sublabel="All tasks done"  tone="info"    />
-          </div>
+          <>
+            <div className="px-4 py-3.5 grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+              <AlertStat label="Overdue Tasks"    value={onboarding.overdueTasks}         sub="Past due"      color={onboarding.overdueTasks > 0 ? '#ff5247' : '#6a6a6e'} />
+              <AlertStat label="Due Soon"         value={onboarding.dueSoonTasks}         sub="Within 7 days" color={onboarding.dueSoonTasks > 0 ? '#ffae3c' : '#6a6a6e'} />
+              <AlertStat label="Blocked"          value={onboarding.blockedTasks}         sub="Need attention" color={onboarding.blockedTasks > 0 ? '#ff5247' : '#6a6a6e'} />
+              <AlertStat label="Ready To Go Live" value={onboarding.readyToGoLiveClients} sub="All tasks done" color={onboarding.readyToGoLiveClients > 0 ? '#22d093' : '#6a6a6e'} />
+            </div>
+            <div className="px-5 pb-4">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-[#6a6a6e] mb-2">Next Due Tasks</p>
+              {onboarding.nextDueTasks.length === 0 ? (
+                <p className="text-[12.5px] text-[#9a9a9d]">No onboarding deadlines need attention.</p>
+              ) : (
+                <div className="flex flex-col divide-y divide-white/[0.04]">
+                  {onboarding.nextDueTasks.map((t) => {
+                    const overdue = t.due_date !== null && t.due_date < todayStr
+                    return (
+                      <div key={t.id} className="flex items-center justify-between gap-3 py-2">
+                        <div className="min-w-0">
+                          <p className="text-[12.5px] text-white truncate">{t.client_business_name}</p>
+                          <p className="text-[11.5px] text-[#9a9a9d] truncate">{t.title}</p>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <span className="text-[11px] tabular-nums" style={{ color: overdue ? '#ff5247' : '#9a9a9d' }}>
+                            {overdue ? 'Overdue · ' : 'Due '}{t.due_date ? new Date(t.due_date).toLocaleDateString() : '—'}
+                          </span>
+                          <MiniPill color={TASK_PRIORITY_TONE[t.priority]} label={t.priority} />
+                          <MiniPill color={TASK_STATUS_TONE[t.status]} label={TASK_STATUS_LABEL[t.status]} />
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
+          </>
         )}
       </section>
 

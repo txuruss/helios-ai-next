@@ -358,6 +358,12 @@ function OnboardingTab({
   const pct       = total > 0 ? Math.round((done / total) * 100) : 0
   const allDone   = total > 0 && done === total
   const tmpl      = getTemplateInfoForPlan(detail.plan)
+  const today     = new Date().toISOString().slice(0, 10)
+  const soonIso   = new Date(Date.now() + 7 * 86_400_000).toISOString().slice(0, 10)
+  // Sort: blocked → overdue → due soon → in progress → todo → done.
+  const sortedTasks = [...tasks].sort(
+    (a, b) => taskRank(a, today, soonIso) - taskRank(b, today, soonIso) || dueCmp(a, b),
+  )
 
   function save() {
     setErr(null)
@@ -480,7 +486,7 @@ function OnboardingTab({
           </div>
         ) : (
           <div className="flex flex-col gap-2">
-            {tasks.map((t) => (
+            {sortedTasks.map((t) => (
               <TaskRow key={t.id} task={t} onChanged={onChanged} onEdit={() => setModalTask(t)} />
             ))}
           </div>
@@ -501,10 +507,31 @@ function OnboardingTab({
   )
 }
 
+// Sort rank: blocked → overdue → due soon → in progress → todo → done.
+function taskRank(t: ClientTask, today: string, soon: string): number {
+  if (t.status === 'blocked') return 0
+  if (t.status !== 'done' && t.due_date && t.due_date < today) return 1
+  if (t.status !== 'done' && t.due_date && t.due_date >= today && t.due_date <= soon) return 2
+  if (t.status === 'in_progress') return 3
+  if (t.status === 'todo') return 4
+  return 5
+}
+// Earlier due dates first; tasks without due dates sort last.
+function dueCmp(a: ClientTask, b: ClientTask): number {
+  if (a.due_date && b.due_date) return a.due_date < b.due_date ? -1 : a.due_date > b.due_date ? 1 : 0
+  if (a.due_date) return -1
+  if (b.due_date) return 1
+  return 0
+}
+
 function TaskRow({ task, onChanged, onEdit }: { task: ClientTask; onChanged: () => void; onEdit: () => void }) {
   const [busy, startBusy] = useTransition()
   const s = TASK_STATUS_CFG[task.status]
   const p = TASK_PRIORITY_CFG[task.priority]
+  const today   = new Date().toISOString().slice(0, 10)
+  const soonIso = new Date(Date.now() + 7 * 86_400_000).toISOString().slice(0, 10)
+  const overdue = task.status !== 'done' && !!task.due_date && task.due_date < today
+  const dueSoon = task.status !== 'done' && !!task.due_date && task.due_date >= today && task.due_date <= soonIso
 
   function run(fn: () => Promise<{ ok: boolean; error?: string }>) {
     startBusy(async () => {
@@ -523,8 +550,14 @@ function TaskRow({ task, onChanged, onEdit }: { task: ClientTask; onChanged: () 
           <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
             <Pill color={s.color} label={s.label} />
             <Pill color={p.color} label={p.label} />
+            {overdue && <Pill color="#ff5247" label="Overdue" />}
+            {!overdue && dueSoon && <Pill color="#ffae3c" label="Due soon" />}
             <span className="text-[10px] text-[#6a6a6e] uppercase tracking-[0.06em]">{task.category}</span>
-            {task.due_date && <span className="text-[10.5px] text-[#6a6a6e] tabular-nums">· due {new Date(task.due_date).toLocaleDateString()}</span>}
+            {task.due_date && (
+              <span className="text-[10.5px] tabular-nums" style={{ color: overdue ? '#ff5247' : '#6a6a6e' }}>
+                · due {new Date(task.due_date).toLocaleDateString()}
+              </span>
+            )}
           </div>
         </div>
       </div>
