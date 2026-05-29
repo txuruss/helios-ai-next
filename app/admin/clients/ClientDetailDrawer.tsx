@@ -25,6 +25,12 @@ import {
   getClientSuggestions, getSuggestionTab,
   type ClientSuggestion, type SuggestionSeverity,
 } from '@/lib/admin/client-suggestions'
+import {
+  STATUS_TRANSITIONS, STATUS_CONFIRM_COPY, STATUS_LABELS as LIFECYCLE_LABELS,
+  STATUS_COLORS as LIFECYCLE_COLORS, STATUS_DESCRIPTIONS, type ClientLifecycleStatus,
+} from '@/lib/admin/client-status'
+import { updateClientStatus } from '@/lib/actions/admin-clients'
+import ConfirmActionDialog from '@/components/admin/ui/ConfirmActionDialog'
 
 const PAYMENT_COLORS: Record<PaymentStatus, string> = {
   unpaid: '#ffae3c', deposit_paid: '#3b9eff', paid: '#22d093', overdue: '#ff5247', cancelled: '#6a6a6e',
@@ -153,7 +159,7 @@ export default function ClientDetailDrawer({ clientId, reloadKey, onClose, onUpd
           ) : !detail ? (
             <div className="text-[13px] text-[#ff8a7a]">Client not found or unavailable.</div>
           ) : tab === 'overview' ? (
-            <OverviewTab detail={detail} notes={notes} events={events} tasks={tasks} onGoToTab={setTab} />
+            <OverviewTab detail={detail} notes={notes} events={events} tasks={tasks} onGoToTab={setTab} onChanged={reloadDrawer} />
           ) : tab === 'payments' ? (
             <PaymentsTab detail={detail} events={events} migrationNeeded={eventsMig} onUpdatePayment={onUpdatePayment} />
           ) : tab === 'notes' ? (
@@ -175,15 +181,31 @@ const SUGGESTION_COLORS: Record<SuggestionSeverity, string> = {
 }
 
 function OverviewTab({
-  detail, notes, events, tasks, onGoToTab,
+  detail, notes, events, tasks, onGoToTab, onChanged,
 }: {
   detail: AdminClientDetail; notes: ClientNote[]; events: ClientPaymentEvent[]
-  tasks: ClientTask[]; onGoToTab: (t: Tab) => void
+  tasks: ClientTask[]; onGoToTab: (t: Tab) => void; onChanged: () => void
 }) {
   const mrr = detail.status === 'active' ? detail.monthly_fee : 0
   const suggestions = getClientSuggestions(detail, tasks)
   const primary = suggestions[0] ?? null
   const secondary = suggestions.slice(1, 4)
+  const readyToGoLive = suggestions.some((s) => s.actionType === 'mark_live_review')
+
+  const curStatus = detail.status as ClientLifecycleStatus
+  const [statusTarget, setStatusTarget] = useState<ClientLifecycleStatus | null>(null)
+  const [statusErr, setStatusErr] = useState<string | null>(null)
+  const [savingStatus, startStatus] = useTransition()
+
+  function confirmStatus() {
+    if (!statusTarget) return
+    setStatusErr(null)
+    startStatus(async () => {
+      const r = await updateClientStatus(detail.id, statusTarget)
+      if (r.ok) { setStatusTarget(null); onChanged() }
+      else setStatusErr(r.error ?? 'Could not update client status. Please try again.')
+    })
+  }
 
   return (
     <div className="flex flex-col gap-5">
@@ -200,6 +222,41 @@ function OverviewTab({
           </div>
         )}
       </Section>
+
+      {/* Client Status (manual transitions, confirmed) */}
+      <Section title="Client Status">
+        <div className="flex flex-col gap-3">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span className="text-[11px] text-[#6a6a6e]">Current:</span>
+            <Pill color={LIFECYCLE_COLORS[curStatus]} label={LIFECYCLE_LABELS[curStatus]} />
+          </div>
+          <p className="text-[12px] text-[#9a9a9d] leading-snug">{STATUS_DESCRIPTIONS[curStatus]}</p>
+          {readyToGoLive && curStatus !== 'active' && (
+            <button type="button" onClick={() => { setStatusErr(null); setStatusTarget('active') }}
+              className="self-start text-[12px] font-medium px-3 py-1.5 rounded-lg bg-[#22d093]/[0.14] border border-[#22d093]/40 text-[#22d093] hover:bg-[#22d093]/25 hover:text-white transition-all">
+              Review and mark active
+            </button>
+          )}
+          <div className="flex flex-wrap gap-2">
+            {STATUS_TRANSITIONS[curStatus].map((tr) => (
+              <button key={tr.to} type="button" onClick={() => { setStatusErr(null); setStatusTarget(tr.to) }}
+                className="text-[11.5px] font-medium px-2.5 py-1 rounded-lg bg-white/[0.04] border border-white/[0.12] text-[#cfd3dc] hover:bg-white/[0.08] hover:text-white transition-all">
+                {tr.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      </Section>
+
+      <ConfirmActionDialog
+        open={statusTarget !== null}
+        title={statusTarget ? STATUS_CONFIRM_COPY[statusTarget].title : ''}
+        body={statusTarget ? `${STATUS_CONFIRM_COPY[statusTarget].body}${statusErr ? `\n\n${statusErr}` : ''}` : ''}
+        confirmLabel={statusTarget ? STATUS_CONFIRM_COPY[statusTarget].confirmLabel : ''}
+        loading={savingStatus}
+        onConfirm={confirmStatus}
+        onCancel={() => { setStatusTarget(null); setStatusErr(null) }}
+      />
 
       <Section title="Client Overview">
         <Field label="Contact"   value={detail.contact_name} />

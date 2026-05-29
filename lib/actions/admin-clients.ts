@@ -50,6 +50,7 @@ function guardServiceRole(): AdminClientActionResult | null {
 
 function revalidate() {
   revalidatePath('/admin/clients')
+  revalidatePath('/admin/delivery')
   revalidatePath('/admin/mission-control')
 }
 
@@ -79,28 +80,64 @@ export async function archiveClient(clientId: string): Promise<AdminClientAction
   return { ok: true }
 }
 
-// ── Update client status (e.g. Mark paused, Reactivate) ────────────
+// ── Update client status (manual lifecycle transitions) ────────────
+// Supports the full lifecycle including 'archived'. Archiving stamps
+// archived_at; moving away from archived clears it. No hard delete.
+// A status-change note is recorded best-effort (never fails the update).
+const LIFECYCLE_STATUSES = ['onboarding', 'active', 'paused', 'churned', 'archived'] as const
+const STATUS_LABEL: Record<string, string> = {
+  onboarding: 'Onboarding', active: 'Active', paused: 'Paused', churned: 'Churned', archived: 'Archived',
+}
+
 export async function updateClientStatus(
   clientId: string,
-  status:   ClientStatus,
+  status:   string,
 ): Promise<AdminClientActionResult> {
   await requireAdmin({ path: '/admin/clients' })
 
   const id = validId(clientId)
   if (!id) return { ok: false, error: 'Invalid client id.' }
-  if (!CLIENT_STATUSES.includes(status)) return { ok: false, error: 'Invalid status.' }
+  if (!LIFECYCLE_STATUSES.includes(status as (typeof LIFECYCLE_STATUSES)[number])) {
+    return { ok: false, error: 'Invalid status.' }
+  }
 
   const guard = guardServiceRole()
   if (guard) return guard
 
   const db = createServiceRoleClient()
-  const { error } = await db.from('admin_clients').update({ status }).eq('id', id)
+
+  // Read current status for the no-op guard + the status-change note.
+  const cur = await db.from('admin_clients').select('status').eq('id', id).maybeSingle()
+  if (cur.error && isMissingTable(cur.error)) return { ok: false, error: MIGRATION_HINT }
+  const fromStatus = cur.data && typeof cur.data.status === 'string' ? cur.data.status : null
+  if (fromStatus === status) {
+    return { ok: false, error: `Client is already marked as ${STATUS_LABEL[status] ?? status}.` }
+  }
+
+  const { error } = await db
+    .from('admin_clients')
+    .update({
+      status,
+      // Stamp on archive; clear when leaving archived. (archived_at exists
+      // from the payment-tracking migration; harmless if it doesn't.)
+      archived_at: status === 'archived' ? new Date().toISOString() : null,
+    })
+    .eq('id', id)
 
   if (error) {
     if (isMissingTable(error)) return { ok: false, error: MIGRATION_HINT }
     console.error('[updateClientStatus]', error.message, '| code:', error.code)
-    return { ok: false, error: 'Could not update client status. Try again.' }
+    return { ok: false, error: 'Could not update client status. Please try again.' }
   }
+
+  // Best-effort status-change note (non-fatal; skipped if notes table absent).
+  try {
+    await db.from('admin_client_notes').insert({
+      client_id: id,
+      note: `Status changed from ${STATUS_LABEL[fromStatus ?? ''] ?? fromStatus ?? 'unknown'} to ${STATUS_LABEL[status] ?? status}.`,
+      note_type: 'general',
+    })
+  } catch { /* non-fatal */ }
 
   revalidate()
   return { ok: true }

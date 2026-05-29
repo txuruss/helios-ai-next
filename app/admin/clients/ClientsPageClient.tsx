@@ -19,8 +19,11 @@ import AdminKpiCard from '@/components/admin/ui/AdminKpiCard'
 import PlanPill from '@/components/admin/ui/PlanPill'
 import ConfirmActionDialog from '@/components/admin/ui/ConfirmActionDialog'
 import {
-  archiveClient, updateClientStatus, updateClientPayment,
+  updateClientStatus, updateClientPayment,
 } from '@/lib/actions/admin-clients'
+import {
+  STATUS_TRANSITIONS, STATUS_CONFIRM_COPY, type ClientLifecycleStatus,
+} from '@/lib/admin/client-status'
 import ClientDetailDrawer from './ClientDetailDrawer'
 
 type HealthStatus = 'Healthy' | 'Watch' | 'At Risk' | 'Unknown'
@@ -104,7 +107,7 @@ const STATUS_OPTIONS = [
 
 type ActionModal =
   | { open: false }
-  | { open: true; kind: 'archive' | 'pause' | 'activate'; id: string; name: string }
+  | { open: true; id: string; name: string; from: ClientLifecycleStatus; to: ClientLifecycleStatus }
 
 interface ClientSuggestionSummary {
   label:      string
@@ -129,6 +132,7 @@ export default function ClientsPageClient({ clients, error, suggestions = {} }: 
   const [planFilter,   setPlanFilter]   = useState('all')
   const [statusFilter, setStatusFilter] = useState('all')
   const [modal,        setModal]        = useState<ActionModal>({ open: false })
+  const [statusMenuFor, setStatusMenuFor] = useState<string | null>(null)
   const [drawerId,     setDrawerId]     = useState<string | null>(null)
   const [drawerKey,    setDrawerKey]    = useState(0)
   const [payClient,    setPayClient]    = useState<AdminClientRow | null>(null)
@@ -168,20 +172,23 @@ export default function ClientsPageClient({ clients, error, suggestions = {} }: 
 
   function runAction() {
     if (!modal.open) return
-    const { kind, id } = modal
+    const { id, to } = modal
     setActionError(null)
     startTransition(async () => {
-      const result =
-        kind === 'archive'  ? await archiveClient(id) :
-        kind === 'pause'    ? await updateClientStatus(id, 'paused') :
-                              await updateClientStatus(id, 'active')
+      const result = await updateClientStatus(id, to)
       if (result.ok) {
         setModal({ open: false })
         router.refresh()
       } else {
-        setActionError(result.error ?? 'Action failed. Please try again.')
+        setActionError(result.error ?? 'Could not update client status. Please try again.')
       }
     })
+  }
+
+  function openStatusChange(c: AdminClientRow, to: ClientLifecycleStatus) {
+    setStatusMenuFor(null)
+    setActionError(null)
+    setModal({ open: true, id: c.id, name: c.name, from: c.status, to })
   }
 
   return (
@@ -341,7 +348,7 @@ export default function ClientsPageClient({ clients, error, suggestions = {} }: 
                             </span>
                           </td>
                           <td className="px-4 py-3">
-                            <div className="flex justify-end gap-3 text-[11.5px] whitespace-nowrap">
+                            <div className="flex justify-end items-center gap-3 text-[11.5px] whitespace-nowrap">
                               <button
                                 type="button"
                                 onClick={() => { setActionError(null); setPayClient(c) }}
@@ -356,30 +363,35 @@ export default function ClientsPageClient({ clients, error, suggestions = {} }: 
                               >
                                 View
                               </button>
-                              {c.status === 'paused' ? (
+                              {/* Status change menu */}
+                              <div className="relative">
                                 <button
                                   type="button"
-                                  onClick={() => setModal({ open: true, kind: 'activate', id: c.id, name: c.name })}
-                                  className="text-[#22d093] hover:text-[#5be4b5] transition-colors focus:outline-none focus:underline"
+                                  onClick={() => setStatusMenuFor((cur) => cur === c.id ? null : c.id)}
+                                  className="text-[#9a9a9d] hover:text-white transition-colors focus:outline-none focus:underline"
+                                  aria-haspopup="menu"
+                                  aria-expanded={statusMenuFor === c.id}
                                 >
-                                  Reactivate
+                                  Status ▾
                                 </button>
-                              ) : (
-                                <button
-                                  type="button"
-                                  onClick={() => setModal({ open: true, kind: 'pause', id: c.id, name: c.name })}
-                                  className="text-[#ffae3c] hover:text-[#ffce7a] transition-colors focus:outline-none focus:underline"
-                                >
-                                  Pause
-                                </button>
-                              )}
-                              <button
-                                type="button"
-                                onClick={() => setModal({ open: true, kind: 'archive', id: c.id, name: c.name })}
-                                className="text-[#9a9a9d] hover:text-[#ff8a7a] transition-colors focus:outline-none focus:underline"
-                              >
-                                Archive
-                              </button>
+                                {statusMenuFor === c.id && (
+                                  <>
+                                    <div className="fixed inset-0 z-40" onClick={() => setStatusMenuFor(null)} />
+                                    <div className="absolute right-0 z-50 mt-1 w-[180px] rounded-xl border border-white/[0.10] bg-[#0f1012] shadow-2xl py-1">
+                                      {STATUS_TRANSITIONS[c.status].map((tr) => (
+                                        <button
+                                          key={tr.to}
+                                          type="button"
+                                          onClick={() => openStatusChange(c, tr.to)}
+                                          className="w-full text-left px-3.5 py-2 text-[12.5px] text-[#cfd3dc] hover:bg-white/[0.05] hover:text-white transition-colors"
+                                        >
+                                          {tr.label}
+                                        </button>
+                                      ))}
+                                    </div>
+                                  </>
+                                )}
+                              </div>
                             </div>
                           </td>
                         </tr>
@@ -440,29 +452,16 @@ export default function ClientsPageClient({ clients, error, suggestions = {} }: 
         </aside>
       </div>
 
-      {/* Confirmation dialog */}
+      {/* Status-change confirmation dialog */}
       <ConfirmActionDialog
         open={modal.open}
-        title={
-          !modal.open ? '' :
-          modal.kind === 'archive'  ? 'Archive this client?' :
-          modal.kind === 'pause'    ? 'Pause this client?'   :
-                                      'Reactivate this client?'
-        }
+        title={modal.open ? STATUS_CONFIRM_COPY[modal.to].title : ''}
         body={
-          !modal.open ? '' :
-          modal.kind === 'archive'
-            ? `This archives "${modal.name}" and removes it from the active list. No data is deleted — the record stays in the database with status "archived".${actionError ? `\n\n${actionError}` : ''}`
-            : modal.kind === 'pause'
-              ? `This marks "${modal.name}" as paused. It will no longer count toward active MRR until reactivated.${actionError ? `\n\n${actionError}` : ''}`
-              : `This marks "${modal.name}" as active again and includes it in MRR.${actionError ? `\n\n${actionError}` : ''}`
+          modal.open
+            ? `${STATUS_CONFIRM_COPY[modal.to].body} (Client: "${modal.name}".)${actionError ? `\n\n${actionError}` : ''}`
+            : ''
         }
-        confirmLabel={
-          !modal.open ? '' :
-          modal.kind === 'archive'  ? 'Archive client' :
-          modal.kind === 'pause'    ? 'Pause client'   :
-                                      'Reactivate'
-        }
+        confirmLabel={modal.open ? STATUS_CONFIRM_COPY[modal.to].confirmLabel : ''}
         loading={isPending}
         onConfirm={runAction}
         onCancel={() => { setModal({ open: false }); setActionError(null) }}
