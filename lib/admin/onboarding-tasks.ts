@@ -6,6 +6,7 @@ import 'server-only'
 // the single source of truth for the default list.
 
 import type { createServiceRoleClient } from '@/lib/supabase/server'
+import { getOnboardingTasksForPlan } from './onboarding-task-templates'
 
 type Db = ReturnType<typeof createServiceRoleClient>
 
@@ -49,8 +50,14 @@ export interface SeedResult {
 }
 
 // Idempotent: only seeds when the client has zero tasks. Never throws —
-// callers (conversion flow) treat seeding as non-fatal.
-export async function seedDefaultTasksFor(db: Db, clientId: string): Promise<SeedResult> {
+// callers (conversion flow) treat seeding as non-fatal. The task list is
+// chosen by the client's plan (Starter / Booking OS / Ops Center), with
+// Starter as the safe fallback for unknown plans.
+export async function seedDefaultTasksFor(
+  db: Db,
+  clientId: string,
+  plan?: string | null,
+): Promise<SeedResult> {
   try {
     const existing = await db
       .from('admin_client_tasks')
@@ -66,7 +73,7 @@ export async function seedDefaultTasksFor(db: Db, clientId: string): Promise<See
       return { seeded: 0, skipped: true, missingTable: false, error: null }
     }
 
-    const rows = DEFAULT_ONBOARDING_TASKS.map((t) => ({
+    const rows = getOnboardingTasksForPlan(plan).map((t) => ({
       client_id: clientId,
       title:     t.title,
       category:  t.category,

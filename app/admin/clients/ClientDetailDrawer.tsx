@@ -20,6 +20,7 @@ import {
   loadClientTasks, seedDefaultClientTasks, createClientTask,
   updateClientTask, completeClientTask, reopenClientTask,
 } from '@/lib/actions/admin-client-tasks'
+import { getTemplateInfoForPlan } from '@/lib/admin/onboarding-task-templates'
 
 const PAYMENT_COLORS: Record<PaymentStatus, string> = {
   unpaid: '#ffae3c', deposit_paid: '#3b9eff', paid: '#22d093', overdue: '#ff5247', cancelled: '#6a6a6e',
@@ -356,6 +357,7 @@ function OnboardingTab({
   const blocked   = tasks.filter((t) => t.status === 'blocked').length
   const pct       = total > 0 ? Math.round((done / total) * 100) : 0
   const allDone   = total > 0 && done === total
+  const tmpl      = getTemplateInfoForPlan(detail.plan)
 
   function save() {
     setErr(null)
@@ -461,6 +463,9 @@ function OnboardingTab({
             </button>
           ) : undefined
         }>
+        <p className="text-[11px] text-[#6a6a6e] mb-2">
+          Template: <span className="text-[#9a9a9d] font-medium">{tmpl.isFallback ? 'Starter fallback' : tmpl.label}</span>
+        </p>
         {tasksMig ? (
           <Empty text="Apply the onboarding tasks migration to enable client task tracking." />
         ) : total === 0 ? (
@@ -470,7 +475,7 @@ function OnboardingTab({
                     className="inline-flex items-center gap-1.5 text-[12.5px] font-medium px-3.5 py-2 rounded-xl
                                bg-[#ff7a18]/[0.14] border border-[#ff7a18]/40 text-[#ffae3c]
                                hover:bg-[#ff7a18]/25 hover:text-white transition-all disabled:opacity-50">
-              <Plus size={12} /> {busy ? 'Creating…' : 'Create default checklist'}
+              <Plus size={12} /> {busy ? 'Creating…' : `Create ${tmpl.label} checklist`}
             </button>
           </div>
         ) : (

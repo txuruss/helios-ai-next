@@ -80,13 +80,50 @@ export async function seedDefaultClientTasks(clientId: string): Promise<TaskActi
   if (guard) return guard
 
   const db = createServiceRoleClient()
-  const res = await seedDefaultTasksFor(db, id)
+
+  // Look up the client's plan so the checklist matches their plan.
+  const clientRow = await db.from('admin_clients').select('plan').eq('id', id).maybeSingle()
+  const plan = !clientRow.error && clientRow.data && typeof clientRow.data.plan === 'string'
+    ? clientRow.data.plan
+    : null
+
+  const res = await seedDefaultTasksFor(db, id, plan)
 
   if (res.missingTable) return { ok: false, error: MIGRATION_HINT }
   if (res.error)        return { ok: false, error: 'Could not create the default checklist. Try again.' }
+  if (res.skipped)      return { ok: true, warning: 'Checklist already exists for this client.' }
 
   revalidate()
-  return { ok: true, ...(res.skipped ? { warning: 'Checklist already exists.' } : {}) }
+  return { ok: true }
+}
+
+// ── Rebuild checklist (future-safe; non-destructive for now) ───────
+// Reserved for a future "rebuild to match plan" flow. Today it ONLY
+// seeds when the client has no tasks — it never deletes or replaces
+// existing tasks (no hard deletes). Existing clients keep their tasks.
+export async function rebuildClientChecklist(clientId: string): Promise<TaskActionResult> {
+  await requireAdmin({ path: '/admin/clients' })
+  const id = validId(clientId)
+  if (!id) return { ok: false, error: 'Invalid client id.' }
+
+  const guard = guardServiceRole()
+  if (guard) return guard
+
+  const db = createServiceRoleClient()
+
+  const existing = await db.from('admin_client_tasks').select('id').eq('client_id', id).limit(1)
+  if (existing.error) {
+    if (isMissingTable(existing.error)) return { ok: false, error: MIGRATION_HINT }
+    console.error('[rebuildClientChecklist]', existing.error.message)
+    return { ok: false, error: 'Could not read existing tasks. Try again.' }
+  }
+  if (existing.data && existing.data.length > 0) {
+    // Destructive replacement is intentionally NOT enabled yet.
+    return { ok: false, error: 'This client already has tasks. Destructive checklist rebuild is not enabled — existing tasks are preserved.' }
+  }
+
+  // No tasks → safe to seed the plan template.
+  return seedDefaultClientTasks(id)
 }
 
 // ── Create a task ──────────────────────────────────────────────────

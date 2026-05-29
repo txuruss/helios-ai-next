@@ -291,11 +291,15 @@ export async function convertAuditToClient(submissionId: string): Promise<AdminA
   try {
     const clientRow = await db
       .from('admin_clients')
-      .select('id')
+      .select('id, plan')
       .eq('source_audit_id', id)
       .maybeSingle()
     if (!clientRow.error && clientRow.data) {
-      await seedDefaultTasksFor(db, clientRow.data.id as string)
+      await seedDefaultTasksFor(
+        db,
+        clientRow.data.id as string,
+        typeof clientRow.data.plan === 'string' ? clientRow.data.plan : null,
+      )
     }
   } catch (seedErr) {
     console.error('[convertAuditToClient] task seed failed (non-fatal):', seedErr instanceof Error ? seedErr.message : seedErr)

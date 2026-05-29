@@ -181,11 +181,15 @@ export async function convertLeadToClient(leadId: string): Promise<AdminLeadActi
   try {
     const clientRow = await db
       .from('admin_clients')
-      .select('id')
+      .select('id, plan')
       .eq('source_lead_id', id)
       .maybeSingle()
     if (!clientRow.error && clientRow.data) {
-      await seedDefaultTasksFor(db, clientRow.data.id as string)
+      await seedDefaultTasksFor(
+        db,
+        clientRow.data.id as string,
+        typeof clientRow.data.plan === 'string' ? clientRow.data.plan : null,
+      )
     }
   } catch (seedErr) {
     console.error('[convertLeadToClient] task seed failed (non-fatal):', seedErr instanceof Error ? seedErr.message : seedErr)
