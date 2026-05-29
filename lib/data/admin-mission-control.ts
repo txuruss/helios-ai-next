@@ -29,7 +29,7 @@ export interface AdminMissionControlSummary {
     anthropic:  boolean
     calcom:     boolean
     whatsapp:   boolean
-    stripe:     boolean
+    paypal:     boolean
   }
   error: string | null
 }
@@ -45,12 +45,15 @@ export async function getAdminMissionControlSummary(): Promise<AdminMissionContr
 
   // Env-presence health flags. Not a live ping — just whether the
   // backing keys are configured. Cheap and non-blocking.
+  // PayPal is the primary payment provider: "configured" means the
+  // PayPal credentials are present, NOT that any payment has been
+  // verified (no transaction reading exists yet).
   const health = {
     supabase:  !!process.env.NEXT_PUBLIC_SUPABASE_URL && !!process.env.SUPABASE_SERVICE_ROLE_KEY,
     anthropic: !!process.env.ANTHROPIC_API_KEY,
     calcom:    !!process.env.CALCOM_API_KEY,
     whatsapp:  !!process.env.META_ACCESS_TOKEN,
-    stripe:    !!process.env.STRIPE_SECRET_KEY,
+    paypal:    !!process.env.PAYPAL_CLIENT_ID && !!process.env.PAYPAL_CLIENT_SECRET,
   }
 
   const empty: AdminMissionControlSummary = {

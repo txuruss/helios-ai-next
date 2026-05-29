@@ -33,12 +33,15 @@ export default async function AdminMissionControlPage() {
 
   const firstName      = (session.fullName ?? session.email).split(' ')[0]
   const hasCritical    = !!auditMetrics.error || !!summary.error
-  const stripeReady    = !!process.env.STRIPE_SECRET_KEY
+  // PayPal is the primary payment provider. "Configured" = credentials
+  // present; it does NOT mean payments are verified (no transaction
+  // reading exists yet), so revenue stays "Estimated" regardless.
+  const paypalReady    = !!process.env.PAYPAL_CLIENT_ID && !!process.env.PAYPAL_CLIENT_SECRET
   const relevanceReady = !!process.env.RELEVANCE_API_KEY
 
   // Revenue figures are computed from REAL stored client fees (admin_clients).
   // They are $0 until clients are converted, and labelled "Estimated"
-  // until Stripe is connected. Never fabricated.
+  // until PayPal payment verification exists. Never fabricated.
   const activeClients  = revenue.activeClients
   const mrr            = revenue.mrr
   const arr            = revenue.arr
@@ -191,9 +194,9 @@ export default async function AdminMissionControlPage() {
                 tone={relevanceReady ? 'success' : 'neutral'}
               />
               <FocusItem
-                label={stripeReady ? 'Stripe billing connected' : 'Connect Stripe for live revenue'}
+                label={paypalReady ? 'PayPal configured — verification pending' : 'Connect PayPal for revenue verification'}
                 href="/admin/settings"
-                tone={stripeReady ? 'success' : 'neutral'}
+                tone={paypalReady ? 'success' : 'neutral'}
               />
             </div>
           </section>
@@ -208,17 +211,21 @@ export default async function AdminMissionControlPage() {
             <h2 className="text-[13.5px] font-semibold text-white">Revenue Command Center</h2>
             <span className="text-[9.5px] font-semibold uppercase tracking-[0.1em] px-1.5 py-0.5 rounded-full
                              border border-[#ffae3c]/30 bg-[#ffae3c]/[0.08] text-[#ffae3c] shrink-0">
-              {stripeReady ? 'Live' : 'Estimated'}
+              Estimated
             </span>
-            {!stripeReady && (
-              <span className="text-[11px] text-[#6a6a6e] hidden sm:inline truncate">
-                No verified revenue yet —{' '}
-                <Link href="/admin/settings" className="text-[#ffae3c]/80 hover:text-[#ffae3c] transition-colors">
-                  Connect Stripe
-                </Link>
-                {' '}or add real client plans to see revenue
-              </span>
-            )}
+            <span className="text-[11px] text-[#6a6a6e] hidden sm:inline truncate">
+              {paypalReady ? (
+                'PayPal configured — payment verification pending'
+              ) : (
+                <>
+                  No verified revenue yet —{' '}
+                  <Link href="/admin/settings" className="text-[#ffae3c]/80 hover:text-[#ffae3c] transition-colors">
+                    Connect PayPal
+                  </Link>
+                  {' '}or add real client plans to see revenue
+                </>
+              )}
+            </span>
           </div>
         </header>
         <div className="px-4 py-3.5 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
@@ -245,7 +252,7 @@ export default async function AdminMissionControlPage() {
             <HealthRow label="Anthropic (AI chat)"        present={summary.health.anthropic} required />
           </div>
           <div className="flex flex-col divide-y divide-white/[0.04]">
-            <HealthRow label="Stripe (billing)"   present={summary.health.stripe}  />
+            <HealthRow label="PayPal (payments & billing)" present={summary.health.paypal} />
             <HealthRow label="Cal.com (booking)"  present={summary.health.calcom}  />
           </div>
           <div className="flex flex-col divide-y divide-white/[0.04]">

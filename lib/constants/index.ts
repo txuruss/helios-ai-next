@@ -52,7 +52,7 @@ export const LEAD_STATUSES = ['new', 'qualified', 'contacted', 'proposal', 'won'
 export const BOOKING_STATUSES = ['pending', 'confirmed', 'cancelled', 'completed', 'no_show'] as const
 
 // ── Pricing ───────────────────────────────────────────────────────
-// Internal plan IDs stay starter/pro/scale to match Stripe.
+// Internal plan IDs stay starter/pro/scale (provider-agnostic).
 // Public labels map: starter→Starter, pro→Booking OS, scale→Ops Center.
 // setupRange/monthlyRange are the flat public prices shown on pricing cards.
 // internalSetupRange/internalMonthlyRange are for internal quoting only — never shown publicly.

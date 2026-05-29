@@ -126,7 +126,7 @@ export default function ClientsPageClient({ clients, error }: Props) {
         <AdminKpiCard label="Active Clients"   value={active}                          tone="neutral"                           sublabel="Status: active"       />
         <AdminKpiCard label="Monthly Leads"     value={totalLeads.toLocaleString()}     tone="info"                              sublabel="Across all clients"   />
         <AdminKpiCard label="Monthly Bookings"  value={totalBook.toLocaleString()}      tone="success"                           sublabel="Across all clients"   />
-        <AdminKpiCard label="Estimated MRR"     value={`$${totalMRR.toLocaleString()}`} tone="orange"                            sublabel="Stripe not connected" />
+        <AdminKpiCard label="Estimated MRR"     value={`$${totalMRR.toLocaleString()}`} tone="orange"                            sublabel="PayPal not connected" />
         <AdminKpiCard label="Avg / Client"      value={`$${avgMRR}/mo`}                 tone="info"                              sublabel="MRR ÷ active clients" />
         <AdminKpiCard label="At-Risk Clients"   value={atRisk}                          tone={atRisk > 0 ? 'danger' : 'neutral'} sublabel={atRisk > 0 ? 'Low booking rate' : 'All healthy'} />
       </section>

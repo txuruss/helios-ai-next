@@ -15,7 +15,8 @@
 //
 // REVENUE
 //   • MRR/ARR/setup are computed from REAL stored fees on admin_clients,
-//     never from a hardcoded plan map. No Stripe = figures are Estimated.
+//     never from a hardcoded plan map. No verified PayPal payments =
+//     figures are Estimated.
 
 import 'server-only'
 
