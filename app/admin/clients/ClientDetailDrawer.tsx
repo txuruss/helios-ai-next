@@ -41,7 +41,10 @@ import {
 } from '@/lib/admin/client-status'
 import { updateClientStatus } from '@/lib/actions/admin-clients'
 import { getClientHandoffReadiness } from '@/lib/admin/client-handoff-readiness'
+import { deriveLaunchState } from '@/lib/admin/launch-state'
+import type { LaunchReportInput } from '@/lib/admin/client-launch-report'
 import ConfirmActionDialog from '@/components/admin/ui/ConfirmActionDialog'
+import LaunchReportModal from './LaunchReportModal'
 
 const PAYMENT_COLORS: Record<PaymentStatus, string> = {
   unpaid: '#ffae3c', deposit_paid: '#3b9eff', paid: '#22d093', overdue: '#ff5247', cancelled: '#6a6a6e',
@@ -218,6 +221,20 @@ function OverviewTab({
   const [statusTarget, setStatusTarget] = useState<ClientLifecycleStatus | null>(null)
   const [statusErr, setStatusErr] = useState<string | null>(null)
   const [savingStatus, startStatus] = useTransition()
+  const [reportOpen, setReportOpen] = useState(false)
+
+  // Launch report input (reuses the shared launch-state derivation).
+  const launch = deriveLaunchState(
+    { payment_status: detail.payment_status, onboarding_stage: detail.onboarding_stage, status: detail.status },
+    files,
+    tasks,
+  )
+  const reportInput: LaunchReportInput = {
+    clientName: detail.business_name, plan: detail.plan, status: detail.status, paymentStatus: detail.payment_status,
+    launchState: launch.launchState, hasHandoffDoc: launch.hasHandoffDoc, hasBrandAssets: launch.hasBrandAssets,
+    hasSetupDoc: launch.hasSetupDoc, taskTotal: launch.taskTotal, taskDone: launch.taskDone,
+    taskBlocked: launch.taskBlocked, taskOverdue: launch.taskOverdue, readiness: launch.readiness, nextAction: launch.nextAction,
+  }
 
   function confirmStatus() {
     if (!statusTarget) return
@@ -266,7 +283,14 @@ function OverviewTab({
       </Section>
 
       {/* Client Status (manual transitions, confirmed) */}
-      <Section title="Client Status">
+      <Section title="Client Status"
+        action={
+          <button type="button" onClick={() => setReportOpen(true)}
+            className="inline-flex items-center gap-1 text-[11.5px] font-medium px-2.5 py-1 rounded-lg
+                       bg-white/[0.04] border border-white/[0.10] text-[#cfd3dc] hover:bg-white/[0.08] hover:text-white transition-all">
+            Launch Report
+          </button>
+        }>
         <div className="flex flex-col gap-3">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-[11px] text-[#6a6a6e]">Current:</span>
@@ -307,6 +331,8 @@ function OverviewTab({
         onConfirm={confirmStatus}
         onCancel={() => { setStatusTarget(null); setStatusErr(null) }}
       />
+
+      {reportOpen && <LaunchReportModal input={reportInput} onClose={() => setReportOpen(false)} />}
 
       <Section title="Client Overview">
         <Field label="Contact"   value={detail.contact_name} />

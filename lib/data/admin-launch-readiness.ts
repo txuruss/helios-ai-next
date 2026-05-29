@@ -11,13 +11,10 @@ import 'server-only'
 
 import { requireAdmin } from '@/lib/auth/require-admin'
 import { createServiceRoleClient } from '@/lib/supabase/server'
-import {
-  getClientHandoffReadiness, type ClientHandoffReadiness,
-  type ReadinessFile, type ReadinessTask,
-} from '@/lib/admin/client-handoff-readiness'
+import { type ClientHandoffReadiness, type ReadinessFile, type ReadinessTask } from '@/lib/admin/client-handoff-readiness'
+import { deriveLaunchState, type LaunchState } from '@/lib/admin/launch-state'
 
-export type LaunchState =
-  | 'ready' | 'needs_files' | 'needs_payment' | 'needs_onboarding' | 'blocked' | 'active' | 'archived'
+export type { LaunchState } from '@/lib/admin/launch-state'
 
 export interface LaunchReadinessRow {
   id:             string
@@ -66,21 +63,6 @@ function isMissing(e: { code?: string; message?: string } | null): boolean {
 
 function str(v: unknown): string | null {
   return typeof v === 'string' && v.length > 0 ? v : null
-}
-
-function nextActionFor(state: LaunchState, r: ClientHandoffReadiness): string {
-  switch (state) {
-    case 'active':           return 'Already active'
-    case 'archived':         return 'Archived'
-    case 'blocked':          return 'Resolve blocked / overdue tasks'
-    case 'needs_payment':    return 'Record payment'
-    case 'needs_files':
-      if (r.missingHandoffDocument) return 'Add handoff document'
-      if (r.missingBrandAssets)     return 'Upload brand assets'
-      return 'Add setup document'
-    case 'needs_onboarding': return 'Complete onboarding tasks'
-    case 'ready':            return 'Review and mark active'
-  }
 }
 
 export async function getLaunchReadinessData(): Promise<LaunchReadinessData> {
@@ -157,29 +139,11 @@ export async function getLaunchReadinessData(): Promise<LaunchReadinessData> {
       const files = filesByClient.get(id) ?? []
       const tasks = tasksByClient.get(id) ?? []
 
-      const readiness = getClientHandoffReadiness(
-        { payment_status, onboarding_stage: str(c.onboarding_stage) },
+      const d = deriveLaunchState(
+        { payment_status, onboarding_stage: str(c.onboarding_stage), status },
         files,
         tasks,
       )
-
-      const hasHandoffDoc  = !readiness.missingHandoffDocument
-      const hasBrandAssets = !readiness.missingBrandAssets
-      const hasSetupDoc    = !readiness.missingSetupDocument
-      const filesOk        = hasHandoffDoc && hasBrandAssets && hasSetupDoc
-      const paymentOk      = payment_status === 'paid' || payment_status === 'deposit_paid'
-      const taskTotal      = tasks.length
-      const taskDone       = tasks.filter((t) => t.status === 'done').length
-      const statusEligible = status === 'onboarding' || status === 'paused'
-
-      // Launch state — most blocking reason first.
-      let launchState: LaunchState
-      if (status === 'active') launchState = 'active'
-      else if (readiness.blockedTaskCount > 0 || readiness.overdueTaskCount > 0) launchState = 'blocked'
-      else if (!paymentOk) launchState = 'needs_payment'
-      else if (!filesOk) launchState = 'needs_files'
-      else if (taskTotal === 0 || readiness.openTaskCount > 0) launchState = 'needs_onboarding'
-      else launchState = statusEligible ? 'ready' : 'needs_onboarding'
 
       rows.push({
         id,
@@ -189,25 +153,28 @@ export async function getLaunchReadinessData(): Promise<LaunchReadinessData> {
         plan:           typeof c.plan === 'string' ? c.plan : '',
         status,
         payment_status,
-        hasHandoffDoc, hasBrandAssets, hasSetupDoc,
-        taskTotal, taskDone,
-        taskOpen:     readiness.openTaskCount,
-        taskBlocked:  readiness.blockedTaskCount,
-        taskOverdue:  readiness.overdueTaskCount,
-        readiness,
-        launchState,
-        nextAction: nextActionFor(launchState, readiness),
+        hasHandoffDoc:  d.hasHandoffDoc,
+        hasBrandAssets: d.hasBrandAssets,
+        hasSetupDoc:    d.hasSetupDoc,
+        taskTotal:      d.taskTotal,
+        taskDone:       d.taskDone,
+        taskOpen:       d.taskOpen,
+        taskBlocked:    d.taskBlocked,
+        taskOverdue:    d.taskOverdue,
+        readiness:      d.readiness,
+        launchState:    d.launchState,
+        nextAction:     d.nextAction,
       })
 
       // KPIs.
       if (status === 'active') {
         summary.activeClients += 1
       } else {
-        if (launchState === 'ready') summary.readyToLaunch += 1
-        if (!filesOk) summary.missingFiles += 1
+        if (d.launchState === 'ready') summary.readyToLaunch += 1
+        if (!(d.hasHandoffDoc && d.hasBrandAssets && d.hasSetupDoc)) summary.missingFiles += 1
         if (payment_status === 'unpaid' || payment_status === 'overdue') summary.missingPayment += 1
-        if (taskTotal > 0 && readiness.openTaskCount > 0) summary.incompleteOnboarding += 1
-        if (readiness.blockedTaskCount > 0 || readiness.overdueTaskCount > 0) summary.blockedByTasks += 1
+        if (d.taskTotal > 0 && d.taskOpen > 0) summary.incompleteOnboarding += 1
+        if (d.taskBlocked > 0 || d.taskOverdue > 0) summary.blockedByTasks += 1
       }
     }
 

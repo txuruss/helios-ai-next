@@ -14,8 +14,19 @@ import AdminKpiCard from '@/components/admin/ui/AdminKpiCard'
 import PlanPill from '@/components/admin/ui/PlanPill'
 import ConfirmActionDialog from '@/components/admin/ui/ConfirmActionDialog'
 import ClientDetailDrawer from '@/app/admin/clients/ClientDetailDrawer'
+import LaunchReportModal from '@/app/admin/clients/LaunchReportModal'
 import { updateClientStatus } from '@/lib/actions/admin-clients'
 import { STATUS_LABELS, STATUS_COLORS } from '@/lib/admin/client-status'
+import { buildClientLaunchReportMarkdown, type LaunchReportInput } from '@/lib/admin/client-launch-report'
+
+function rowToReportInput(r: LaunchReadinessRow): LaunchReportInput {
+  return {
+    clientName: r.business_name, plan: r.plan, status: r.status, paymentStatus: r.payment_status,
+    launchState: r.launchState, hasHandoffDoc: r.hasHandoffDoc, hasBrandAssets: r.hasBrandAssets,
+    hasSetupDoc: r.hasSetupDoc, taskTotal: r.taskTotal, taskDone: r.taskDone,
+    taskBlocked: r.taskBlocked, taskOverdue: r.taskOverdue, readiness: r.readiness, nextAction: r.nextAction,
+  }
+}
 
 const LAUNCH_CFG: Record<LaunchState, { label: string; color: string }> = {
   ready:            { label: 'Ready',            color: '#22d093' },
@@ -76,6 +87,18 @@ export default function LaunchReadinessClient({ rows, summary, filesMigrationNee
   const [pending, startTransition] = useTransition()
   const [drawer, setDrawer]       = useState<DrawerState>(null)
   const [drawerKey, setDrawerKey] = useState(0)
+  const [reportInput, setReportInput] = useState<LaunchReportInput | null>(null)
+  const [copyToast, setCopyToast] = useState<string | null>(null)
+
+  async function copyRow(r: LaunchReadinessRow) {
+    try {
+      await navigator.clipboard.writeText(buildClientLaunchReportMarkdown(rowToReportInput(r)))
+      setCopyToast('Launch report copied.')
+    } catch {
+      setCopyToast('Could not copy report. Please try again.')
+    }
+    setTimeout(() => setCopyToast(null), 2500)
+  }
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -275,6 +298,10 @@ export default function LaunchReadinessClient({ rows, summary, filesMigrationNee
                           <td className="px-3 py-2.5 text-[#9a9a9d] max-w-[160px]">{r.nextAction}</td>
                           <td className="px-3 py-2.5">
                             <div className="flex items-center justify-end gap-2.5 text-[11px] whitespace-nowrap flex-wrap">
+                              <button type="button" onClick={() => setReportInput(rowToReportInput(r))}
+                                className="text-[#ffae3c] hover:text-white transition-colors focus:outline-none focus:underline">Report</button>
+                              <button type="button" onClick={() => copyRow(r)}
+                                className="text-[#9a9a9d] hover:text-white transition-colors focus:outline-none focus:underline">Copy</button>
                               <button type="button" onClick={() => setDrawer({ id: r.id })}
                                 className="text-[#9a9a9d] hover:text-white transition-colors focus:outline-none focus:underline">Open</button>
                               {r.status !== 'active' && (
@@ -332,6 +359,16 @@ export default function LaunchReadinessClient({ rows, summary, filesMigrationNee
         onConfirm={confirmActive}
         onCancel={() => { setStatusModal({ open: false }); setStatusErr(null) }}
       />
+
+      {/* Launch report preview modal */}
+      {reportInput && <LaunchReportModal input={reportInput} onClose={() => setReportInput(null)} />}
+
+      {/* Copy toast */}
+      {copyToast && (
+        <div className="fixed bottom-5 left-1/2 -translate-x-1/2 z-[80] px-4 py-2.5 rounded-xl border border-white/[0.12] bg-[#0f1012] shadow-2xl text-[12.5px] text-[#cfd3dc]">
+          {copyToast}
+        </div>
+      )}
 
       {/* Client detail drawer (reused) */}
       {drawer && (
