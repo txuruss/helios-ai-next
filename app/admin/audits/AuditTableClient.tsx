@@ -7,13 +7,18 @@ import StatusPill from '@/components/admin/ui/StatusPill'
 import PriorityPill from '@/components/admin/ui/PriorityPill'
 import PlanPill from '@/components/admin/ui/PlanPill'
 import AuditActionsCell from './AuditActionsCell'
+import AuditAiCell from './AuditAiCell'
+import AuditAiResultModal from './AuditAiResultModal'
 import ConfirmActionDialog from '@/components/admin/ui/ConfirmActionDialog'
 import { archiveBulkAuditSubmissions } from '@/lib/actions/admin-audits'
+import type { AuditAiResult } from '@/lib/data/admin-audit-ai'
 
 interface Props {
   rows:  AdminAuditRow[]
   total: number
   error: string | null
+  aiResults:    Record<string, AuditAiResult>
+  aiConfigured: boolean
 }
 
 const STATUS_OPTIONS: { value: string; label: string }[] = [
@@ -28,13 +33,14 @@ const STATUS_OPTIONS: { value: string; label: string }[] = [
 
 type ArchiveModal = { open: false } | { open: true; ids: string[]; bulk: boolean }
 
-export default function AuditTableClient({ rows: initialRows, total, error }: Props) {
+export default function AuditTableClient({ rows: initialRows, total, error, aiResults, aiConfigured }: Props) {
   const [localRows,    setLocalRows]    = useState(initialRows)
   const [search,       setSearch]       = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [selectedIds,  setSelectedIds]  = useState<Set<string>>(new Set())
   const [archiveModal, setArchiveModal] = useState<ArchiveModal>({ open: false })
   const [isArchiving,  startArchive]    = useTransition()
+  const [aiModal,      setAiModal]      = useState<{ result: AuditAiResult; name: string } | null>(null)
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase()
@@ -195,7 +201,7 @@ export default function AuditTableClient({ rows: initialRows, total, error }: Pr
         ) : (
           <div className="rounded-2xl border border-white/[0.08] bg-[#0f1012]/80 overflow-hidden">
             <div className="overflow-x-auto">
-              <table className="w-full text-[12.5px] min-w-[1000px]">
+              <table className="w-full text-[12.5px] min-w-[1180px]">
                 <thead className="bg-white/[0.02] text-[10px] uppercase tracking-[0.08em] text-[#6a6a6e]">
                   <tr>
                     <th className="px-3 py-2.5 w-[36px]">
@@ -217,6 +223,7 @@ export default function AuditTableClient({ rows: initialRows, total, error }: Pr
                     <th className="text-left px-3 py-2.5">Priority</th>
                     <th className="text-right px-3 py-2.5">Score</th>
                     <th className="text-right px-3 py-2.5 whitespace-nowrap">Submitted</th>
+                    <th className="text-left px-3 py-2.5">AI</th>
                     <th className="text-right px-3 py-2.5">Actions</th>
                   </tr>
                 </thead>
@@ -289,6 +296,14 @@ export default function AuditTableClient({ rows: initialRows, total, error }: Pr
                           {new Date(row.created_at).toLocaleDateString()}
                         </td>
                         <td className="px-3 py-2.5">
+                          <AuditAiCell
+                            auditId={row.id}
+                            result={aiResults[row.id]}
+                            aiConfigured={aiConfigured}
+                            onView={() => { const res = aiResults[row.id]; if (res) setAiModal({ result: res, name: row.business_name }) }}
+                          />
+                        </td>
+                        <td className="px-3 py-2.5">
                           <AuditActionsCell
                             submissionId={row.id}
                             status={row.status}
@@ -324,6 +339,10 @@ export default function AuditTableClient({ rows: initialRows, total, error }: Pr
         onConfirm={confirmArchive}
         onCancel={() => setArchiveModal({ open: false })}
       />
+
+      {aiModal && (
+        <AuditAiResultModal result={aiModal.result} businessName={aiModal.name} onClose={() => setAiModal(null)} />
+      )}
     </>
   )
 }

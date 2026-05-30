@@ -8,6 +8,7 @@ import { getAdminMissionControlSummary } from '@/lib/data/admin-mission-control'
 import { getAdminClientRevenue, getAdminClientPaymentHealth } from '@/lib/data/admin-clients'
 import { getOnboardingAlertSummary } from '@/lib/data/admin-client-tasks'
 import { getTopClientSuggestions } from '@/lib/data/admin-client-suggestions'
+import { relevanceAiConfigured } from '@/lib/ai/relevance-audit-analysis'
 import AdminKpiCard from '@/components/admin/ui/AdminKpiCard'
 import MissionControlAuditTable from './MissionControlAuditTable'
 import {
@@ -68,7 +69,7 @@ export default async function AdminMissionControlPage() {
   // present; it does NOT mean payments are verified (no transaction
   // reading exists yet), so revenue stays "Estimated" regardless.
   const paypalReady    = !!process.env.PAYPAL_CLIENT_ID && !!process.env.PAYPAL_CLIENT_SECRET
-  const relevanceReady = !!process.env.RELEVANCE_API_KEY
+  const relevanceReady = relevanceAiConfigured()
 
   // Revenue figures are computed from REAL stored client fees (admin_clients).
   // They are $0 until clients are converted, and labelled "Estimated"

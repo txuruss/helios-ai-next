@@ -1,6 +1,8 @@
 import Link from 'next/link'
 import { requireAdmin } from '@/lib/auth/require-admin'
 import { getAdminAuditMetrics, getAdminAuditTableRows } from '@/lib/data/admin-audits'
+import { getAuditAiResultsForAudits } from '@/lib/data/admin-audit-ai'
+import { relevanceAiConfigured } from '@/lib/ai/relevance-audit-analysis'
 import AdminKpiCard from '@/components/admin/ui/AdminKpiCard'
 import AuditTableClient from './AuditTableClient'
 import { ArrowLeft, AlertTriangle, Database, FileSearch } from 'lucide-react'
@@ -14,6 +16,9 @@ export default async function AdminAuditsPage() {
     getAdminAuditMetrics(),
     getAdminAuditTableRows({ limit: 100 }),
   ])
+
+  const ai = await getAuditAiResultsForAudits(table.rows.map((r) => r.id))
+  const aiConfigured = relevanceAiConfigured()
 
   return (
     <div className="flex flex-col gap-5">
@@ -110,6 +115,8 @@ export default async function AdminAuditsPage() {
             rows={table.rows}
             total={table.total}
             error={table.error}
+            aiResults={ai.byAudit}
+            aiConfigured={aiConfigured}
           />
         </div>
 

@@ -36,6 +36,7 @@ import {
   PLAN_FEES,
 } from '@/lib/admin/plan-pricing'
 import { seedDefaultTasksFor } from '@/lib/admin/onboarding-tasks'
+import { relevanceAiConfigured, runRelevanceAuditAnalysis } from '@/lib/ai/relevance-audit-analysis'
 
 export interface AdminAuditActionResult {
   ok:    boolean
@@ -347,5 +348,100 @@ export async function archiveBulkAuditSubmissions(ids: unknown[]): Promise<Admin
 
   revalidatePath('/admin/audits')
   revalidatePath('/admin/mission-control')
+  return { ok: true }
+}
+
+// ── Run Relevance AI analysis on an audit submission (manual) ──────
+// Decision-support only: stores structured AI output in
+// admin_audit_ai_results. NEVER converts leads, creates clients,
+// contacts anyone, or changes payment. Failures are saved as a 'failed'
+// result so the UI can show it — the app never crashes.
+const AI_SEED_COLS =
+  'id, business_name, contact_name, email, industry, city, country, website, ' +
+  'current_booking, monthly_leads, biggest_problem, services_offered, business_hours, ' +
+  'existing_booking_software, preferred_channels, selected_plan'
+
+export async function runAuditAiAnalysis(submissionId: string): Promise<AdminAuditActionResult> {
+  await requireAdmin({ path: '/admin/audits' })
+
+  const id = validateSubmissionId(submissionId)
+  if (!id) return { ok: false, error: 'Invalid submission id.' }
+
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    console.error('[runAuditAiAnalysis] SUPABASE_SERVICE_ROLE_KEY missing')
+    return { ok: false, error: 'Server configuration error.' }
+  }
+  if (!relevanceAiConfigured()) {
+    return { ok: false, error: 'Relevance AI not connected. Set RELEVANCE_AI_API_KEY and RELEVANCE_AI_AGENT_ID.' }
+  }
+
+  const db = createServiceRoleClient()
+
+  const { data: rowData, error: fetchErr } = await db
+    .from('audit_submissions')
+    .select(AI_SEED_COLS)
+    .eq('id', id)
+    .single()
+  if (fetchErr || !rowData) return { ok: false, error: 'Audit submission not found.' }
+  const r = rowData as Record<string, unknown>
+
+  const result = await runRelevanceAuditAnalysis({
+    audit_id:           id,
+    business_name:      typeof r.business_name === 'string' ? r.business_name : '(unknown)',
+    contact_name:       asStr(r.contact_name),
+    email:              asStr(r.email),
+    industry:           asStr(r.industry),
+    city:               asStr(r.city),
+    country:            asStr(r.country),
+    website:            asStr(r.website),
+    current_booking:    asStr(r.current_booking),
+    monthly_leads:      asStr(r.monthly_leads),
+    biggest_problem:    asStr(r.biggest_problem),
+    services_offered:   asStr(r.services_offered),
+    business_hours:     asStr(r.business_hours),
+    existing_software:  asStr(r.existing_booking_software),
+    preferred_channels: Array.isArray(r.preferred_channels) ? (r.preferred_channels as unknown[]).map(String) : [],
+    selected_plan:      asStr(r.selected_plan),
+  })
+
+  const baseRow = result.ok
+    ? {
+        audit_id:                 id,
+        business_summary:         result.analysis.business_summary,
+        fit_score:                result.analysis.fit_score,
+        urgency_score:            result.analysis.urgency_score,
+        lead_priority:            result.analysis.lead_priority,
+        recommended_offer:        result.analysis.recommended_offer,
+        automation_opportunities: result.analysis.automation_opportunities,
+        missing_information:      result.analysis.missing_information,
+        suggested_next_action:    result.analysis.suggested_next_action,
+        founder_notes:            result.analysis.founder_notes,
+        raw_agent_response:       result.analysis.raw_agent_response ?? null,
+        status:                   'completed' as const,
+        error_message:            null,
+      }
+    : {
+        audit_id:           id,
+        status:             'failed' as const,
+        error_message:      result.error,
+        raw_agent_response: 'raw' in result ? (result.raw ?? null) : null,
+      }
+
+  const { error: upsertErr } = await db
+    .from('admin_audit_ai_results')
+    .upsert(baseRow, { onConflict: 'audit_id' })
+
+  if (upsertErr) {
+    if (isMissingTable(upsertErr)) {
+      return { ok: false, error: 'AI results table not found. Apply migration 20260603120000_add_admin_audit_ai_results.sql in Supabase, then retry.' }
+    }
+    console.error('[runAuditAiAnalysis] save failed:', upsertErr.message, '| code:', upsertErr.code)
+    return { ok: false, error: 'Could not save the AI result. Try again.' }
+  }
+
+  revalidatePath('/admin/audits')
+  revalidatePath('/admin/mission-control')
+
+  if (!result.ok) return { ok: false, error: result.error }
   return { ok: true }
 }
