@@ -7,7 +7,8 @@ import type { AdminAuditRow } from '@/lib/data/admin-audits'
 import StatusPill from '@/components/admin/ui/StatusPill'
 import PriorityPill from '@/components/admin/ui/PriorityPill'
 import PlanPill from '@/components/admin/ui/PlanPill'
-import { ExpandToggle, ExpandedDetailRow } from '@/components/admin/ui/ExpandableRow'
+import { ExpandToggle, ActionsToggle } from '@/components/admin/ui/ExpandableRow'
+import ExpandableActionPanel from '@/components/admin/ui/ExpandableActionPanel'
 import CompactDataList, { type DataItem } from '@/components/admin/ui/CompactDataList'
 import AuditActionsCell from './AuditActionsCell'
 import AuditAiCell from './AuditAiCell'
@@ -38,6 +39,25 @@ const STATUS_OPTIONS: { value: string; label: string }[] = [
 // detail row's colSpan so it spans the full table width.
 const COL_SPAN = 9
 
+// Plain-language "next step" shown at the top of the expanded panel.
+function recommendedAuditAction(
+  status: AdminAuditRow['status'],
+  aiConfigured: boolean,
+  aiRes: AuditAiResult | undefined,
+): string {
+  if (aiRes?.status === 'completed' && aiRes.suggested_next_action) return aiRes.suggested_next_action
+  if (aiConfigured && !aiRes) return 'Run the AI audit to score this lead before qualifying.'
+  switch (status) {
+    case 'new':       return 'Mark reviewed, then qualify this lead if it is a good fit.'
+    case 'in_review': return 'Qualify this lead, or convert it to a client.'
+    case 'qualified':
+    case 'contacted': return 'Convert this lead into a client to begin onboarding.'
+    case 'converted': return 'Already converted — continue in Clients and Delivery.'
+    case 'archived':  return 'Archived — no further action needed.'
+    default:          return 'Review this submission and choose the next step.'
+  }
+}
+
 type ArchiveModal = { open: false } | { open: true; ids: string[]; bulk: boolean }
 
 export default function AuditTableClient({ rows: initialRows, total, error, aiResults, aiConfigured }: Props) {
@@ -46,7 +66,7 @@ export default function AuditTableClient({ rows: initialRows, total, error, aiRe
   const [search,       setSearch]       = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [selectedIds,  setSelectedIds]  = useState<Set<string>>(new Set())
-  const [expanded,     setExpanded]     = useState<Set<string>>(new Set())
+  const [expandedId,   setExpandedId]   = useState<string | null>(null)
   const [runningId,    setRunningId]    = useState<string | null>(null)
   const [archiveModal, setArchiveModal] = useState<ArchiveModal>({ open: false })
   const [isArchiving,  startArchive]    = useTransition()
@@ -80,11 +100,8 @@ export default function AuditTableClient({ rows: initialRows, total, error, aiRe
   }
 
   function toggleExpand(id: string) {
-    setExpanded((prev) => {
-      const next = new Set(prev)
-      next.has(id) ? next.delete(id) : next.add(id)
-      return next
-    })
+    // One row open at a time — opening a row closes any other.
+    setExpandedId((cur) => (cur === id ? null : id))
   }
 
   function toggleSelectAll() {
@@ -262,13 +279,17 @@ export default function AuditTableClient({ rows: initialRows, total, error, aiRe
                       [row.city, row.country].filter(Boolean).join(', ') || '—'
                     )
                     const isSelected = selectedIds.has(row.id)
-                    const isOpen     = expanded.has(row.id)
+                    const isOpen     = expandedId === row.id
                     const aiRes      = aiResults[row.id]
+                    const completed  = aiRes?.status === 'completed'
                     const website    = row.website_url
                       ? row.website_url.replace(/^https?:\/\//, '').replace(/\/$/, '')
                       : null
+                    const recommendation = recommendedAuditAction(row.status, aiConfigured, aiRes)
 
                     const details: DataItem[] = [
+                      { label: 'Contact name', value: row.contact_name ?? '—' },
+                      { label: 'Email', value: row.email ?? '—' },
                       { label: 'Location', value: location },
                       {
                         label: 'Website',
@@ -279,29 +300,23 @@ export default function AuditTableClient({ rows: initialRows, total, error, aiRe
                           </a>
                         ) : '—',
                       },
-                      { label: 'Contact name', value: row.contact_name ?? '—' },
-                      { label: 'Email', value: row.email ?? '—' },
                       { label: 'Submitted', value: new Date(row.created_at).toLocaleString() },
                       { label: 'Source', value: row.source || '—' },
                     ]
-                    if (aiRes?.status === 'completed') {
-                      if (aiRes.business_summary) details.push({ label: 'AI summary', value: aiRes.business_summary, full: true })
-                      details.push({ label: 'Fit score', value: aiRes.fit_score ?? '—' })
-                      details.push({ label: 'Urgency score', value: aiRes.urgency_score ?? '—' })
-                      details.push({ label: 'Recommended offer', value: aiRes.recommended_offer ?? '—' })
-                      if (aiRes.missing_information.length > 0) {
+                    if (completed) {
+                      if (aiRes!.business_summary) details.push({ label: 'AI summary', value: aiRes!.business_summary, full: true })
+                      if (aiRes!.missing_information.length > 0) {
                         details.push({
                           label: 'Missing information', full: true,
                           value: (
                             <ul className="list-disc pl-4 flex flex-col gap-0.5">
-                              {aiRes.missing_information.map((m, i) => <li key={i}>{m}</li>)}
+                              {aiRes!.missing_information.map((m, i) => <li key={i}>{m}</li>)}
                             </ul>
                           ),
                         })
                       }
-                      if (aiRes.suggested_next_action) {
-                        details.push({ label: 'Suggested next action', value: aiRes.suggested_next_action, full: true })
-                      }
+                      if (aiRes!.suggested_next_action) details.push({ label: 'Suggested next action', value: aiRes!.suggested_next_action, full: true })
+                      if (aiRes!.founder_notes) details.push({ label: 'Founder notes', value: aiRes!.founder_notes, full: true })
                     } else if (aiRes?.status === 'failed' && aiRes.error_message) {
                       details.push({ label: 'AI error', value: aiRes.error_message, full: true })
                     }
@@ -362,20 +377,45 @@ export default function AuditTableClient({ rows: initialRows, total, error, aiRe
                             </div>
                           </td>
                           <td className="px-3 py-2.5">
-                            <AuditActionsCell
-                              submissionId={row.id}
-                              status={row.status}
-                              aiConfigured={aiConfigured}
-                              hasResult={!!aiRes}
-                              onRunAi={() => runAi(row.id)}
-                              onView={() => { if (aiRes) setAiModal({ result: aiRes, name: row.business_name }) }}
-                              onArchiveRequest={(id) => requestArchive([id], false)}
-                            />
+                            <div className="flex justify-end">
+                              <ActionsToggle open={isOpen} onToggle={() => toggleExpand(row.id)} label={isOpen ? 'Close' : 'Actions'} />
+                            </div>
                           </td>
                         </tr>
-                        <ExpandedDetailRow open={isOpen} colSpan={COL_SPAN}>
-                          <CompactDataList items={details} />
-                        </ExpandedDetailRow>
+                        <tr>
+                          <td colSpan={COL_SPAN} className="p-0">
+                            <ExpandableActionPanel
+                              open={isOpen}
+                              title="Recommended next action"
+                              description={recommendation}
+                              meta={
+                                <>
+                                  <AuditAiCell result={aiRes} aiConfigured={aiConfigured} running={runningId === row.id} />
+                                  {row.qualification_score !== null && (
+                                    <span className="inline-flex items-center text-[10.5px] font-semibold px-2 py-[2px] rounded-full border border-white/[0.12] bg-white/[0.03] text-[#9a9a9d] whitespace-nowrap">
+                                      Score {row.qualification_score}
+                                    </span>
+                                  )}
+                                </>
+                              }
+                              actions={
+                                <AuditActionsCell
+                                  submissionId={row.id}
+                                  status={row.status}
+                                  aiConfigured={aiConfigured}
+                                  hasResult={!!aiRes}
+                                  completed={completed}
+                                  running={runningId === row.id}
+                                  onRunAi={() => runAi(row.id)}
+                                  onView={() => { if (aiRes) setAiModal({ result: aiRes, name: row.business_name }) }}
+                                  onArchiveRequest={(id) => requestArchive([id], false)}
+                                />
+                              }
+                            >
+                              <CompactDataList items={details} />
+                            </ExpandableActionPanel>
+                          </td>
+                        </tr>
                       </Fragment>
                     )
                   })}

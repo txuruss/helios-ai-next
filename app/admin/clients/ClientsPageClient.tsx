@@ -18,9 +18,9 @@ import type {
 import AdminKpiCard from '@/components/admin/ui/AdminKpiCard'
 import PlanPill from '@/components/admin/ui/PlanPill'
 import ConfirmActionDialog from '@/components/admin/ui/ConfirmActionDialog'
-import { ExpandToggle, ExpandedDetailRow } from '@/components/admin/ui/ExpandableRow'
+import { ExpandToggle, ActionsToggle } from '@/components/admin/ui/ExpandableRow'
 import CompactDataList, { type DataItem } from '@/components/admin/ui/CompactDataList'
-import RowActionMenu, { type RowAction } from '@/components/admin/ui/RowActionMenu'
+import ExpandableActionPanel, { PanelActionButton, PanelSectionLabel } from '@/components/admin/ui/ExpandableActionPanel'
 import {
   updateClientStatus, updateClientPayment, loadClientReadiness,
 } from '@/lib/actions/admin-clients'
@@ -38,6 +38,17 @@ function computeHealth(leads: number, bookings: number): HealthStatus {
   if (r >= 0.6) return 'Healthy'
   if (r >= 0.3) return 'Watch'
   return 'At Risk'
+}
+
+// Plain-language "next step" fallback when there is no live suggestion.
+function clientNextAction(status: AdminClientStatus): string {
+  switch (status) {
+    case 'onboarding': return 'Continue onboarding tasks and confirm payment before launch.'
+    case 'active':     return 'Monitor health, bookings, and upcoming payments.'
+    case 'paused':     return 'Re-engage the client or confirm the reason for pausing.'
+    case 'churned':    return 'Review the churn reason, or archive if fully closed.'
+    default:           return 'Review this client and choose the next step.'
+  }
 }
 
 const HEALTH_COLORS: Record<HealthStatus, string> = {
@@ -136,11 +147,12 @@ export default function ClientsPageClient({ clients, error, suggestions = {} }: 
   const [planFilter,   setPlanFilter]   = useState('all')
   const [statusFilter, setStatusFilter] = useState('all')
   const [modal,        setModal]        = useState<ActionModal>({ open: false })
-  const [expanded,     setExpanded]     = useState<Set<string>>(new Set())
+  const [expandedId,   setExpandedId]   = useState<string | null>(null)
   const [readiness, setReadiness]         = useState<ClientHandoffReadiness | null>(null)
   const [readinessErr, setReadinessErr]   = useState<string | null>(null)
   const [readinessLoading, setReadinessLoading] = useState(false)
   const [drawerId,     setDrawerId]     = useState<string | null>(null)
+  const [drawerTab,    setDrawerTab]    = useState<'overview' | 'payments' | 'files' | undefined>(undefined)
   const [drawerKey,    setDrawerKey]    = useState(0)
   const [payClient,    setPayClient]    = useState<AdminClientRow | null>(null)
   const [isPending,    startTransition] = useTransition()
@@ -193,11 +205,13 @@ export default function ClientsPageClient({ clients, error, suggestions = {} }: 
   }
 
   function toggleExpand(id: string) {
-    setExpanded((prev) => {
-      const next = new Set(prev)
-      next.has(id) ? next.delete(id) : next.add(id)
-      return next
-    })
+    // One row open at a time — opening a row closes any other.
+    setExpandedId((cur) => (cur === id ? null : id))
+  }
+
+  function openDrawer(id: string, tab?: 'overview' | 'payments' | 'files') {
+    setDrawerTab(tab)
+    setDrawerId(id)
   }
 
   function openStatusChange(c: AdminClientRow, to: ClientLifecycleStatus) {
@@ -352,7 +366,7 @@ export default function ClientsPageClient({ clients, error, suggestions = {} }: 
                       // Reflect "effectively overdue" in the pill even if the
                       // stored status hasn't been flipped to 'overdue' yet.
                       const payCfg      = overdue ? PAYMENT_STATUS_CONFIG.overdue : PAYMENT_STATUS_CONFIG[c.payment_status]
-                      const isOpen      = expanded.has(c.id)
+                      const isOpen      = expandedId === c.id
                       const suggestion  = suggestions[c.id]
 
                       const details: DataItem[] = [
@@ -387,20 +401,9 @@ export default function ClientsPageClient({ clients, error, suggestions = {} }: 
                         },
                       ]
 
-                      // Row action menu — every existing action preserved.
-                      const statusItems: RowAction[] = STATUS_TRANSITIONS[c.status]
-                        .filter((tr) => tr.to !== 'archived')
-                        .map((tr) => ({ label: tr.label, onSelect: () => openStatusChange(c, tr.to) }))
-                      const canArchive = STATUS_TRANSITIONS[c.status].some((tr) => tr.to === 'archived')
-                      const actions: RowAction[] = [
-                        { label: 'View client', onSelect: () => setDrawerId(c.id) },
-                        { label: 'Update payment', tone: 'info', onSelect: () => { setActionError(null); setPayClient(c) } },
-                        ...statusItems,
-                        { label: 'Launch report', onSelect: () => setDrawerId(c.id) },
-                        ...(canArchive
-                          ? [{ label: 'Archive', tone: 'danger' as const, onSelect: () => openStatusChange(c, 'archived') }]
-                          : []),
-                      ]
+                      const statusTransitions = STATUS_TRANSITIONS[c.status].filter((tr) => tr.to !== 'archived')
+                      const canArchive   = STATUS_TRANSITIONS[c.status].some((tr) => tr.to === 'archived')
+                      const recommendation = suggestion?.title || suggestion?.label || clientNextAction(c.status)
 
                       return (
                         <Fragment key={c.id}>
@@ -411,7 +414,7 @@ export default function ClientsPageClient({ clients, error, suggestions = {} }: 
                             <td className="px-3 py-3">
                               <button
                                 type="button"
-                                onClick={() => setDrawerId(c.id)}
+                                onClick={() => openDrawer(c.id)}
                                 className="text-white font-medium hover:text-[#ffae3c] transition-colors focus:outline-none focus:underline text-left"
                               >
                                 {c.name}
@@ -447,13 +450,58 @@ export default function ClientsPageClient({ clients, error, suggestions = {} }: 
                             </td>
                             <td className="px-3 py-3">
                               <div className="flex justify-end">
-                                <RowActionMenu actions={actions} label={`Actions for ${c.name}`} />
+                                <ActionsToggle open={isOpen} onToggle={() => toggleExpand(c.id)} label={isOpen ? 'Close' : 'Actions'} />
                               </div>
                             </td>
                           </tr>
-                          <ExpandedDetailRow open={isOpen} colSpan={7}>
-                            <CompactDataList items={details} />
-                          </ExpandedDetailRow>
+                          <tr>
+                            <td colSpan={7} className="p-0">
+                              <ExpandableActionPanel
+                                open={isOpen}
+                                title="Next action"
+                                description={recommendation}
+                                meta={
+                                  <>
+                                    <span className="inline-flex items-center text-[10.5px] font-semibold px-2.5 py-[3px] rounded-full border whitespace-nowrap"
+                                      style={{ color: statusCfg.color, borderColor: `${statusCfg.color}33`, background: `${statusCfg.color}12` }}>
+                                      {statusCfg.label}
+                                    </span>
+                                    <span className="inline-flex items-center text-[10.5px] font-semibold px-2.5 py-[3px] rounded-full border whitespace-nowrap"
+                                      style={{ color: payCfg.color, borderColor: `${payCfg.color}33`, background: `${payCfg.color}12` }}>
+                                      {payCfg.label}
+                                    </span>
+                                    <span className="inline-flex items-center text-[10.5px] font-semibold px-2.5 py-[3px] rounded-full border whitespace-nowrap"
+                                      style={{ color: healthColor, borderColor: `${healthColor}33`, background: `${healthColor}12` }}>
+                                      {health}
+                                    </span>
+                                  </>
+                                }
+                                actions={
+                                  <>
+                                    <PanelActionButton variant="primary" onClick={() => openDrawer(c.id, 'overview')}>View Client</PanelActionButton>
+                                    <PanelActionButton variant="info" onClick={() => { setActionError(null); setPayClient(c) }}>Update Payment</PanelActionButton>
+                                    <PanelActionButton variant="secondary" onClick={() => openDrawer(c.id, 'overview')}>Open Launch Report</PanelActionButton>
+                                    <PanelActionButton variant="secondary" onClick={() => openDrawer(c.id, 'files')}>Open Files &amp; Handoff</PanelActionButton>
+                                  </>
+                                }
+                                secondary={
+                                  <>
+                                    <PanelSectionLabel>Status</PanelSectionLabel>
+                                    {statusTransitions.map((tr) => (
+                                      <PanelActionButton key={tr.to} variant="secondary" onClick={() => openStatusChange(c, tr.to)}>
+                                        {tr.label}
+                                      </PanelActionButton>
+                                    ))}
+                                    {canArchive && (
+                                      <PanelActionButton variant="danger" onClick={() => openStatusChange(c, 'archived')}>Archive</PanelActionButton>
+                                    )}
+                                  </>
+                                }
+                              >
+                                <CompactDataList items={details} />
+                              </ExpandableActionPanel>
+                            </td>
+                          </tr>
                         </Fragment>
                       )
                     })}
@@ -528,7 +576,8 @@ export default function ClientsPageClient({ clients, error, suggestions = {} }: 
         <ClientDetailDrawer
           clientId={drawerId}
           reloadKey={drawerKey}
-          onClose={() => setDrawerId(null)}
+          initialTab={drawerTab}
+          onClose={() => { setDrawerId(null); setDrawerTab(undefined) }}
           onUpdatePayment={() => {
             const c = clients.find((x) => x.id === drawerId)
             if (c) { setActionError(null); setPayClient(c) }

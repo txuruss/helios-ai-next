@@ -10,7 +10,34 @@
 // scroll while preserving every field in an expandable panel.
 
 import type { ReactNode } from 'react'
-import { ChevronRight } from 'lucide-react'
+import { ChevronRight, ChevronDown } from 'lucide-react'
+
+// Labelled "Actions" toggle for the Actions column. Clicking it opens the
+// same expandable action panel the row chevron controls, so either entry
+// point unfolds the row. Highlights in the orange accent while open.
+export function ActionsToggle({
+  open, onToggle, label = 'Actions',
+}: {
+  open: boolean
+  onToggle: () => void
+  label?: string
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-expanded={open}
+      className={`inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[12px] font-medium border
+                  transition-all focus:outline-none focus:ring-2 focus:ring-[#ff7a18]/30
+                  ${open
+                    ? 'bg-[#ff7a18]/[0.16] border-[#ff7a18]/45 text-[#ffae3c]'
+                    : 'bg-white/[0.03] border-white/[0.08] text-[#9a9a9d] hover:text-white hover:bg-white/[0.07]'}`}
+    >
+      {label}
+      <ChevronDown size={12} className={`transition-transform duration-200 ${open ? 'rotate-180' : ''}`} />
+    </button>
+  )
+}
 
 export function ExpandToggle({
   open, onToggle, label = 'Toggle row details',

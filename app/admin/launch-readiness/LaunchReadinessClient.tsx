@@ -13,9 +13,9 @@ import type { ClientHandoffReadiness } from '@/lib/admin/client-handoff-readines
 import AdminKpiCard from '@/components/admin/ui/AdminKpiCard'
 import PlanPill from '@/components/admin/ui/PlanPill'
 import ConfirmActionDialog from '@/components/admin/ui/ConfirmActionDialog'
-import { ExpandToggle, ExpandedDetailRow } from '@/components/admin/ui/ExpandableRow'
+import { ExpandToggle, ActionsToggle } from '@/components/admin/ui/ExpandableRow'
 import CompactDataList, { type DataItem } from '@/components/admin/ui/CompactDataList'
-import RowActionMenu, { type RowAction } from '@/components/admin/ui/RowActionMenu'
+import ExpandableActionPanel, { PanelActionButton } from '@/components/admin/ui/ExpandableActionPanel'
 import ClientDetailDrawer from '@/app/admin/clients/ClientDetailDrawer'
 import LaunchReportModal from '@/app/admin/clients/LaunchReportModal'
 import { updateClientStatus } from '@/lib/actions/admin-clients'
@@ -92,10 +92,11 @@ export default function LaunchReadinessClient({ rows, summary, filesMigrationNee
   const [drawerKey, setDrawerKey] = useState(0)
   const [reportInput, setReportInput] = useState<LaunchReportInput | null>(null)
   const [copyToast, setCopyToast] = useState<string | null>(null)
-  const [expanded, setExpanded]   = useState<Set<string>>(new Set())
+  const [expandedId, setExpandedId] = useState<string | null>(null)
 
   function toggleExpand(id: string) {
-    setExpanded((p) => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n })
+    // One row open at a time — opening a row closes any other.
+    setExpandedId((cur) => (cur === id ? null : id))
   }
 
   async function copyRow(r: LaunchReadinessRow) {
@@ -257,25 +258,18 @@ export default function LaunchReadinessClient({ rows, summary, filesMigrationNee
                     {filtered.map((r) => {
                       const lc = LAUNCH_CFG[r.launchState]
                       const paymentMissing = r.payment_status === 'unpaid' || r.payment_status === 'overdue'
-                      const isOpen = expanded.has(r.id)
+                      const isOpen = expandedId === r.id
 
-                      const blockerNodes: string[] = []
-                      if (r.taskBlocked > 0) blockerNodes.push(`${r.taskBlocked} blocked`)
-                      if (r.taskOverdue > 0) blockerNodes.push(`${r.taskOverdue} overdue`)
-                      if (paymentMissing) blockerNodes.push(r.payment_status === 'overdue' ? 'Payment overdue' : 'Payment unpaid')
+                      const missingItems: string[] = []
+                      if (!r.hasHandoffDoc)  missingItems.push('Handoff doc')
+                      if (!r.hasBrandAssets) missingItems.push('Brand assets')
+                      if (!r.hasSetupDoc)    missingItems.push('Setup doc')
+                      if (r.taskBlocked > 0) missingItems.push(`${r.taskBlocked} blocked`)
+                      if (r.taskOverdue > 0) missingItems.push(`${r.taskOverdue} overdue`)
+                      if (paymentMissing)    missingItems.push(r.payment_status === 'overdue' ? 'Payment overdue' : 'Payment unpaid')
 
                       const details: DataItem[] = [
                         { label: 'Plan', value: <PlanPill plan={r.plan} /> },
-                        {
-                          label: 'Task completion',
-                          value: `${r.taskDone}/${r.taskTotal} done${r.taskOpen > 0 ? ` · ${r.taskOpen} open` : ''}${r.taskOverdue > 0 ? ` · ${r.taskOverdue} overdue` : ''}`,
-                        },
-                        {
-                          label: 'Blockers',
-                          value: blockerNodes.length === 0
-                            ? 'None'
-                            : <span className="text-[#ff8a7a]">{blockerNodes.join(' · ')}</span>,
-                        },
                         {
                           label: 'File checklist',
                           full: true,
@@ -287,30 +281,12 @@ export default function LaunchReadinessClient({ rows, summary, filesMigrationNee
                             </div>
                           ),
                         },
-                        {
-                          label: 'Launch report',
-                          full: true,
-                          value: (
-                            <div className="flex items-center gap-4">
-                              <button type="button" onClick={() => setReportInput(rowToReportInput(r))}
-                                className="text-[#ffae3c] hover:text-white transition-colors focus:outline-none focus:underline">View report</button>
-                              <button type="button" onClick={() => copyRow(r)}
-                                className="text-[#9a9a9d] hover:text-white transition-colors focus:outline-none focus:underline">Copy report</button>
-                            </div>
-                          ),
-                        },
-                      ]
-
-                      const actions: RowAction[] = [
-                        { label: 'Open client', onSelect: () => setDrawer({ id: r.id }) },
-                        { label: 'Open files', tone: 'info', onSelect: () => setDrawer({ id: r.id, tab: 'files' }) },
-                        { label: 'Open payment', tone: 'info', onSelect: () => setDrawer({ id: r.id, tab: 'payments' }) },
-                        { label: 'Open delivery', tone: 'muted', onSelect: () => router.push('/admin/delivery') },
-                        { label: 'View report', onSelect: () => setReportInput(rowToReportInput(r)) },
-                        { label: 'Copy report', tone: 'muted', onSelect: () => { void copyRow(r) } },
-                        ...(r.status !== 'active'
-                          ? [{ label: 'Mark active', tone: 'success' as const, onSelect: () => { setStatusErr(null); setStatusModal({ open: true, id: r.id, name: r.business_name, readiness: r.readiness }) } }]
-                          : []),
+                        { label: 'Task completion', value: `${r.taskDone}/${r.taskTotal} done` },
+                        { label: 'Open tasks', value: r.taskOpen },
+                        { label: 'Blocked tasks', value: <span style={{ color: r.taskBlocked > 0 ? '#ff5247' : undefined }}>{r.taskBlocked}</span> },
+                        { label: 'Overdue tasks', value: <span style={{ color: r.taskOverdue > 0 ? '#ff5247' : undefined }}>{r.taskOverdue}</span> },
+                        { label: 'Payment status', value: r.payment_status ? r.payment_status.replace('_', ' ') : '—' },
+                        { label: 'Client status', value: STATUS_LABELS[r.status as keyof typeof STATUS_LABELS] ?? r.status },
                       ]
 
                       return (
@@ -338,13 +314,46 @@ export default function LaunchReadinessClient({ rows, summary, filesMigrationNee
                             <td className="px-3 py-2.5 text-[#9a9a9d] max-w-[180px]">{r.nextAction}</td>
                             <td className="px-3 py-2.5">
                               <div className="flex justify-end">
-                                <RowActionMenu actions={actions} label={`Actions for ${r.business_name}`} />
+                                <ActionsToggle open={isOpen} onToggle={() => toggleExpand(r.id)} label={isOpen ? 'Close' : 'Actions'} />
                               </div>
                             </td>
                           </tr>
-                          <ExpandedDetailRow open={isOpen} colSpan={7}>
-                            <CompactDataList items={details} />
-                          </ExpandedDetailRow>
+                          <tr>
+                            <td colSpan={7} className="p-0">
+                              <ExpandableActionPanel
+                                open={isOpen}
+                                title="Launch recommendation"
+                                description={r.nextAction}
+                                meta={
+                                  <>
+                                    <Pill color={lc.color} label={lc.label} />
+                                    <Pill color={STATUS_COLORS[r.status as keyof typeof STATUS_COLORS] ?? '#6a6a6e'} label={STATUS_LABELS[r.status as keyof typeof STATUS_LABELS] ?? r.status} />
+                                    {r.payment_status && <Pill color={PAYMENT_TONE[r.payment_status] ?? '#6a6a6e'} label={r.payment_status.replace('_', ' ')} />}
+                                    <span className="text-[11px] text-[#9a9a9d]">
+                                      {missingItems.length === 0 ? 'No missing launch items' : `Missing: ${missingItems.join(' · ')}`}
+                                    </span>
+                                  </>
+                                }
+                                actions={
+                                  <>
+                                    <PanelActionButton variant="primary" onClick={() => setReportInput(rowToReportInput(r))}>View Report</PanelActionButton>
+                                    <PanelActionButton variant="secondary" onClick={() => { void copyRow(r) }}>Copy Report</PanelActionButton>
+                                    <PanelActionButton variant="secondary" onClick={() => setDrawer({ id: r.id })}>Open Client</PanelActionButton>
+                                    <PanelActionButton variant="info" onClick={() => setDrawer({ id: r.id, tab: 'files' })}>Open Files</PanelActionButton>
+                                    <PanelActionButton variant="info" onClick={() => setDrawer({ id: r.id, tab: 'payments' })}>Open Payment</PanelActionButton>
+                                    <PanelActionButton variant="secondary" onClick={() => router.push('/admin/delivery')}>Open Delivery</PanelActionButton>
+                                    {r.status !== 'active' && (
+                                      <PanelActionButton variant="success" onClick={() => { setStatusErr(null); setStatusModal({ open: true, id: r.id, name: r.business_name, readiness: r.readiness }) }}>
+                                        Mark Active
+                                      </PanelActionButton>
+                                    )}
+                                  </>
+                                }
+                              >
+                                <CompactDataList items={details} />
+                              </ExpandableActionPanel>
+                            </td>
+                          </tr>
                         </Fragment>
                       )
                     })}

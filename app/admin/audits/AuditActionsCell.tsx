@@ -1,16 +1,14 @@
 'use client'
 
-// Per-row action menu for the /admin/audits table. Collapses every row
-// action into a single compact "⋯" menu (RowActionMenu) so the Actions
-// column stays narrow and visible without horizontal scroll.
+// Primary action buttons for an audit row, rendered inside the row's
+// expandable action panel (ExpandableActionPanel). Replaces the old
+// compact "⋯" menu so the founder sees the real actions laid out clearly.
 //
-// Each action calls a server action in lib/actions/admin-audits.ts which:
-//   1. re-derives founder identity server-side (requireAdmin)
-//   2. updates audit_submissions.status
-//   3. revalidates /admin/audits + /admin/mission-control
-//
-// The available actions are gated by the submission's current status so
-// the founder is never offered a no-op:
+// Each status action calls a server action in lib/actions/admin-audits.ts
+// which re-derives founder identity (requireAdmin), updates
+// audit_submissions.status, and revalidates /admin/audits +
+// /admin/mission-control. Actions are gated by current status so no no-op
+// is ever offered:
 //   • new                    → Run/View AI · Mark reviewed · Qualify · Convert · Archive
 //   • in_review              → Run/View AI · Qualify · Convert · Archive
 //   • qualified / contacted  → Run/View AI · Convert · Archive
@@ -18,9 +16,10 @@
 //   • archived               → Run/View AI only
 //
 // Run AI Audit / View AI Result are owned by the parent table (so the
-// "Running" state can show in the Score / AI column); they are passed in
-// as callbacks. Qualify creates an admin_leads row; Convert creates an
-// admin_clients row; Archive routes through the parent confirm dialog.
+// "Running" state shows in the Score / AI column and the AI modal opens at
+// table level); they are passed in as callbacks. When Relevance AI is not
+// connected, Run AI Audit is disabled but Qualify / Convert / Archive
+// remain available.
 
 import { useTransition } from 'react'
 import {
@@ -29,20 +28,22 @@ import {
   convertAuditToClient,
 } from '@/lib/actions/admin-audits'
 import type { AdminAuditStatus } from '@/lib/data/admin-audits'
-import RowActionMenu, { type RowAction } from '@/components/admin/ui/RowActionMenu'
+import { PanelActionButton } from '@/components/admin/ui/ExpandableActionPanel'
 
 interface Props {
   submissionId:     string
   status:           AdminAuditStatus
   aiConfigured:     boolean
   hasResult:        boolean
+  completed:        boolean
+  running:          boolean
   onRunAi:          () => void
   onView:           () => void
   onArchiveRequest: (id: string) => void
 }
 
 export default function AuditActionsCell({
-  submissionId, status, aiConfigured, hasResult, onRunAi, onView, onArchiveRequest,
+  submissionId, status, aiConfigured, hasResult, completed, running, onRunAi, onView, onArchiveRequest,
 }: Props) {
   const [pending, startTransition] = useTransition()
 
@@ -58,17 +59,48 @@ export default function AuditActionsCell({
     })
   }
 
-  const actions: RowAction[] = []
-  if (aiConfigured) actions.push({ label: hasResult ? 'Re-run AI audit' : 'Run AI audit', onSelect: onRunAi })
-  if (hasResult)    actions.push({ label: 'View AI result', tone: 'info', onSelect: onView })
-  if (canMarkReviewed) actions.push({ label: 'Mark reviewed', tone: 'info', onSelect: () => run(markAuditReviewed) })
-  if (canQualify)      actions.push({ label: 'Qualify → lead', tone: 'info', onSelect: () => run(qualifyAuditToLead) })
-  if (canConvert)      actions.push({ label: 'Convert → client', tone: 'success', onSelect: () => run(convertAuditToClient) })
-  if (canArchive)      actions.push({ label: 'Archive', tone: 'danger', onSelect: () => onArchiveRequest(submissionId) })
-
   return (
-    <div className="flex justify-end">
-      <RowActionMenu actions={actions} busy={pending} label="Audit actions" />
+    <div className="flex flex-col gap-2">
+      <div className="flex items-center gap-2 flex-wrap">
+        <PanelActionButton
+          variant="primary"
+          disabled={!aiConfigured || running}
+          onClick={onRunAi}
+          title={!aiConfigured ? 'Relevance AI not connected' : undefined}
+        >
+          {running ? 'Running…' : hasResult ? 'Re-run AI Audit' : 'Run AI Audit'}
+        </PanelActionButton>
+
+        {completed && (
+          <PanelActionButton variant="info" onClick={onView}>View AI Result</PanelActionButton>
+        )}
+        {canMarkReviewed && (
+          <PanelActionButton variant="secondary" disabled={pending} onClick={() => run(markAuditReviewed)}>
+            Mark reviewed
+          </PanelActionButton>
+        )}
+        {canQualify && (
+          <PanelActionButton variant="info" disabled={pending} onClick={() => run(qualifyAuditToLead)}>
+            Qualify
+          </PanelActionButton>
+        )}
+        {canConvert && (
+          <PanelActionButton variant="success" disabled={pending} onClick={() => run(convertAuditToClient)}>
+            Convert
+          </PanelActionButton>
+        )}
+        {canArchive && (
+          <PanelActionButton variant="danger" disabled={pending} onClick={() => onArchiveRequest(submissionId)}>
+            Archive
+          </PanelActionButton>
+        )}
+      </div>
+
+      {!aiConfigured && (
+        <span className="text-[11px] text-[#6a6a6e]">
+          Relevance AI not connected — Run AI Audit disabled. Qualify, Convert, and Archive still work.
+        </span>
+      )}
     </div>
   )
 }
