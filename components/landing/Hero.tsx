@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { motion } from 'framer-motion'
+import { Zap, CalendarCheck, BellRing } from 'lucide-react'
 import { capture } from '@/lib/analytics/posthog'
 
 const TRUST_BULLETS = [
@@ -25,80 +26,102 @@ function ConversationCard() {
   }, [tick])
 
   const msgs = [
-    { who: 'cust', text: 'Hi — any openings this Saturday for a haircut?' },
+    { who: 'cust', text: 'Hi, any openings this Saturday for a haircut?' },
     { who: 'ai',   text: 'Yes! We have 10:00 AM and 1:30 PM available.' },
     { who: 'cust', text: '10 AM works.' },
     { who: 'ai',   text: 'Booked! Confirmation sent to your number.' },
   ]
 
+  const stats = [
+    { icon: Zap,           value: '< 1s',                                     label: 'Replied',     tone: '#ffae3c' },
+    { icon: CalendarCheck, value: tick % 2 === 0 ? '12 today' : '13 today',   label: 'Booked',      tone: '#22d093' },
+    { icon: BellRing,      value: 'Sent',                                     label: 'Owner alert', tone: '#9a9a9d' },
+  ]
+
   return (
-    <div className="relative rounded-3xl border border-white/10 overflow-hidden
-                    bg-gradient-to-b from-[#141518]/95 to-[#0c0c0e]/95
-                    shadow-[0_0_0_1px_rgba(255,255,255,0.04),0_60px_120px_-40px_rgba(255,122,24,0.25)]
-                    hover:border-[#ff7a18]/40 hover:shadow-[0_0_0_1px_rgba(255,122,24,0.18),0_60px_120px_-30px_rgba(255,122,24,0.5)]
-                    transition-all duration-300">
+    <div className="relative">
+      {/* Ambient orange/gold glow behind the card */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute -inset-3 -z-10 rounded-[2.25rem] blur-2xl
+                   bg-[radial-gradient(60%_55%_at_50%_0%,rgba(255,122,24,0.22),transparent_70%)]"
+      />
 
-      {/* Live pill */}
-      <div className="absolute -top-3 left-6 z-10 flex items-center gap-2 px-3 py-1.5 rounded-full
-                      bg-[#0a0a0c] border border-[#ff7a18]/40
-                      text-[11px] font-semibold tracking-widest uppercase text-[#ffae3c]">
-        <span className="w-1.5 h-1.5 rounded-full bg-[#ff7a18] animate-pulse-orange" />
-        Live Preview
-      </div>
+      <div className="glass relative rounded-[1.75rem] border border-white/10 overflow-hidden
+                      shadow-[0_0_0_1px_rgba(255,255,255,0.04),0_60px_120px_-40px_rgba(255,122,24,0.28)]
+                      hover:border-[#ff7a18]/40 hover:shadow-[0_0_0_1px_rgba(255,122,24,0.18),0_60px_120px_-30px_rgba(255,122,24,0.5)]
+                      transition-all duration-300">
 
-      {/* Header */}
-      <div className="flex items-center justify-between px-5 py-4 border-b border-white/[0.06]">
-        <div className="flex items-center gap-2.5 text-[13px] text-[#9a9a9d] font-mono">
-          <span className="w-2 h-2 rounded-full bg-[#22d093] shadow-glow-green" />
-          Elite Cuts · WhatsApp
+        {/* Top accent line */}
+        <div aria-hidden className="h-px w-full bg-gradient-to-r from-transparent via-[#ff7a18]/50 to-transparent" />
+
+        {/* Header */}
+        <div className="px-6 pt-5 pb-4 border-b border-white/[0.06]">
+          <div className="flex items-center justify-between gap-3">
+            <span className="inline-flex items-center gap-2 px-2.5 py-1 rounded-full
+                             bg-[#ff7a18]/[0.10] border border-[#ff7a18]/30
+                             text-[10px] font-semibold tracking-[0.18em] uppercase text-[#ffae3c]">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#ff7a18] animate-pulse-orange" />
+              Live Preview
+            </span>
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full
+                             bg-[#22d093]/[0.10] border border-[#22d093]/25
+                             text-[10.5px] font-medium text-[#22d093]">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#22d093] shadow-glow-green" />
+              AI Active
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2.5 mt-3.5">
+            <span className="w-2 h-2 rounded-full bg-[#22d093] shadow-glow-green shrink-0" />
+            <span className="text-[15px] font-semibold text-white tracking-tight">Elite Cuts</span>
+            <span className="text-[#3a3a3e]">·</span>
+            <span className="text-[12.5px] text-[#9a9a9d] font-mono">WhatsApp</span>
+          </div>
         </div>
-        <span className="text-[10px] px-2.5 py-1 rounded-full bg-[#22d093]/10 text-[#22d093] font-medium">AI Active</span>
-      </div>
 
-      {/* Messages */}
-      <div className="p-5 flex flex-col gap-2.5">
-        {msgs.map((m, i) => (
-          <div key={i} className="flex gap-2 text-[12.5px]">
-            <div className={`w-5 h-5 rounded-full shrink-0 flex items-center justify-center text-[9px] font-semibold ${
-              m.who === 'ai'
-                ? 'bg-gradient-to-b from-[#ff8a2a] to-[#b34800] text-white'
-                : 'bg-[#2a2a2e] text-[#bbb]'
-            }`}>
-              {m.who === 'ai' ? 'AI' : 'CU'}
+        {/* Messages */}
+        <div className="px-5 py-5 flex flex-col gap-3.5">
+          {msgs.map((m, i) => (
+            <div key={i} className="flex gap-2.5 items-start">
+              <div className={`w-6 h-6 rounded-full shrink-0 flex items-center justify-center text-[9px] font-bold tracking-wide ${
+                m.who === 'ai'
+                  ? 'bg-gradient-to-b from-[#ff8a2a] to-[#b34800] text-white shadow-[0_4px_12px_-4px_rgba(255,122,24,0.7)]'
+                  : 'bg-[#2a2a2e] text-[#cfcfcf] border border-white/[0.06]'
+              }`}>
+                {m.who === 'ai' ? 'AI' : 'CU'}
+              </div>
+              <div className={`rounded-2xl rounded-tl-md px-3.5 py-2.5 max-w-[85%] text-[12.5px] leading-relaxed border break-words ${
+                m.who === 'ai'
+                  ? 'bg-[#ff7a18]/[0.10] border-[#ff7a18]/25 text-[#f3e7da] shadow-[0_8px_26px_-14px_rgba(255,122,24,0.65)]'
+                  : 'bg-white/[0.04] border-white/[0.07] text-[#dcdcde]'
+              }`}>
+                {m.text}
+              </div>
             </div>
-            <div className={`rounded-xl px-2.5 py-1.5 max-w-[88%] border ${
-              m.who === 'ai'
-                ? 'bg-[#ff7a18]/[0.08] border-[#ff7a18]/[0.18]'
-                : 'bg-white/[0.04] border-white/[0.06]'
-            }`}>
-              {m.text}
+          ))}
+          {typing && (
+            <div className="flex gap-2.5 items-start">
+              <div className="w-6 h-6 rounded-full shrink-0 bg-gradient-to-b from-[#ff8a2a] to-[#b34800] flex items-center justify-center text-[9px] font-bold text-white shadow-[0_4px_12px_-4px_rgba(255,122,24,0.7)]">AI</div>
+              <div className="bg-white/[0.04] border border-white/[0.07] rounded-2xl rounded-tl-md px-3.5 py-3 flex gap-1.5 items-center">
+                {[0, 150, 300].map((d) => (
+                  <span key={d} className="w-1.5 h-1.5 rounded-full bg-white/50 animate-blink" style={{ animationDelay: `${d}ms` }} />
+                ))}
+              </div>
             </div>
-          </div>
-        ))}
-        {typing && (
-          <div className="flex gap-2 text-[12.5px]">
-            <div className="w-5 h-5 rounded-full shrink-0 bg-gradient-to-b from-[#ff8a2a] to-[#b34800] flex items-center justify-center text-[9px] font-semibold text-white">AI</div>
-            <div className="bg-white/[0.04] border border-white/[0.06] rounded-xl px-3 py-2 flex gap-1">
-              {[0, 150, 300].map((d) => (
-                <span key={d} className="w-1.5 h-1.5 rounded-full bg-white/50 animate-blink" style={{ animationDelay: `${d}ms` }} />
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
+          )}
+        </div>
 
-      {/* Stats strip */}
-      <div className="border-t border-white/[0.06] px-5 py-3 grid grid-cols-3 gap-3">
-        {[
-          { label: 'Replied',     value: '< 1s'   },
-          { label: 'Booked',      value: tick % 2 === 0 ? '12 today' : '13 today' },
-          { label: 'Owner alert', value: 'Sent ✓' },
-        ].map((s) => (
-          <div key={s.label} className="text-center">
-            <div className="text-[15px] font-semibold text-white">{s.value}</div>
-            <div className="text-[10px] text-[#6a6a6e] mt-0.5">{s.label}</div>
-          </div>
-        ))}
+        {/* Stats — mini KPI cards */}
+        <div className="border-t border-white/[0.06] px-5 py-4 grid grid-cols-3 gap-2.5">
+          {stats.map(({ icon: Icon, value, label, tone }) => (
+            <div key={label} className="rounded-xl bg-white/[0.03] border border-white/[0.07] px-3 py-3 flex flex-col gap-1.5">
+              <Icon size={14} style={{ color: tone }} strokeWidth={2.2} />
+              <div className="text-[14px] font-semibold text-white leading-none tabular-nums">{value}</div>
+              <div className="text-[10px] text-[#6a6a6e] uppercase tracking-[0.08em] leading-tight">{label}</div>
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   )
