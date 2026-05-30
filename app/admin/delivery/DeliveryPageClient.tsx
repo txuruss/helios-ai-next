@@ -5,7 +5,7 @@
 // ClientDetailDrawer. Bulk status changes go through bulkUpdateClientTasks.
 // No hard deletes — status changes only.
 
-import { useState, useMemo, useTransition } from 'react'
+import { Fragment, useState, useMemo, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import {
@@ -18,6 +18,9 @@ import type {
 import AdminKpiCard from '@/components/admin/ui/AdminKpiCard'
 import PlanPill from '@/components/admin/ui/PlanPill'
 import ConfirmActionDialog from '@/components/admin/ui/ConfirmActionDialog'
+import { ExpandToggle, ExpandedDetailRow } from '@/components/admin/ui/ExpandableRow'
+import CompactDataList, { type DataItem } from '@/components/admin/ui/CompactDataList'
+import RowActionMenu, { type RowAction } from '@/components/admin/ui/RowActionMenu'
 import ClientDetailDrawer from '@/app/admin/clients/ClientDetailDrawer'
 import {
   updateClientTask, completeClientTask, reopenClientTask, bulkUpdateClientTasks,
@@ -97,6 +100,11 @@ export default function DeliveryPageClient({ tasks, summary, migrationNeeded, er
   const [bulkPending, startBulk]    = useTransition()
   const [drawerId,   setDrawerId]   = useState<string | null>(null)
   const [drawerKey,  setDrawerKey]  = useState(0)
+  const [expanded,   setExpanded]   = useState<Set<string>>(new Set())
+
+  function toggleExpand(id: string) {
+    setExpanded((p) => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n })
+  }
 
   const today = todayIso()
   const soon  = soonIso()
@@ -245,19 +253,19 @@ export default function DeliveryPageClient({ tasks, summary, migrationNeeded, er
           ) : (
             <div className="rounded-2xl border border-white/[0.08] bg-[#0f1012]/80 overflow-hidden">
               <div className="overflow-x-auto">
-                <table className="w-full text-[12.5px] min-w-[920px]">
+                <table className="w-full text-[12.5px] min-w-[620px]">
                   <thead className="bg-white/[0.02] text-[10px] uppercase tracking-[0.08em] text-[#6a6a6e]">
                     <tr>
                       <th className="px-3 py-2.5 w-[36px]">
                         <input type="checkbox" checked={allSelected} onChange={toggleAll} aria-label="Select all"
                           className="cursor-pointer" style={{ accentColor: '#ff7a18', width: 13, height: 13 }} />
                       </th>
-                      <th className="text-left px-3 py-2.5 min-w-[150px]">Client</th>
+                      <th className="px-2 py-2.5 w-[28px]" aria-label="Expand" />
+                      <th className="text-left px-3 py-2.5 min-w-[130px]">Client</th>
                       <th className="text-left px-3 py-2.5 min-w-[200px]">Task</th>
-                      <th className="text-left px-3 py-2.5">Category</th>
                       <th className="text-left px-3 py-2.5">Status</th>
                       <th className="text-left px-3 py-2.5">Priority</th>
-                      <th className="text-left px-3 py-2.5 whitespace-nowrap">Due Date</th>
+                      <th className="text-left px-3 py-2.5 whitespace-nowrap">Due</th>
                       <th className="text-right px-3 py-2.5">Actions</th>
                     </tr>
                   </thead>
@@ -266,6 +274,7 @@ export default function DeliveryPageClient({ tasks, summary, migrationNeeded, er
                       <DeliveryTaskRow
                         key={t.id} task={t} today={today} soon={soon}
                         selected={selected.has(t.id)} onToggle={() => toggle(t.id)}
+                        open={expanded.has(t.id)} onToggleExpand={() => toggleExpand(t.id)}
                         onEdit={() => setEditTask(t)} onOpenClient={() => setDrawerId(t.client_id)}
                         onChanged={() => router.refresh()}
                       />
@@ -339,9 +348,10 @@ function buildRecommendations(s: AdminDeliverySummary): { label: string; color: 
 }
 
 function DeliveryTaskRow({
-  task, today, soon, selected, onToggle, onEdit, onOpenClient, onChanged,
+  task, today, soon, selected, onToggle, open, onToggleExpand, onEdit, onOpenClient, onChanged,
 }: {
   task: AdminDeliveryTaskRow; today: string; soon: string; selected: boolean
+  open: boolean; onToggleExpand: () => void
   onToggle: () => void; onEdit: () => void; onOpenClient: () => void; onChanged: () => void
 }) {
   const [busy, startBusy] = useTransition()
@@ -358,72 +368,94 @@ function DeliveryTaskRow({
     })
   }
 
+  // Core task actions collapsed into a compact menu so they stay visible
+  // without horizontal scroll. Gated by status (no no-op actions offered).
+  const actions: RowAction[] = []
+  if (task.status !== 'done') {
+    if (task.status === 'todo') {
+      actions.push({ label: 'Start', tone: 'info', onSelect: () => run(() => updateClientTask(task.id, { status: 'in_progress' })) })
+    }
+    if (task.status !== 'blocked') {
+      actions.push({ label: 'Block', tone: 'danger', onSelect: () => run(() => updateClientTask(task.id, { status: 'blocked' })) })
+    }
+    actions.push({ label: 'Mark done', tone: 'success', onSelect: () => run(() => completeClientTask(task.id)) })
+  } else {
+    actions.push({ label: 'Reopen', tone: 'default', onSelect: () => run(() => reopenClientTask(task.id)) })
+  }
+  actions.push({ label: 'Edit task', tone: 'muted', onSelect: onEdit })
+
+  const details: DataItem[] = [
+    { label: 'Category', value: <span className="uppercase tracking-[0.06em] text-[11px]">{task.category}</span> },
+    { label: 'Client plan', value: task.client_plan ? <PlanPill plan={task.client_plan} /> : '—' },
+    {
+      label: 'Due date',
+      value: task.due_date
+        ? <span style={{ color: overdue ? '#ff5247' : undefined }}>
+            {new Date(task.due_date).toLocaleDateString()}{overdue ? ' · Overdue' : dueSoon ? ' · Due soon' : ''}
+          </span>
+        : 'No due date',
+    },
+    { label: 'Created', value: new Date(task.created_at).toLocaleDateString() },
+    { label: 'Description', value: task.description || '—', full: true },
+  ]
+
   return (
-    <tr className={`border-t border-white/[0.04] transition-colors ${task.status === 'done' ? 'opacity-60' : 'hover:bg-white/[0.015]'} ${selected ? 'bg-[#ff7a18]/[0.04]' : ''}`}>
-      <td className="px-3 py-2.5">
-        <input type="checkbox" checked={selected} onChange={onToggle} aria-label={`Select ${task.title}`}
-          className="cursor-pointer" style={{ accentColor: '#ff7a18', width: 13, height: 13 }} />
-      </td>
-      <td className="px-3 py-2.5">
-        <button type="button" onClick={onOpenClient}
-          className="text-white font-medium hover:text-[#ffae3c] transition-colors text-left focus:outline-none focus:underline">
-          {task.client_business_name}
-        </button>
-        {task.client_plan && <div className="mt-0.5"><PlanPill plan={task.client_plan} /></div>}
-      </td>
-      <td className="px-3 py-2.5">
-        <div className={`leading-snug ${task.status === 'done' ? 'text-[#9a9a9d] line-through' : 'text-white'}`}>{task.title}</div>
-        {task.description && <div className="text-[10.5px] text-[#6a6a6e] mt-0.5 max-w-[280px] truncate">{task.description}</div>}
-        <div className="flex items-center gap-2 mt-1 flex-wrap">
-          {task.status === 'blocked' && <span className="text-[10px] text-[#ff8a7a]">Action: Review blocker</span>}
-          {task.status !== 'blocked' && overdue && <span className="text-[10px] text-[#ffae3c]">Action: Complete overdue task</span>}
-          {task.client_payment_status === 'unpaid' && (
-            <span className="text-[10px] font-semibold px-1.5 py-[1px] rounded-full border border-[#ffae3c]/30 bg-[#ffae3c]/[0.10] text-[#ffae3c]">
-              Payment not recorded
-            </span>
-          )}
-        </div>
-      </td>
-      <td className="px-3 py-2.5 text-[#9a9a9d] uppercase text-[10px] tracking-[0.06em] whitespace-nowrap">{task.category}</td>
-      <td className="px-3 py-2.5"><MiniPill color={s.color} label={s.label} /></td>
-      <td className="px-3 py-2.5"><MiniPill color={p.color} label={p.label} /></td>
-      <td className="px-3 py-2.5 whitespace-nowrap">
-        {task.due_date ? (
-          <div className="flex flex-col gap-0.5">
-            <span className="text-[11.5px] tabular-nums" style={{ color: overdue ? '#ff5247' : '#9a9a9d' }}>
-              {new Date(task.due_date).toLocaleDateString()}
-            </span>
-            {overdue && <MiniPill color="#ff5247" label="Overdue" />}
-            {!overdue && dueSoon && <MiniPill color="#ffae3c" label="Due soon" />}
+    <Fragment>
+      <tr className={`border-t border-white/[0.04] transition-colors ${task.status === 'done' ? 'opacity-60' : 'hover:bg-white/[0.015]'} ${selected ? 'bg-[#ff7a18]/[0.04]' : ''}`}>
+        <td className="px-3 py-2.5">
+          <input type="checkbox" checked={selected} onChange={onToggle} aria-label={`Select ${task.title}`}
+            className="cursor-pointer" style={{ accentColor: '#ff7a18', width: 13, height: 13 }} />
+        </td>
+        <td className="px-2 py-2.5">
+          <ExpandToggle open={open} onToggle={onToggleExpand} label={`Toggle details for ${task.title}`} />
+        </td>
+        <td className="px-3 py-2.5">
+          <button type="button" onClick={onOpenClient}
+            className="text-white font-medium hover:text-[#ffae3c] transition-colors text-left focus:outline-none focus:underline">
+            {task.client_business_name}
+          </button>
+        </td>
+        <td className="px-3 py-2.5">
+          <button type="button" onClick={onToggleExpand}
+            className={`leading-snug text-left focus:outline-none focus:underline ${task.status === 'done' ? 'text-[#9a9a9d] line-through' : 'text-white hover:text-[#ffae3c]'} transition-colors`}>
+            {task.title}
+          </button>
+          {task.description && <div className="text-[10.5px] text-[#6a6a6e] mt-0.5 max-w-[280px] truncate">{task.description}</div>}
+          <div className="flex items-center gap-2 mt-1 flex-wrap">
+            {task.status === 'blocked' && <span className="text-[10px] text-[#ff8a7a]">Action: Review blocker</span>}
+            {task.status !== 'blocked' && overdue && <span className="text-[10px] text-[#ffae3c]">Action: Complete overdue task</span>}
+            {task.client_payment_status === 'unpaid' && (
+              <span className="text-[10px] font-semibold px-1.5 py-[1px] rounded-full border border-[#ffae3c]/30 bg-[#ffae3c]/[0.10] text-[#ffae3c]">
+                Payment not recorded
+              </span>
+            )}
           </div>
-        ) : (
-          <span className="text-[11px] text-[#6a6a6e]">No due date</span>
-        )}
-      </td>
-      <td className="px-3 py-2.5">
-        <div className="flex items-center justify-end gap-2.5 text-[11px] whitespace-nowrap">
-          {task.status !== 'done' ? (
-            <>
-              {task.status === 'todo' && (
-                <button type="button" disabled={busy} onClick={() => run(() => updateClientTask(task.id, { status: 'in_progress' }))}
-                  className="text-[#3b9eff] hover:text-[#7ec0ff] transition-colors disabled:opacity-50 focus:outline-none focus:underline">Start</button>
-              )}
-              {task.status !== 'blocked' && (
-                <button type="button" disabled={busy} onClick={() => run(() => updateClientTask(task.id, { status: 'blocked' }))}
-                  className="text-[#ff8a7a] hover:text-[#ffb0a4] transition-colors disabled:opacity-50 focus:outline-none focus:underline">Block</button>
-              )}
-              <button type="button" disabled={busy} onClick={() => run(() => completeClientTask(task.id))}
-                className="text-[#22d093] hover:text-[#5be4b5] transition-colors disabled:opacity-50 focus:outline-none focus:underline">Done</button>
-            </>
+        </td>
+        <td className="px-3 py-2.5"><MiniPill color={s.color} label={s.label} /></td>
+        <td className="px-3 py-2.5"><MiniPill color={p.color} label={p.label} /></td>
+        <td className="px-3 py-2.5 whitespace-nowrap">
+          {task.due_date ? (
+            <div className="flex flex-col gap-0.5">
+              <span className="text-[11.5px] tabular-nums" style={{ color: overdue ? '#ff5247' : '#9a9a9d' }}>
+                {new Date(task.due_date).toLocaleDateString()}
+              </span>
+              {overdue && <MiniPill color="#ff5247" label="Overdue" />}
+              {!overdue && dueSoon && <MiniPill color="#ffae3c" label="Due soon" />}
+            </div>
           ) : (
-            <button type="button" disabled={busy} onClick={() => run(() => reopenClientTask(task.id))}
-              className="text-[#ffae3c] hover:text-[#ffce7a] transition-colors disabled:opacity-50 focus:outline-none focus:underline">Reopen</button>
+            <span className="text-[11px] text-[#6a6a6e]">No due date</span>
           )}
-          <button type="button" disabled={busy} onClick={onEdit}
-            className="text-[#9a9a9d] hover:text-white transition-colors disabled:opacity-50 focus:outline-none focus:underline">Edit</button>
-        </div>
-      </td>
-    </tr>
+        </td>
+        <td className="px-3 py-2.5">
+          <div className="flex justify-end">
+            <RowActionMenu actions={actions} busy={busy} label={`Actions for ${task.title}`} />
+          </div>
+        </td>
+      </tr>
+      <ExpandedDetailRow open={open} colSpan={8}>
+        <CompactDataList items={details} />
+      </ExpandedDetailRow>
+    </Fragment>
   )
 }
 

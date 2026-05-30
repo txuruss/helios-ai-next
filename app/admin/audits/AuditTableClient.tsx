@@ -1,16 +1,19 @@
 'use client'
 
-import { useState, useMemo, useTransition } from 'react'
+import { Fragment, useState, useMemo, useTransition } from 'react'
+import { useRouter } from 'next/navigation'
 import { Search, SlidersHorizontal, ExternalLink } from 'lucide-react'
 import type { AdminAuditRow } from '@/lib/data/admin-audits'
 import StatusPill from '@/components/admin/ui/StatusPill'
 import PriorityPill from '@/components/admin/ui/PriorityPill'
 import PlanPill from '@/components/admin/ui/PlanPill'
+import { ExpandToggle, ExpandedDetailRow } from '@/components/admin/ui/ExpandableRow'
+import CompactDataList, { type DataItem } from '@/components/admin/ui/CompactDataList'
 import AuditActionsCell from './AuditActionsCell'
 import AuditAiCell from './AuditAiCell'
 import AuditAiResultModal from './AuditAiResultModal'
 import ConfirmActionDialog from '@/components/admin/ui/ConfirmActionDialog'
-import { archiveBulkAuditSubmissions } from '@/lib/actions/admin-audits'
+import { archiveBulkAuditSubmissions, runAuditAiAnalysis } from '@/lib/actions/admin-audits'
 import type { AuditAiResult } from '@/lib/data/admin-audit-ai'
 
 interface Props {
@@ -31,13 +34,20 @@ const STATUS_OPTIONS: { value: string; label: string }[] = [
   { value: 'archived',  label: 'Archived'      },
 ]
 
+// Total column count (incl. checkbox + chevron) — used for the expanded
+// detail row's colSpan so it spans the full table width.
+const COL_SPAN = 9
+
 type ArchiveModal = { open: false } | { open: true; ids: string[]; bulk: boolean }
 
 export default function AuditTableClient({ rows: initialRows, total, error, aiResults, aiConfigured }: Props) {
+  const router = useRouter()
   const [localRows,    setLocalRows]    = useState(initialRows)
   const [search,       setSearch]       = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [selectedIds,  setSelectedIds]  = useState<Set<string>>(new Set())
+  const [expanded,     setExpanded]     = useState<Set<string>>(new Set())
+  const [runningId,    setRunningId]    = useState<string | null>(null)
   const [archiveModal, setArchiveModal] = useState<ArchiveModal>({ open: false })
   const [isArchiving,  startArchive]    = useTransition()
   const [aiModal,      setAiModal]      = useState<{ result: AuditAiResult; name: string } | null>(null)
@@ -69,6 +79,14 @@ export default function AuditTableClient({ rows: initialRows, total, error, aiRe
     })
   }
 
+  function toggleExpand(id: string) {
+    setExpanded((prev) => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
+
   function toggleSelectAll() {
     if (allSelected) {
       setSelectedIds((prev) => {
@@ -78,6 +96,20 @@ export default function AuditTableClient({ rows: initialRows, total, error, aiRe
       })
     } else {
       setSelectedIds((prev) => new Set([...prev, ...filtered.map((r) => r.id)]))
+    }
+  }
+
+  // Run AI Audit lives here (not in the cell) so the Score / AI column can
+  // show a "Running" state while the server action is in flight. On
+  // completion we refresh so the server re-reads admin_audit_ai_results.
+  async function runAi(id: string) {
+    setRunningId(id)
+    try {
+      const r = await runAuditAiAnalysis(id)
+      if (!r.ok) alert(r.error ?? 'AI analysis failed.')
+    } finally {
+      setRunningId(null)
+      router.refresh()
     }
   }
 
@@ -201,7 +233,7 @@ export default function AuditTableClient({ rows: initialRows, total, error, aiRe
         ) : (
           <div className="rounded-2xl border border-white/[0.08] bg-[#0f1012]/80 overflow-hidden">
             <div className="overflow-x-auto">
-              <table className="w-full text-[12.5px] min-w-[1180px]">
+              <table className="w-full text-[12.5px] min-w-[640px]">
                 <thead className="bg-white/[0.02] text-[10px] uppercase tracking-[0.08em] text-[#6a6a6e]">
                   <tr>
                     <th className="px-3 py-2.5 w-[36px]">
@@ -214,16 +246,13 @@ export default function AuditTableClient({ rows: initialRows, total, error, aiRe
                         style={{ accentColor: '#ff7a18', width: 13, height: 13 }}
                       />
                     </th>
-                    <th className="text-left px-3 py-2.5 w-[180px]">Business</th>
+                    <th className="px-2 py-2.5 w-[28px]" aria-label="Expand" />
+                    <th className="text-left px-3 py-2.5 min-w-[170px]">Business</th>
                     <th className="text-left px-3 py-2.5">Industry</th>
-                    <th className="text-left px-3 py-2.5">Location</th>
-                    <th className="text-left px-3 py-2.5 max-w-[140px]">Website</th>
                     <th className="text-left px-3 py-2.5">Plan</th>
                     <th className="text-left px-3 py-2.5">Status</th>
                     <th className="text-left px-3 py-2.5">Priority</th>
-                    <th className="text-right px-3 py-2.5">Score</th>
-                    <th className="text-right px-3 py-2.5 whitespace-nowrap">Submitted</th>
-                    <th className="text-left px-3 py-2.5">AI</th>
+                    <th className="text-left px-3 py-2.5">Score / AI</th>
                     <th className="text-right px-3 py-2.5">Actions</th>
                   </tr>
                 </thead>
@@ -233,84 +262,121 @@ export default function AuditTableClient({ rows: initialRows, total, error, aiRe
                       [row.city, row.country].filter(Boolean).join(', ') || '—'
                     )
                     const isSelected = selectedIds.has(row.id)
+                    const isOpen     = expanded.has(row.id)
+                    const aiRes      = aiResults[row.id]
+                    const website    = row.website_url
+                      ? row.website_url.replace(/^https?:\/\//, '').replace(/\/$/, '')
+                      : null
+
+                    const details: DataItem[] = [
+                      { label: 'Location', value: location },
+                      {
+                        label: 'Website',
+                        value: row.website_url ? (
+                          <a href={row.website_url} target="_blank" rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-[#9a9a9d] hover:text-[#ffae3c] transition-colors">
+                            {website}<ExternalLink size={9} className="shrink-0" />
+                          </a>
+                        ) : '—',
+                      },
+                      { label: 'Contact name', value: row.contact_name ?? '—' },
+                      { label: 'Email', value: row.email ?? '—' },
+                      { label: 'Submitted', value: new Date(row.created_at).toLocaleString() },
+                      { label: 'Source', value: row.source || '—' },
+                    ]
+                    if (aiRes?.status === 'completed') {
+                      if (aiRes.business_summary) details.push({ label: 'AI summary', value: aiRes.business_summary, full: true })
+                      details.push({ label: 'Fit score', value: aiRes.fit_score ?? '—' })
+                      details.push({ label: 'Urgency score', value: aiRes.urgency_score ?? '—' })
+                      details.push({ label: 'Recommended offer', value: aiRes.recommended_offer ?? '—' })
+                      if (aiRes.missing_information.length > 0) {
+                        details.push({
+                          label: 'Missing information', full: true,
+                          value: (
+                            <ul className="list-disc pl-4 flex flex-col gap-0.5">
+                              {aiRes.missing_information.map((m, i) => <li key={i}>{m}</li>)}
+                            </ul>
+                          ),
+                        })
+                      }
+                      if (aiRes.suggested_next_action) {
+                        details.push({ label: 'Suggested next action', value: aiRes.suggested_next_action, full: true })
+                      }
+                    } else if (aiRes?.status === 'failed' && aiRes.error_message) {
+                      details.push({ label: 'AI error', value: aiRes.error_message, full: true })
+                    }
+
                     return (
-                      <tr
-                        key={row.id}
-                        className={`border-t border-white/[0.04] transition-colors
-                          ${isSelected ? 'bg-[#ff7a18]/[0.04]' : 'hover:bg-white/[0.015]'}`}
-                      >
-                        <td className="px-3 py-2.5">
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
-                            onChange={() => toggleRow(row.id)}
-                            aria-label={`Select ${row.business_name}`}
-                            className="cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#ff7a18]/30"
-                            style={{ accentColor: '#ff7a18', width: 13, height: 13 }}
-                          />
-                        </td>
-                        <td className="px-3 py-2.5">
-                          <div className="text-white font-medium leading-snug">{row.business_name}</div>
-                          {row.contact_name && (
-                            <div className="text-[10.5px] text-[#6a6a6e] mt-0.5">
-                              {row.contact_name}{row.email ? ` · ${row.email}` : ''}
-                            </div>
-                          )}
-                        </td>
-                        <td className="px-3 py-2.5 text-[#9a9a9d] whitespace-nowrap">{row.business_type ?? '—'}</td>
-                        <td className="px-3 py-2.5 text-[#9a9a9d] whitespace-nowrap">{location}</td>
-                        <td className="px-3 py-2.5 max-w-[140px]">
-                          {row.website_url ? (
-                            <a
-                              href={row.website_url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1 text-[#9a9a9d] hover:text-[#ffae3c] transition-colors"
+                      <Fragment key={row.id}>
+                        <tr
+                          className={`border-t border-white/[0.04] transition-colors
+                            ${isSelected ? 'bg-[#ff7a18]/[0.04]' : 'hover:bg-white/[0.015]'}`}
+                        >
+                          <td className="px-3 py-2.5">
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => toggleRow(row.id)}
+                              aria-label={`Select ${row.business_name}`}
+                              className="cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#ff7a18]/30"
+                              style={{ accentColor: '#ff7a18', width: 13, height: 13 }}
+                            />
+                          </td>
+                          <td className="px-2 py-2.5">
+                            <ExpandToggle open={isOpen} onToggle={() => toggleExpand(row.id)} label={`Toggle details for ${row.business_name}`} />
+                          </td>
+                          <td className="px-3 py-2.5">
+                            <button
+                              type="button"
+                              onClick={() => toggleExpand(row.id)}
+                              className="text-white font-medium leading-snug text-left hover:text-[#ffae3c] transition-colors focus:outline-none focus:underline"
                             >
-                              <span className="truncate max-w-[100px] block">
-                                {row.website_url.replace(/^https?:\/\//, '').replace(/\/$/, '')}
+                              {row.business_name}
+                            </button>
+                            {row.contact_name && (
+                              <div className="text-[10.5px] text-[#6a6a6e] mt-0.5 truncate max-w-[200px]">
+                                {row.contact_name}{row.email ? ` · ${row.email}` : ''}
+                              </div>
+                            )}
+                          </td>
+                          <td className="px-3 py-2.5 text-[#9a9a9d] whitespace-nowrap">{row.business_type ?? '—'}</td>
+                          <td className="px-3 py-2.5"><PlanPill plan={row.recommended_plan} /></td>
+                          <td className="px-3 py-2.5"><StatusPill status={row.status} /></td>
+                          <td className="px-3 py-2.5"><PriorityPill priority={row.priority} /></td>
+                          <td className="px-3 py-2.5">
+                            <div className="flex flex-col gap-1">
+                              <span className="font-mono text-[12px]">
+                                {row.qualification_score !== null ? (
+                                  <span className={
+                                    row.qualification_score >= 70 ? 'text-[#22d093]' :
+                                    row.qualification_score >= 40 ? 'text-[#ffae3c]' :
+                                    'text-[#ff8a7a]'
+                                  }>
+                                    {row.qualification_score}
+                                  </span>
+                                ) : (
+                                  <span className="text-[#6a6a6e]">—</span>
+                                )}
                               </span>
-                              <ExternalLink size={9} className="shrink-0" />
-                            </a>
-                          ) : (
-                            <span className="text-[#6a6a6e]">—</span>
-                          )}
-                        </td>
-                        <td className="px-3 py-2.5"><PlanPill plan={row.recommended_plan} /></td>
-                        <td className="px-3 py-2.5"><StatusPill status={row.status} /></td>
-                        <td className="px-3 py-2.5"><PriorityPill priority={row.priority} /></td>
-                        <td className="px-3 py-2.5 text-right font-mono text-[12px]">
-                          {row.qualification_score !== null ? (
-                            <span className={
-                              row.qualification_score >= 70 ? 'text-[#22d093]' :
-                              row.qualification_score >= 40 ? 'text-[#ffae3c]' :
-                              'text-[#ff8a7a]'
-                            }>
-                              {row.qualification_score}
-                            </span>
-                          ) : (
-                            <span className="text-[#6a6a6e]">—</span>
-                          )}
-                        </td>
-                        <td className="px-3 py-2.5 text-right text-[11px] text-[#6a6a6e] whitespace-nowrap">
-                          {new Date(row.created_at).toLocaleDateString()}
-                        </td>
-                        <td className="px-3 py-2.5">
-                          <AuditAiCell
-                            auditId={row.id}
-                            result={aiResults[row.id]}
-                            aiConfigured={aiConfigured}
-                            onView={() => { const res = aiResults[row.id]; if (res) setAiModal({ result: res, name: row.business_name }) }}
-                          />
-                        </td>
-                        <td className="px-3 py-2.5">
-                          <AuditActionsCell
-                            submissionId={row.id}
-                            status={row.status}
-                            onArchiveRequest={(id) => requestArchive([id], false)}
-                          />
-                        </td>
-                      </tr>
+                              <AuditAiCell result={aiRes} aiConfigured={aiConfigured} running={runningId === row.id} />
+                            </div>
+                          </td>
+                          <td className="px-3 py-2.5">
+                            <AuditActionsCell
+                              submissionId={row.id}
+                              status={row.status}
+                              aiConfigured={aiConfigured}
+                              hasResult={!!aiRes}
+                              onRunAi={() => runAi(row.id)}
+                              onView={() => { if (aiRes) setAiModal({ result: aiRes, name: row.business_name }) }}
+                              onArchiveRequest={(id) => requestArchive([id], false)}
+                            />
+                          </td>
+                        </tr>
+                        <ExpandedDetailRow open={isOpen} colSpan={COL_SPAN}>
+                          <CompactDataList items={details} />
+                        </ExpandedDetailRow>
+                      </Fragment>
                     )
                   })}
                 </tbody>

@@ -4,15 +4,18 @@
 // reuses updateClientStatus (with the same handoff-readiness confirmation)
 // and the ClientDetailDrawer. No automatic status changes.
 
-import { useState, useMemo, useTransition } from 'react'
+import { Fragment, useState, useMemo, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Search, RotateCcw, Rocket, ArrowRight } from 'lucide-react'
+import { ArrowLeft, Search, RotateCcw, Rocket } from 'lucide-react'
 import type { LaunchReadinessRow, LaunchReadinessSummary, LaunchState } from '@/lib/data/admin-launch-readiness'
 import type { ClientHandoffReadiness } from '@/lib/admin/client-handoff-readiness'
 import AdminKpiCard from '@/components/admin/ui/AdminKpiCard'
 import PlanPill from '@/components/admin/ui/PlanPill'
 import ConfirmActionDialog from '@/components/admin/ui/ConfirmActionDialog'
+import { ExpandToggle, ExpandedDetailRow } from '@/components/admin/ui/ExpandableRow'
+import CompactDataList, { type DataItem } from '@/components/admin/ui/CompactDataList'
+import RowActionMenu, { type RowAction } from '@/components/admin/ui/RowActionMenu'
 import ClientDetailDrawer from '@/app/admin/clients/ClientDetailDrawer'
 import LaunchReportModal from '@/app/admin/clients/LaunchReportModal'
 import { updateClientStatus } from '@/lib/actions/admin-clients'
@@ -89,6 +92,11 @@ export default function LaunchReadinessClient({ rows, summary, filesMigrationNee
   const [drawerKey, setDrawerKey] = useState(0)
   const [reportInput, setReportInput] = useState<LaunchReportInput | null>(null)
   const [copyToast, setCopyToast] = useState<string | null>(null)
+  const [expanded, setExpanded]   = useState<Set<string>>(new Set())
+
+  function toggleExpand(id: string) {
+    setExpanded((p) => { const n = new Set(p); n.has(id) ? n.delete(id) : n.add(id); return n })
+  }
 
   async function copyRow(r: LaunchReadinessRow) {
     try {
@@ -233,18 +241,15 @@ export default function LaunchReadinessClient({ rows, summary, filesMigrationNee
           ) : (
             <div className="rounded-2xl border border-white/[0.08] bg-[#0f1012]/80 overflow-hidden">
               <div className="overflow-x-auto">
-                <table className="w-full text-[12.5px] min-w-[1080px]">
+                <table className="w-full text-[12.5px] min-w-[640px]">
                   <thead className="bg-white/[0.02] text-[10px] uppercase tracking-[0.08em] text-[#6a6a6e]">
                     <tr>
+                      <th className="px-2 py-2.5 w-[28px]" aria-label="Expand" />
                       <th className="text-left px-3 py-2.5 min-w-[150px]">Client</th>
-                      <th className="text-left px-3 py-2.5">Plan</th>
                       <th className="text-left px-3 py-2.5">Status</th>
                       <th className="text-left px-3 py-2.5">Payment</th>
-                      <th className="text-left px-3 py-2.5">Files</th>
-                      <th className="text-left px-3 py-2.5">Tasks</th>
-                      <th className="text-left px-3 py-2.5">Blockers</th>
-                      <th className="text-left px-3 py-2.5">Launch</th>
-                      <th className="text-left px-3 py-2.5">Next Action</th>
+                      <th className="text-left px-3 py-2.5">Readiness</th>
+                      <th className="text-left px-3 py-2.5 min-w-[150px]">Next Action</th>
                       <th className="text-right px-3 py-2.5">Actions</th>
                     </tr>
                   </thead>
@@ -252,75 +257,95 @@ export default function LaunchReadinessClient({ rows, summary, filesMigrationNee
                     {filtered.map((r) => {
                       const lc = LAUNCH_CFG[r.launchState]
                       const paymentMissing = r.payment_status === 'unpaid' || r.payment_status === 'overdue'
-                      const filesMissing = !r.hasHandoffDoc || !r.hasBrandAssets || !r.hasSetupDoc
-                      return (
-                        <tr key={r.id} className="border-t border-white/[0.04] hover:bg-white/[0.015] transition-colors align-top">
-                          <td className="px-3 py-2.5">
-                            <button type="button" onClick={() => setDrawer({ id: r.id })}
-                              className="text-white font-medium hover:text-[#ffae3c] transition-colors text-left focus:outline-none focus:underline">
-                              {r.business_name}
-                            </button>
-                            {(r.contact_name || r.email) && (
-                              <div className="text-[10.5px] text-[#6a6a6e] truncate max-w-[170px]">{r.email ?? r.contact_name}</div>
-                            )}
-                          </td>
-                          <td className="px-3 py-2.5"><PlanPill plan={r.plan} /></td>
-                          <td className="px-3 py-2.5"><Pill color={STATUS_COLORS[r.status as keyof typeof STATUS_COLORS] ?? '#6a6a6e'} label={STATUS_LABELS[r.status as keyof typeof STATUS_LABELS] ?? r.status} /></td>
-                          <td className="px-3 py-2.5">
-                            {r.payment_status
-                              ? <Pill color={PAYMENT_TONE[r.payment_status] ?? '#6a6a6e'} label={r.payment_status.replace('_', ' ')} />
-                              : <span className="text-[#6a6a6e]">—</span>}
-                          </td>
-                          <td className="px-3 py-2.5">
-                            <div className="flex flex-col gap-0.5">
-                              <FileFlag ok={r.hasHandoffDoc} label="Handoff" />
-                              <FileFlag ok={r.hasBrandAssets} label="Brand" />
-                              <FileFlag ok={r.hasSetupDoc} label="Setup" />
+                      const isOpen = expanded.has(r.id)
+
+                      const blockerNodes: string[] = []
+                      if (r.taskBlocked > 0) blockerNodes.push(`${r.taskBlocked} blocked`)
+                      if (r.taskOverdue > 0) blockerNodes.push(`${r.taskOverdue} overdue`)
+                      if (paymentMissing) blockerNodes.push(r.payment_status === 'overdue' ? 'Payment overdue' : 'Payment unpaid')
+
+                      const details: DataItem[] = [
+                        { label: 'Plan', value: <PlanPill plan={r.plan} /> },
+                        {
+                          label: 'Task completion',
+                          value: `${r.taskDone}/${r.taskTotal} done${r.taskOpen > 0 ? ` · ${r.taskOpen} open` : ''}${r.taskOverdue > 0 ? ` · ${r.taskOverdue} overdue` : ''}`,
+                        },
+                        {
+                          label: 'Blockers',
+                          value: blockerNodes.length === 0
+                            ? 'None'
+                            : <span className="text-[#ff8a7a]">{blockerNodes.join(' · ')}</span>,
+                        },
+                        {
+                          label: 'File checklist',
+                          full: true,
+                          value: (
+                            <div className="flex gap-4 flex-wrap">
+                              <FileFlag ok={r.hasHandoffDoc} label="Handoff doc" />
+                              <FileFlag ok={r.hasBrandAssets} label="Brand assets" />
+                              <FileFlag ok={r.hasSetupDoc} label="Setup doc" />
                             </div>
-                          </td>
-                          <td className="px-3 py-2.5 whitespace-nowrap">
-                            <div className="text-white tabular-nums">{r.taskDone}/{r.taskTotal}</div>
-                            {r.taskOpen > 0 && <div className="text-[10.5px] text-[#9a9a9d]">{r.taskOpen} open</div>}
-                            {r.taskOverdue > 0 && <div className="text-[10.5px] text-[#ff5247]">{r.taskOverdue} overdue</div>}
-                          </td>
-                          <td className="px-3 py-2.5 whitespace-nowrap">
-                            {r.taskBlocked === 0 && r.taskOverdue === 0 && !paymentMissing ? (
-                              <span className="text-[#6a6a6e]">None</span>
-                            ) : (
-                              <div className="flex flex-col gap-0.5 text-[10.5px]">
-                                {r.taskBlocked > 0 && <span className="text-[#ff5247]">{r.taskBlocked} blocked</span>}
-                                {r.taskOverdue > 0 && <span className="text-[#ff5247]">{r.taskOverdue} overdue</span>}
-                                {paymentMissing && <span className="text-[#ffae3c]">{r.payment_status === 'overdue' ? 'Payment overdue' : 'Payment unpaid'}</span>}
-                              </div>
-                            )}
-                          </td>
-                          <td className="px-3 py-2.5"><Pill color={lc.color} label={lc.label} /></td>
-                          <td className="px-3 py-2.5 text-[#9a9a9d] max-w-[160px]">{r.nextAction}</td>
-                          <td className="px-3 py-2.5">
-                            <div className="flex items-center justify-end gap-2.5 text-[11px] whitespace-nowrap flex-wrap">
+                          ),
+                        },
+                        {
+                          label: 'Launch report',
+                          full: true,
+                          value: (
+                            <div className="flex items-center gap-4">
                               <button type="button" onClick={() => setReportInput(rowToReportInput(r))}
-                                className="text-[#ffae3c] hover:text-white transition-colors focus:outline-none focus:underline">Report</button>
+                                className="text-[#ffae3c] hover:text-white transition-colors focus:outline-none focus:underline">View report</button>
                               <button type="button" onClick={() => copyRow(r)}
-                                className="text-[#9a9a9d] hover:text-white transition-colors focus:outline-none focus:underline">Copy</button>
-                              <button type="button" onClick={() => setDrawer({ id: r.id })}
-                                className="text-[#9a9a9d] hover:text-white transition-colors focus:outline-none focus:underline">Open</button>
-                              {r.status !== 'active' && (
-                                <button type="button" onClick={() => { setStatusErr(null); setStatusModal({ open: true, id: r.id, name: r.business_name, readiness: r.readiness }) }}
-                                  className="text-[#22d093] hover:text-[#5be4b5] transition-colors focus:outline-none focus:underline">Mark Active</button>
-                              )}
-                              {paymentMissing && (
-                                <button type="button" onClick={() => setDrawer({ id: r.id, tab: 'payments' })}
-                                  className="text-[#ffae3c] hover:text-[#ffce7a] transition-colors focus:outline-none focus:underline">Payment</button>
-                              )}
-                              {filesMissing && (
-                                <button type="button" onClick={() => setDrawer({ id: r.id, tab: 'files' })}
-                                  className="text-[#3b9eff] hover:text-[#7ec0ff] transition-colors focus:outline-none focus:underline">Files</button>
-                              )}
-                              <Link href="/admin/delivery"
-                                className="text-[#9a9a9d] hover:text-white transition-colors focus:outline-none focus:underline">Delivery</Link>
+                                className="text-[#9a9a9d] hover:text-white transition-colors focus:outline-none focus:underline">Copy report</button>
                             </div>
-                          </td>
-                        </tr>
+                          ),
+                        },
+                      ]
+
+                      const actions: RowAction[] = [
+                        { label: 'Open client', onSelect: () => setDrawer({ id: r.id }) },
+                        { label: 'Open files', tone: 'info', onSelect: () => setDrawer({ id: r.id, tab: 'files' }) },
+                        { label: 'Open payment', tone: 'info', onSelect: () => setDrawer({ id: r.id, tab: 'payments' }) },
+                        { label: 'Open delivery', tone: 'muted', onSelect: () => router.push('/admin/delivery') },
+                        { label: 'View report', onSelect: () => setReportInput(rowToReportInput(r)) },
+                        { label: 'Copy report', tone: 'muted', onSelect: () => { void copyRow(r) } },
+                        ...(r.status !== 'active'
+                          ? [{ label: 'Mark active', tone: 'success' as const, onSelect: () => { setStatusErr(null); setStatusModal({ open: true, id: r.id, name: r.business_name, readiness: r.readiness }) } }]
+                          : []),
+                      ]
+
+                      return (
+                        <Fragment key={r.id}>
+                          <tr className="border-t border-white/[0.04] hover:bg-white/[0.015] transition-colors">
+                            <td className="px-2 py-2.5">
+                              <ExpandToggle open={isOpen} onToggle={() => toggleExpand(r.id)} label={`Toggle details for ${r.business_name}`} />
+                            </td>
+                            <td className="px-3 py-2.5">
+                              <button type="button" onClick={() => setDrawer({ id: r.id })}
+                                className="text-white font-medium hover:text-[#ffae3c] transition-colors text-left focus:outline-none focus:underline">
+                                {r.business_name}
+                              </button>
+                              {(r.contact_name || r.email) && (
+                                <div className="text-[10.5px] text-[#6a6a6e] truncate max-w-[170px]">{r.email ?? r.contact_name}</div>
+                              )}
+                            </td>
+                            <td className="px-3 py-2.5"><Pill color={STATUS_COLORS[r.status as keyof typeof STATUS_COLORS] ?? '#6a6a6e'} label={STATUS_LABELS[r.status as keyof typeof STATUS_LABELS] ?? r.status} /></td>
+                            <td className="px-3 py-2.5">
+                              {r.payment_status
+                                ? <Pill color={PAYMENT_TONE[r.payment_status] ?? '#6a6a6e'} label={r.payment_status.replace('_', ' ')} />
+                                : <span className="text-[#6a6a6e]">—</span>}
+                            </td>
+                            <td className="px-3 py-2.5"><Pill color={lc.color} label={lc.label} /></td>
+                            <td className="px-3 py-2.5 text-[#9a9a9d] max-w-[180px]">{r.nextAction}</td>
+                            <td className="px-3 py-2.5">
+                              <div className="flex justify-end">
+                                <RowActionMenu actions={actions} label={`Actions for ${r.business_name}`} />
+                              </div>
+                            </td>
+                          </tr>
+                          <ExpandedDetailRow open={isOpen} colSpan={7}>
+                            <CompactDataList items={details} />
+                          </ExpandedDetailRow>
+                        </Fragment>
                       )
                     })}
                   </tbody>

@@ -9,7 +9,7 @@
 //   • Mark paused / etc. → updateClientStatus
 // No record is ever hard-deleted; archiving sets status='archived'.
 
-import { useState, useMemo, useTransition } from 'react'
+import { Fragment, useState, useMemo, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { Search, Activity, X } from 'lucide-react'
 import type {
@@ -18,6 +18,9 @@ import type {
 import AdminKpiCard from '@/components/admin/ui/AdminKpiCard'
 import PlanPill from '@/components/admin/ui/PlanPill'
 import ConfirmActionDialog from '@/components/admin/ui/ConfirmActionDialog'
+import { ExpandToggle, ExpandedDetailRow } from '@/components/admin/ui/ExpandableRow'
+import CompactDataList, { type DataItem } from '@/components/admin/ui/CompactDataList'
+import RowActionMenu, { type RowAction } from '@/components/admin/ui/RowActionMenu'
 import {
   updateClientStatus, updateClientPayment, loadClientReadiness,
 } from '@/lib/actions/admin-clients'
@@ -133,7 +136,7 @@ export default function ClientsPageClient({ clients, error, suggestions = {} }: 
   const [planFilter,   setPlanFilter]   = useState('all')
   const [statusFilter, setStatusFilter] = useState('all')
   const [modal,        setModal]        = useState<ActionModal>({ open: false })
-  const [statusMenuFor, setStatusMenuFor] = useState<string | null>(null)
+  const [expanded,     setExpanded]     = useState<Set<string>>(new Set())
   const [readiness, setReadiness]         = useState<ClientHandoffReadiness | null>(null)
   const [readinessErr, setReadinessErr]   = useState<string | null>(null)
   const [readinessLoading, setReadinessLoading] = useState(false)
@@ -189,8 +192,15 @@ export default function ClientsPageClient({ clients, error, suggestions = {} }: 
     })
   }
 
+  function toggleExpand(id: string) {
+    setExpanded((prev) => {
+      const next = new Set(prev)
+      next.has(id) ? next.delete(id) : next.add(id)
+      return next
+    })
+  }
+
   function openStatusChange(c: AdminClientRow, to: ClientLifecycleStatus) {
-    setStatusMenuFor(null)
     setActionError(null)
     setReadiness(null)
     setReadinessErr(null)
@@ -321,20 +331,16 @@ export default function ClientsPageClient({ clients, error, suggestions = {} }: 
           ) : (
             <div className="rounded-2xl border border-white/[0.08] bg-[#0f1012]/80 overflow-hidden">
               <div className="overflow-x-auto">
-                <table className="w-full text-[12.5px] min-w-[1180px]">
+                <table className="w-full text-[12.5px] min-w-[560px]">
                   <thead className="bg-white/[0.02] text-[10px] uppercase tracking-[0.08em] text-[#6a6a6e]">
                     <tr>
-                      <th className="text-left px-4 py-2.5 min-w-[150px]">Business</th>
-                      <th className="text-left px-4 py-2.5">Industry</th>
-                      <th className="text-left px-4 py-2.5">Plan</th>
-                      <th className="text-left px-4 py-2.5">Status</th>
-                      <th className="text-left px-4 py-2.5">Payment</th>
-                      <th className="text-right px-4 py-2.5 whitespace-nowrap">Next Due</th>
-                      <th className="text-right px-4 py-2.5 whitespace-nowrap">Leads/mo</th>
-                      <th className="text-right px-4 py-2.5 whitespace-nowrap">Bookings/mo</th>
-                      <th className="text-right px-4 py-2.5 whitespace-nowrap">Est. MRR</th>
-                      <th className="text-left px-4 py-2.5">Health</th>
-                      <th className="text-right px-4 py-2.5">Actions</th>
+                      <th className="px-2 py-2.5 w-[28px]" aria-label="Expand" />
+                      <th className="text-left px-3 py-2.5 min-w-[150px]">Business</th>
+                      <th className="text-left px-3 py-2.5">Plan</th>
+                      <th className="text-left px-3 py-2.5">Status</th>
+                      <th className="text-left px-3 py-2.5">Payment</th>
+                      <th className="text-left px-3 py-2.5 min-w-[140px]">Next Action</th>
+                      <th className="text-right px-3 py-2.5">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -346,106 +352,109 @@ export default function ClientsPageClient({ clients, error, suggestions = {} }: 
                       // Reflect "effectively overdue" in the pill even if the
                       // stored status hasn't been flipped to 'overdue' yet.
                       const payCfg      = overdue ? PAYMENT_STATUS_CONFIG.overdue : PAYMENT_STATUS_CONFIG[c.payment_status]
-                      return (
-                        <tr key={c.id} className="border-t border-white/[0.04] transition-colors hover:bg-white/[0.015]">
-                          <td className="px-4 py-3 whitespace-nowrap">
+                      const isOpen      = expanded.has(c.id)
+                      const suggestion  = suggestions[c.id]
+
+                      const details: DataItem[] = [
+                        { label: 'Industry', value: c.industry || '—' },
+                        { label: 'City', value: c.city || '—' },
+                        { label: 'Monthly leads', value: c.monthly_leads },
+                        { label: 'Monthly bookings', value: c.monthly_bookings },
+                        { label: 'Estimated MRR', value: `$${c.monthly_fee.toLocaleString()}/mo` },
+                        {
+                          label: 'Health',
+                          value: <span style={{ color: healthColor }}>{health}</span>,
+                        },
+                        {
+                          label: 'Next payment due',
+                          value: c.next_payment_due
+                            ? <span style={{ color: overdue ? '#ff5247' : undefined }}>{new Date(c.next_payment_due).toLocaleDateString()}</span>
+                            : '—',
+                        },
+                        { label: 'Payment notes', value: c.payment_notes || '—', full: true },
+                        {
+                          label: 'Onboarding · files · launch report',
+                          full: true,
+                          value: (
                             <button
                               type="button"
                               onClick={() => setDrawerId(c.id)}
-                              className="text-white font-medium hover:text-[#ffae3c] transition-colors focus:outline-none focus:underline text-left"
+                              className="text-[#ffae3c] hover:text-white transition-colors focus:outline-none focus:underline"
                             >
-                              {c.name}
+                              Open client drawer →
                             </button>
-                            {suggestions[c.id] && (
-                              <div className="text-[10.5px] mt-0.5 flex items-center gap-1.5">
-                                <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: SUGGESTION_TONE[suggestions[c.id].severity] }} />
-                                <span className="text-[#9a9a9d]">Next: {suggestions[c.id].label}</span>
-                              </div>
-                            )}
-                          </td>
-                          <td className="px-4 py-3 text-[#9a9a9d] whitespace-nowrap">{c.industry}</td>
-                          <td className="px-4 py-3"><PlanPill plan={c.plan} /></td>
-                          <td className="px-4 py-3">
-                            <span
-                              className="inline-flex items-center text-[10.5px] font-semibold px-2.5 py-[3px] rounded-full border whitespace-nowrap"
-                              style={{ color: statusCfg.color, borderColor: `${statusCfg.color}33`, background: `${statusCfg.color}12` }}
-                            >
-                              {statusCfg.label}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3">
-                            <span
-                              className="inline-flex items-center text-[10.5px] font-semibold px-2.5 py-[3px] rounded-full border whitespace-nowrap"
-                              style={{ color: payCfg.color, borderColor: `${payCfg.color}33`, background: `${payCfg.color}12` }}
-                            >
-                              {payCfg.label}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3 text-right text-[11.5px] whitespace-nowrap tabular-nums"
-                              style={{ color: overdue ? '#ff5247' : '#9a9a9d' }}>
-                            {c.next_payment_due ? new Date(c.next_payment_due).toLocaleDateString() : '—'}
-                          </td>
-                          <td className="px-4 py-3 text-right font-mono text-white tabular-nums">{c.monthly_leads}</td>
-                          <td className="px-4 py-3 text-right font-mono text-white tabular-nums">{c.monthly_bookings}</td>
-                          <td className="px-4 py-3 text-right font-mono text-[12.5px] font-semibold text-white tabular-nums">
-                            ${c.monthly_fee.toLocaleString()}
-                          </td>
-                          <td className="px-4 py-3">
-                            <span
-                              className="inline-flex items-center text-[10.5px] font-semibold px-2.5 py-[3px] rounded-full border whitespace-nowrap"
-                              style={{ color: healthColor, borderColor: `${healthColor}33`, background: `${healthColor}12` }}
-                            >
-                              {health}
-                            </span>
-                          </td>
-                          <td className="px-4 py-3">
-                            <div className="flex justify-end items-center gap-3 text-[11.5px] whitespace-nowrap">
-                              <button
-                                type="button"
-                                onClick={() => { setActionError(null); setPayClient(c) }}
-                                className="text-[#3b9eff] hover:text-[#7ec0ff] transition-colors focus:outline-none focus:underline"
-                              >
-                                Payment
-                              </button>
+                          ),
+                        },
+                      ]
+
+                      // Row action menu — every existing action preserved.
+                      const statusItems: RowAction[] = STATUS_TRANSITIONS[c.status]
+                        .filter((tr) => tr.to !== 'archived')
+                        .map((tr) => ({ label: tr.label, onSelect: () => openStatusChange(c, tr.to) }))
+                      const canArchive = STATUS_TRANSITIONS[c.status].some((tr) => tr.to === 'archived')
+                      const actions: RowAction[] = [
+                        { label: 'View client', onSelect: () => setDrawerId(c.id) },
+                        { label: 'Update payment', tone: 'info', onSelect: () => { setActionError(null); setPayClient(c) } },
+                        ...statusItems,
+                        { label: 'Launch report', onSelect: () => setDrawerId(c.id) },
+                        ...(canArchive
+                          ? [{ label: 'Archive', tone: 'danger' as const, onSelect: () => openStatusChange(c, 'archived') }]
+                          : []),
+                      ]
+
+                      return (
+                        <Fragment key={c.id}>
+                          <tr className="border-t border-white/[0.04] transition-colors hover:bg-white/[0.015]">
+                            <td className="px-2 py-3">
+                              <ExpandToggle open={isOpen} onToggle={() => toggleExpand(c.id)} label={`Toggle details for ${c.name}`} />
+                            </td>
+                            <td className="px-3 py-3">
                               <button
                                 type="button"
                                 onClick={() => setDrawerId(c.id)}
-                                className="text-[#9a9a9d] hover:text-white transition-colors focus:outline-none focus:underline"
+                                className="text-white font-medium hover:text-[#ffae3c] transition-colors focus:outline-none focus:underline text-left"
                               >
-                                View
+                                {c.name}
                               </button>
-                              {/* Status change menu */}
-                              <div className="relative">
-                                <button
-                                  type="button"
-                                  onClick={() => setStatusMenuFor((cur) => cur === c.id ? null : c.id)}
-                                  className="text-[#9a9a9d] hover:text-white transition-colors focus:outline-none focus:underline"
-                                  aria-haspopup="menu"
-                                  aria-expanded={statusMenuFor === c.id}
-                                >
-                                  Status ▾
-                                </button>
-                                {statusMenuFor === c.id && (
-                                  <>
-                                    <div className="fixed inset-0 z-40" onClick={() => setStatusMenuFor(null)} />
-                                    <div className="absolute right-0 z-50 mt-1 w-[180px] rounded-xl border border-white/[0.10] bg-[#0f1012] shadow-2xl py-1">
-                                      {STATUS_TRANSITIONS[c.status].map((tr) => (
-                                        <button
-                                          key={tr.to}
-                                          type="button"
-                                          onClick={() => openStatusChange(c, tr.to)}
-                                          className="w-full text-left px-3.5 py-2 text-[12.5px] text-[#cfd3dc] hover:bg-white/[0.05] hover:text-white transition-colors"
-                                        >
-                                          {tr.label}
-                                        </button>
-                                      ))}
-                                    </div>
-                                  </>
-                                )}
+                              <div className="text-[10.5px] text-[#6a6a6e] mt-0.5">{c.industry}</div>
+                            </td>
+                            <td className="px-3 py-3"><PlanPill plan={c.plan} /></td>
+                            <td className="px-3 py-3">
+                              <span
+                                className="inline-flex items-center text-[10.5px] font-semibold px-2.5 py-[3px] rounded-full border whitespace-nowrap"
+                                style={{ color: statusCfg.color, borderColor: `${statusCfg.color}33`, background: `${statusCfg.color}12` }}
+                              >
+                                {statusCfg.label}
+                              </span>
+                            </td>
+                            <td className="px-3 py-3">
+                              <span
+                                className="inline-flex items-center text-[10.5px] font-semibold px-2.5 py-[3px] rounded-full border whitespace-nowrap"
+                                style={{ color: payCfg.color, borderColor: `${payCfg.color}33`, background: `${payCfg.color}12` }}
+                              >
+                                {payCfg.label}
+                              </span>
+                            </td>
+                            <td className="px-3 py-3">
+                              {suggestion ? (
+                                <div className="flex items-center gap-1.5">
+                                  <span className="w-1.5 h-1.5 rounded-full shrink-0" style={{ background: SUGGESTION_TONE[suggestion.severity] }} />
+                                  <span className="text-[#cfd3dc] text-[11.5px] leading-snug">{suggestion.label}</span>
+                                </div>
+                              ) : (
+                                <span className="text-[#6a6a6e]">—</span>
+                              )}
+                            </td>
+                            <td className="px-3 py-3">
+                              <div className="flex justify-end">
+                                <RowActionMenu actions={actions} label={`Actions for ${c.name}`} />
                               </div>
-                            </div>
-                          </td>
-                        </tr>
+                            </td>
+                          </tr>
+                          <ExpandedDetailRow open={isOpen} colSpan={7}>
+                            <CompactDataList items={details} />
+                          </ExpandedDetailRow>
+                        </Fragment>
                       )
                     })}
                   </tbody>
