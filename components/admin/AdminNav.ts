@@ -18,6 +18,7 @@ export const ADMIN_NAV: AdminNavItem[] = [
   { id: 'audits',          label: 'Audits',          href: '/admin/audits',          icon: 'BarChart2', group: 'Sales' },
   { id: 'leads',           label: 'Leads',           href: '/admin/leads',           icon: 'Users',     group: 'Sales' },
   { id: 'clients',         label: 'Clients',         href: '/admin/clients',         icon: 'Building2', group: 'Sales' },
+  { id: 'outreach',        label: 'Outreach',        href: '/admin/outreach',        icon: 'Megaphone', group: 'Sales' },
 
   // Operations
   { id: 'delivery',        label: 'Delivery',        href: '/admin/delivery',        icon: 'ClipboardList', group: 'Operations' },

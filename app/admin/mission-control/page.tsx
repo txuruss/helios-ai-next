@@ -8,12 +8,13 @@ import { getAdminMissionControlSummary } from '@/lib/data/admin-mission-control'
 import { getAdminClientRevenue, getAdminClientPaymentHealth } from '@/lib/data/admin-clients'
 import { getOnboardingAlertSummary } from '@/lib/data/admin-client-tasks'
 import { getTopClientSuggestions } from '@/lib/data/admin-client-suggestions'
+import { getOutreachSummary } from '@/lib/data/admin-outreach'
 import { relevanceAiConfigured } from '@/lib/ai/relevance-audit-analysis'
 import AdminKpiCard from '@/components/admin/ui/AdminKpiCard'
 import MissionControlAuditTable from './MissionControlAuditTable'
 import {
   CheckCircle2, AlertCircle, ArrowRight, TrendingUp, Zap,
-  FileText, Users, Building2, Settings, Activity, Wallet, ClipboardList, Rocket,
+  FileText, Users, Building2, Settings, Activity, Wallet, ClipboardList, Rocket, Megaphone,
 } from 'lucide-react'
 
 export const metadata = { title: 'Mission Control — Helios AI Admin' }
@@ -49,10 +50,20 @@ function MiniPill({ color, label }: { color: string; label: string }) {
   )
 }
 
+// Compact stat for the Outreach Focus card.
+function OutreachStat({ label, value, color }: { label: string; value: number; color: string }) {
+  return (
+    <div className="rounded-xl border border-white/[0.07] bg-white/[0.02] px-3 py-2.5">
+      <div className="text-[18px] font-bold tabular-nums leading-none" style={{ color }}>{value}</div>
+      <div className="text-[10px] text-[#6a6a6e] uppercase tracking-[0.08em] mt-1 truncate">{label}</div>
+    </div>
+  )
+}
+
 export default async function AdminMissionControlPage() {
   const session = await requireAdmin({ path: '/admin/mission-control' })
 
-  const [auditMetrics, latestAudits, summary, revenue, payments, onboarding, clientSuggestions] = await Promise.all([
+  const [auditMetrics, latestAudits, summary, revenue, payments, onboarding, clientSuggestions, outreach] = await Promise.all([
     getAdminAuditMetrics(),
     getLatestAdminAuditSubmissions(6),
     getAdminMissionControlSummary(),
@@ -60,6 +71,7 @@ export default async function AdminMissionControlPage() {
     getAdminClientPaymentHealth(),
     getOnboardingAlertSummary(),
     getTopClientSuggestions(3),
+    getOutreachSummary(),
   ])
 
   const firstName      = (session.fullName ?? session.email).split(' ')[0]
@@ -153,6 +165,29 @@ export default async function AdminMissionControlPage() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* ── Outreach Focus (compact) ─────────────────────────────── */}
+      {!outreach.migrationNeeded && (
+        <section className="rounded-2xl border border-[#ff7a18]/20 bg-[#ff7a18]/[0.03] overflow-hidden">
+          <div className="flex items-center justify-between gap-3 px-5 py-3 border-b border-[#ff7a18]/10">
+            <div className="flex items-center gap-2">
+              <Megaphone size={13} className="text-[#ff7a18]" />
+              <h2 className="text-[13.5px] font-semibold text-white">Outreach Focus</h2>
+            </div>
+            <Link href="/admin/outreach"
+              className="text-[12px] text-[#ffae3c] hover:text-white inline-flex items-center gap-1.5 transition-colors">
+              Open Outreach Dashboard <ArrowRight size={11} />
+            </Link>
+          </div>
+          <div className="px-4 py-3.5 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2.5">
+            <OutreachStat label="Contacted Today" value={outreach.contactedToday} color="#3b9eff" />
+            <OutreachStat label="Replies"         value={outreach.newReplies}     color="#a07cff" />
+            <OutreachStat label="Follow-Ups Due"  value={outreach.followUpsDue}   color="#ffae3c" />
+            <OutreachStat label="Hot Leads"       value={outreach.hotLeads}       color="#22d093" />
+            <OutreachStat label="Calls Booked"    value={outreach.callsBooked}    color="#22d093" />
+          </div>
+        </section>
       )}
 
       {/* ── MAIN ROW: Latest Audits (2/3) + Right Panels (1/3) ───── */}
