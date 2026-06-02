@@ -13,6 +13,7 @@ export interface AdminNavItem {
 export const ADMIN_NAV: AdminNavItem[] = [
   // Overview
   { id: 'mission-control', label: 'Mission Control', href: '/admin/mission-control', icon: 'Compass',   group: 'Overview' },
+  { id: 'research-agent',  label: 'Research Agent',  href: '/admin/mission-control/research-agent', icon: 'Telescope', group: 'Overview' },
 
   // Sales
   { id: 'audits',          label: 'Audits',          href: '/admin/audits',          icon: 'BarChart2', group: 'Sales' },
