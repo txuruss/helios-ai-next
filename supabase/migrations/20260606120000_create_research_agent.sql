@@ -38,6 +38,7 @@ CREATE TABLE IF NOT EXISTS public.research_runs (
   niches      text[] NOT NULL DEFAULT '{}',
   radius_km   integer,
   lead_target integer,
+  leads_found integer,
   status      text NOT NULL DEFAULT 'pending',
   created_at  timestamptz NOT NULL DEFAULT now(),
   updated_at  timestamptz NOT NULL DEFAULT now(),
@@ -56,7 +57,11 @@ CREATE TRIGGER research_runs_set_updated_at
   BEFORE UPDATE ON public.research_runs
   FOR EACH ROW EXECUTE FUNCTION public.admin_pipeline_set_updated_at();
 
--- ── Research leads (saved, qualified businesses) ───────────────────
+-- ── Research leads (every business found in a run) ─────────────────
+-- A row is created for EVERY business found in a run (is_saved=false,
+-- status='found'). The founder later promotes rows to saved
+-- (is_saved=true, status='saved', saved_at set). This makes a run's full
+-- result set inspectable from history even if nothing was saved at the time.
 CREATE TABLE IF NOT EXISTS public.research_leads (
   id                  uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   research_run_id     uuid REFERENCES public.research_runs(id) ON DELETE CASCADE,
@@ -73,27 +78,32 @@ CREATE TABLE IF NOT EXISTS public.research_leads (
   first_dm            text,
   cold_email_opening  text,
   lead_score          integer,
-  status              text NOT NULL DEFAULT 'new',
+  is_saved            boolean NOT NULL DEFAULT false,
+  saved_at            timestamptz,
+  status              text NOT NULL DEFAULT 'found',
   created_at          timestamptz NOT NULL DEFAULT now(),
   updated_at          timestamptz NOT NULL DEFAULT now(),
 
   CONSTRAINT research_leads_status_check CHECK (
-    status IN ('new', 'reviewing', 'qualified', 'contacted', 'archived')
+    status IN ('found', 'saved', 'new', 'reviewing', 'qualified', 'contacted', 'archived')
   )
 );
 
-COMMENT ON TABLE public.research_leads IS 'Saved, rule-scored businesses from a research run. Real Google Places data only.';
+COMMENT ON TABLE public.research_leads IS 'Every rule-scored business found in a research run. is_saved marks the ones the founder kept. Real Google Places data only.';
 
 CREATE INDEX IF NOT EXISTS research_leads_run_idx    ON public.research_leads (research_run_id);
 CREATE INDEX IF NOT EXISTS research_leads_status_idx ON public.research_leads (status);
 CREATE INDEX IF NOT EXISTS research_leads_score_idx  ON public.research_leads (lead_score DESC);
+CREATE INDEX IF NOT EXISTS research_leads_saved_idx  ON public.research_leads (research_run_id, is_saved);
 
--- Duplicate guard: one saved lead per Google Maps URL (the strongest dedupe
--- key). Postgres treats NULLs as distinct, so URL-less rows are allowed to
--- repeat here and are instead deduped in the save route by
--- business_name + address + research_run_id.
-CREATE UNIQUE INDEX IF NOT EXISTS research_leads_gmaps_url_key
-  ON public.research_leads (google_maps_url);
+-- Duplicate guard: a business appears at most once PER RUN (by Google Maps
+-- URL). It is intentionally NOT global — the same business may legitimately
+-- appear in different runs, since each run owns its own history. Postgres
+-- treats NULLs as distinct, so URL-less rows are deduped in the API by
+-- business_name + address + research_run_id instead.
+CREATE UNIQUE INDEX IF NOT EXISTS research_leads_run_gmaps_key
+  ON public.research_leads (research_run_id, google_maps_url)
+  WHERE google_maps_url IS NOT NULL;
 
 DROP TRIGGER IF EXISTS research_leads_set_updated_at ON public.research_leads;
 CREATE TRIGGER research_leads_set_updated_at

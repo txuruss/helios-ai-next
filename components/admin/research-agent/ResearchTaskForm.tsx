@@ -1,6 +1,6 @@
 'use client'
 
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Search, Loader2 } from 'lucide-react'
 
 export interface ResearchFormValues {
@@ -11,10 +11,20 @@ export interface ResearchFormValues {
   saveQualified: boolean
 }
 
+// Re-run prefill: a nonce makes repeated re-runs of the same run re-apply.
+export interface ResearchFormPrefill {
+  location:   string
+  niches:     string
+  leadTarget: number
+  radiusKm:   number
+  nonce:      number
+}
+
 interface Props {
   onRun:    (values: ResearchFormValues) => void
   loading:  boolean
   disabled: boolean // true when GOOGLE_MAPS_API_KEY is missing
+  prefill?: ResearchFormPrefill | null
 }
 
 const inputCls =
@@ -22,13 +32,25 @@ const inputCls =
   'placeholder-[#6a6a6e] focus:outline-none focus:border-[#ff7a18]/40 focus:bg-white/[0.04] transition-all'
 const labelCls = 'text-[11px] font-semibold uppercase tracking-[0.08em] text-[#6a6a6e]'
 
-export default function ResearchTaskForm({ onRun, loading, disabled }: Props) {
+export default function ResearchTaskForm({ onRun, loading, disabled, prefill }: Props) {
   const [location, setLocation]   = useState('')
   const [niches, setNiches]       = useState('')
   const [leadTarget, setLeadTarget] = useState(10)
   const [radiusKm, setRadiusKm]   = useState(10)
   const [saveQualified, setSaveQualified] = useState(false)
   const [localError, setLocalError] = useState<string | null>(null)
+
+  // Apply a re-run prefill from history. Keyed on nonce so the same run can
+  // be re-applied repeatedly.
+  useEffect(() => {
+    if (!prefill) return
+    setLocation(prefill.location)
+    setNiches(prefill.niches)
+    setLeadTarget(prefill.leadTarget)
+    setRadiusKm(prefill.radiusKm)
+    setLocalError(null)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [prefill?.nonce])
 
   function submit(e: React.FormEvent) {
     e.preventDefault()

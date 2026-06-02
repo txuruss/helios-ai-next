@@ -38,24 +38,16 @@ export default function ResearchResultsTable({ leads, runId }: Props) {
     setNote(null)
   }, [leads])
 
-  function toPayload(l: ResearchResultLead) {
-    return {
-      name: l.name, niche: l.niche, address: l.address, phone: l.phone,
-      website: l.website, googleMapsUrl: l.googleMapsUrl, rating: l.rating,
-      reviewCount: l.reviewCount, problemFound: l.problemFound, outreachAngle: l.outreachAngle,
-      firstDm: l.firstDm, coldEmailOpening: l.coldEmailOpening, leadScore: l.leadScore,
-    }
-  }
-
   interface SaveResult { savedCount: number; duplicateCount: number; message: string }
 
   async function save(rows: ResearchResultLead[]): Promise<SaveResult | null> {
     if (rows.length === 0) return null
     setError(null)
+    // Rows are already stored (status 'found') — saving promotes them by id.
     const res = await fetch('/api/research-agent/leads/save', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ runId, leads: rows.map(toPayload) }),
+      body: JSON.stringify({ runId, ids: rows.map((r) => r.id) }),
     })
     const data = await res.json().catch(() => ({}))
     if (!res.ok || !data?.ok) {
@@ -123,6 +115,7 @@ export default function ResearchResultsTable({ leads, runId }: Props) {
                 <th className="text-left px-3 py-2.5 min-w-[200px]">Problem Found</th>
                 <th className="text-left px-3 py-2.5 min-w-[200px]">Outreach Angle</th>
                 <th className="text-left px-3 py-2.5">Score</th>
+                <th className="text-left px-3 py-2.5 whitespace-nowrap">Status</th>
                 <th className="text-right px-3 py-2.5">Actions</th>
               </tr>
             </thead>
@@ -159,6 +152,19 @@ export default function ResearchResultsTable({ leads, runId }: Props) {
                     <td className="px-3 py-2.5 text-[#9a9a9d] max-w-[240px]">{l.problemFound}</td>
                     <td className="px-3 py-2.5 text-[#9a9a9d] max-w-[240px]">{l.outreachAngle}</td>
                     <td className="px-3 py-2.5"><LeadScoreBadge score={l.leadScore} /></td>
+                    <td className="px-3 py-2.5">
+                      {isSaved ? (
+                        <span className="inline-flex items-center text-[10.5px] font-semibold px-2.5 py-[3px] rounded-full border whitespace-nowrap"
+                          style={{ color: '#22d093', borderColor: '#22d09333', background: '#22d09312' }}>
+                          Saved
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center text-[10.5px] font-semibold px-2.5 py-[3px] rounded-full border whitespace-nowrap"
+                          style={{ color: '#9a9a9d', borderColor: '#ffffff1a', background: '#ffffff08' }}>
+                          Unsaved
+                        </span>
+                      )}
+                    </td>
                     <td className="px-3 py-2.5">
                       <div className="flex justify-end">
                         {isSaved ? (
