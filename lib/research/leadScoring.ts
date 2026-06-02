@@ -13,6 +13,7 @@
 
 // A normalized Google Places result (filled by lib/research/googlePlaces).
 export interface PlaceResult {
+  placeId:        string | null   // Google Place ID — strongest dedupe key
   name:           string
   category:       string | null
   address:        string | null
@@ -71,6 +72,37 @@ function clamp(n: number, lo: number, hi: number): number {
 }
 
 export interface ScoreBand { label: string; color: string }
+
+// ── Dedupe helpers (shared by the run + save routes and the data layer) ──
+
+// Bare hostname for a website, lowercased, without leading "www.".
+export function websiteDomain(url: string | null | undefined): string | null {
+  if (!url) return null
+  try {
+    const u = new URL(url.startsWith('http') ? url : `https://${url}`)
+    return u.hostname.replace(/^www\./, '').toLowerCase() || null
+  } catch {
+    return null
+  }
+}
+
+// Stable dedupe key for a business: Google Place ID → website domain →
+// phone digits → business name + address. Used to prevent duplicate saved
+// leads within a single run.
+export function leadDedupKey(p: {
+  placeId?: string | null
+  website?: string | null
+  phone?:   string | null
+  name?:    string | null
+  address?: string | null
+}): string {
+  if (p.placeId) return `pid:${p.placeId}`
+  const dom = websiteDomain(p.website ?? null)
+  if (dom) return `dom:${dom}`
+  const tel = (p.phone ?? '').replace(/\D/g, '')
+  if (tel.length >= 7) return `tel:${tel}`
+  return `na:${(p.name ?? '').trim().toLowerCase()}|${(p.address ?? '').trim().toLowerCase()}`
+}
 
 // Visual band for a 0–100 score, using the Mission Control palette.
 export function scoreBand(score: number): ScoreBand {

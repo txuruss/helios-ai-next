@@ -1,6 +1,6 @@
 # Helios AI — HQ
 
-> Top-level hub for the Helios AI business brain. Start here.
+> Top-level hub and **Master Source** index for the Helios AI business brain. Start here.
 
 ## Summary
 
@@ -33,26 +33,40 @@ The website is **live** at https://heliosai.agency/ and is *ready enough to begi
 
 ## Primary target clients
 
-Barbershops · Salons · Dentists · Gyms · Home service providers · Restaurants with booking needs · Other local businesses that miss calls, DMs, website inquiries, or appointment requests.
+Barbershops · Salons · Spas · Dentists · Gyms · Home service providers · Restaurants with booking needs · Other local businesses that miss calls, DMs, website inquiries, or appointment requests.
 
 ## Key decisions
 
+- **Client first. Problem second. Tool third. Build last.** (See [[Helios AI Client Acquisition Doctrine]].)
 - Find clients **before** PayPal and Relevance AI are finished. Validate demand, not automation.
 - Sell the **outcome** (more bookings, fewer missed inquiries), not "AI automation."
 - The first client can be delivered manually if needed.
+- Do not hide behind building — if no one is being contacted, Helios isn't moving. (See [[Helios AI Founder Operating Rules]].)
 
 ## Map of this brain
 
 - [[Next Steps]] — immediate actions and first-client goal
 - [[Mission Control]] — internal admin operating system
-- **Offers:** [[Pricing]]
-- **Sales:** [[Client Acquisition Readiness]] · [[Outreach Strategy]]
-- **Agents:** [[Agent System]]
+- **Offers:** [[Pricing]] · [[Helios AI Pricing Principles]]
+- **Sales:** [[Helios AI Client Outreach & Acquisition Source]] · [[Client Acquisition Readiness]] · [[Outreach Strategy]]
+- **Agents:** [[Agent System]] · [[Helios AI Managed Agent Brain System]]
 - **Integrations:** [[Relevance AI]] · [[PayPal]]
 - **Technical:** [[System Architecture]]
 - **Operations:** [[Email Setup]]
-- **Strategy:** [[Decision Log]] · [[Risks]]
+- **Strategy:** [[Decision Log]] · [[Risks]] · [[Helios AI Founder Operating Rules]]
 - **Website:** [[Website Improvement Backlog]]
+
+### Sales & acquisition doctrine (sales-first, less build-first)
+
+The sharpened playbook for landing the first $1,000–$1,500 client:
+
+- [[Helios AI Client Acquisition Doctrine]] — *Client first. Problem second. Tool third. Build last.* + the 3 Cs
+- [[Helios AI Cold Email System]] — the outreach cycle, why it works/fails, message + subject formulas
+- [[Helios AI Outreach Infrastructure]] — separate domain, SPF/DKIM/DMARC, warmup, deliverability
+- [[Helios AI Discovery Call Framework]] — understand-don't-pitch call script + questions
+- [[Helios AI Pricing Principles]] — setup + retainer, price on value, audit as entry offer
+- [[Helios AI Managed Agent Brain System]] — agent memory / sleep-cycle (later, not first)
+- [[Helios AI Founder Operating Rules]] — the 7 rules + what to change now
 
 ## Related (technical brain)
 
@@ -60,4 +74,4 @@ The numbered technical source-of-truth lives alongside this folder:
 [[00-source-of-truth]] · [[03-mission-control]] · [[04-agent-workflows]] · [[05-tech-stack]] · [[08-decision-log]] · [[10-feature-map]]
 
 ---
-*Last updated: 2026-05-29*
+*Last updated: 2026-05-30 — added sales & acquisition doctrine (cold email, outreach infra, discovery, pricing principles, managed agent brain, founder rules).*

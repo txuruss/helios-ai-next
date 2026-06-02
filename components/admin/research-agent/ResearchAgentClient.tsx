@@ -61,7 +61,7 @@ export default function ResearchAgentClient({ apiKeyMissing, migrationNeeded, in
       })
       const data = await res.json().catch(() => ({}))
       if (!res.ok || !data?.ok) {
-        setError(data?.error ?? 'Research run failed.')
+        setError((data?.error ?? 'Research run failed.') + (data?.detail ? ` — ${data.detail}` : ''))
         setLoading(false)
         return
       }

@@ -68,6 +68,20 @@ A business-operating layer sits alongside this technical brain. **Start at [[Hel
 | [[Helios AI/Strategy/Risks]] | Overbuilding / positioning risks | `In progress` |
 | [[Helios AI/Operations/Email Setup]] | Contact identity (`hello@heliosai.agency`) | `In progress` |
 
+### Sales & acquisition doctrine
+
+Sharper, sales-first playbook for the first $1,000–$1,500 client (start at [[Helios AI/HQ]]):
+
+| Note | Purpose | Status |
+|------|---------|--------|
+| [[Helios AI/Sales/Helios AI Client Acquisition Doctrine]] | Client first, build last · the 3 Cs | `In progress` |
+| [[Helios AI/Sales/Helios AI Cold Email System]] | Outreach cycle, why it works/fails, message + subject formulas | `In progress` |
+| [[Helios AI/Sales/Helios AI Outreach Infrastructure]] | Outreach domain, SPF/DKIM/DMARC, warmup, deliverability | `Planned` |
+| [[Helios AI/Sales/Helios AI Discovery Call Framework]] | Understand-don't-pitch call script + questions | `In progress` |
+| [[Helios AI/Offers/Helios AI Pricing Principles]] | Setup + retainer, price on value, audit as entry offer | `Complete (for current offer)` |
+| [[Helios AI/Agents/Helios AI Managed Agent Brain System]] | Agent memory / sleep-cycle (later, not first) | `Planned` |
+| [[Helios AI/Strategy/Helios AI Founder Operating Rules]] | The 7 rules + what to change now | `In progress` |
+
 **Canonical rule:** the `Helios AI/` notes are canonical for **business direction**; the numbered notes (`00`–`11`) are canonical for **code/build facts**. Where they overlap, each business note links to its numbered counterpart and the numbered note links back.
 
 ---
@@ -76,3 +90,4 @@ A business-operating layer sits alongside this technical brain. **Start at [[Hel
 
 2026-05-22 — Initial brain created from codebase inspection.
 2026-05-29 — Added `Helios AI/` business brain (HQ, Next Steps, Sales, Integrations, Strategy, Website). Confirmed live domain heliosai.agency. Published current pricing.
+2026-05-30 — Added sales & acquisition doctrine: Client Acquisition Doctrine, Cold Email System, Outreach Infrastructure, Discovery Call Framework, Pricing Principles, Managed Agent Brain System, Founder Operating Rules. Sharper, sales-first, less build-first.

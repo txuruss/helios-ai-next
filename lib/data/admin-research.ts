@@ -7,6 +7,7 @@ import 'server-only'
 
 import { requireAdmin } from '@/lib/auth/require-admin'
 import { createServiceRoleClient } from '@/lib/supabase/server'
+import { leadDedupKey } from '@/lib/research/leadScoring'
 
 export interface ResearchRunSummary {
   id:          string
@@ -33,6 +34,7 @@ export interface ResearchRunsResult {
 // status, types) come back empty — the table degrades gracefully.
 export interface ResearchRunLead {
   id:               string
+  placeId:          string | null
   name:             string
   category:         string | null
   address:          string | null
@@ -85,20 +87,22 @@ function toSummary(r: Record<string, unknown>, savedCount: number): ResearchRunS
 }
 
 function ns(v: unknown): string | null { return typeof v === 'string' && v.length > 0 ? v : null }
+function nnum(v: unknown): number | null { return typeof v === 'number' ? v : null }
 
-// Map a research_leads DB row → the table-compatible lead shape. saved comes
-// from is_saved so unsaved "found" rows render as savable.
+// Map a research_leads DB row → the table-compatible lead shape. Used only as
+// a fallback for legacy runs that have no raw_results JSON.
 function toRunLead(r: Record<string, unknown>): ResearchRunLead {
   return {
     id:               String(r.id ?? ''),
+    placeId:          ns(r.place_id),
     name:             typeof r.business_name === 'string' ? r.business_name : '(unnamed)',
     category:         null,
     address:          ns(r.address),
     phone:            ns(r.phone),
     website:          ns(r.website),
     googleMapsUrl:    ns(r.google_maps_url),
-    rating:           typeof r.rating === 'number' ? r.rating : null,
-    reviewCount:      typeof r.review_count === 'number' ? r.review_count : null,
+    rating:           nnum(r.rating),
+    reviewCount:      nnum(r.review_count),
     businessStatus:   null,
     types:            [],
     niche:            typeof r.niche === 'string' ? r.niche : '—',
@@ -108,6 +112,38 @@ function toRunLead(r: Record<string, unknown>): ResearchRunLead {
     firstDm:          ns(r.first_dm) ?? '',
     coldEmailOpening: ns(r.cold_email_opening) ?? '',
     saved:            r.is_saved === true,
+  }
+}
+
+// Map a raw_results JSON entry (a stored ScoredLead) → the table shape,
+// re-deriving saved from the run's current saved-leads set.
+function rawToRunLead(raw: Record<string, unknown>, savedKeys: Set<string>): ResearchRunLead {
+  const placeId       = ns(raw.placeId)
+  const website       = ns(raw.website)
+  const phone         = ns(raw.phone)
+  const name          = typeof raw.name === 'string' ? raw.name : '(unnamed)'
+  const address       = ns(raw.address)
+  const key = leadDedupKey({ placeId, website, phone, name, address })
+  return {
+    id:               typeof raw.id === 'string' ? raw.id : key,
+    placeId,
+    name,
+    category:         ns(raw.category),
+    address,
+    phone,
+    website,
+    googleMapsUrl:    ns(raw.googleMapsUrl),
+    rating:           nnum(raw.rating),
+    reviewCount:      nnum(raw.reviewCount),
+    businessStatus:   ns(raw.businessStatus),
+    types:            Array.isArray(raw.types) ? (raw.types as unknown[]).map(String) : [],
+    niche:            typeof raw.niche === 'string' ? raw.niche : '—',
+    leadScore:        typeof raw.leadScore === 'number' ? raw.leadScore : 0,
+    problemFound:     ns(raw.problemFound) ?? '',
+    outreachAngle:    ns(raw.outreachAngle) ?? '',
+    firstDm:          ns(raw.firstDm) ?? '',
+    coldEmailOpening: ns(raw.coldEmailOpening) ?? '',
+    saved:            savedKeys.has(key),
   }
 }
 
@@ -177,7 +213,7 @@ export async function getResearchRunDetail(runId: string): Promise<ResearchRunDe
 
     const { data: runData, error: runErr } = await db
       .from('research_runs')
-      .select('id, title, location, niches, radius_km, lead_target, leads_found, status, created_at')
+      .select('id, title, location, niches, radius_km, lead_target, leads_found, status, created_at, raw_results')
       .eq('id', runId)
       .maybeSingle()
 
@@ -186,22 +222,41 @@ export async function getResearchRunDetail(runId: string): Promise<ResearchRunDe
       throw runErr
     }
     if (!runData) return { ...empty, notFound: true }
+    const runRecord = runData as Record<string, unknown>
 
-    const { data: leadData, error: leadErr } = await db
+    // Currently-saved leads for this run → dedupe set + saved count.
+    const { data: savedData, error: savedErr } = await db
       .from('research_leads')
-      .select('id, business_name, niche, address, phone, website, google_maps_url, rating, review_count, problem_found, outreach_angle, first_dm, cold_email_opening, lead_score, is_saved, created_at')
+      .select('id, place_id, website, phone, business_name, address, niche, google_maps_url, rating, review_count, problem_found, outreach_angle, first_dm, cold_email_opening, lead_score, is_saved')
       .eq('research_run_id', runId)
-      .order('is_saved', { ascending: false })
       .order('lead_score', { ascending: false })
 
-    if (leadErr) {
-      if (isMissingTable(leadErr)) return { ...empty, migrationNeeded: true }
-      throw leadErr
+    if (savedErr) {
+      if (isMissingTable(savedErr)) return { ...empty, migrationNeeded: true }
+      throw savedErr
     }
 
-    const leads = ((leadData ?? []) as Record<string, unknown>[]).map(toRunLead)
-    const savedCount = leads.filter((l) => l.saved).length
-    const run = toSummary(runData as Record<string, unknown>, savedCount)
+    const savedRows = (savedData ?? []) as Record<string, unknown>[]
+    const savedKeys = new Set<string>()
+    for (const r of savedRows) {
+      savedKeys.add(leadDedupKey({
+        placeId: r.place_id as string | null,
+        website: r.website as string | null,
+        phone:   r.phone as string | null,
+        name:    r.business_name as string | null,
+        address: r.address as string | null,
+      }))
+    }
+    const savedCount = savedRows.length
+
+    // Prefer the run's full result set (raw_results). Fall back to the saved
+    // rows for legacy runs created before raw_results existed.
+    const raw = runRecord.raw_results
+    const leads = Array.isArray(raw) && raw.length > 0
+      ? (raw as Record<string, unknown>[]).map((r) => rawToRunLead(r, savedKeys))
+      : savedRows.map(toRunLead)
+
+    const run = toSummary(runRecord, savedCount)
     return { run, leads, migrationNeeded: false, notFound: false, error: null }
   } catch (err) {
     console.error('[getResearchRunDetail]', err instanceof Error ? err.message : err)

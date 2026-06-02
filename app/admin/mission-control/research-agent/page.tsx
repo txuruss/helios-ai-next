@@ -11,7 +11,7 @@ export default async function ResearchAgentPage() {
   await requireAdmin({ path: '/admin/mission-control/research-agent' })
 
   const apiKeyMissing = !googleMapsConfigured()
-  const { rows, migrationNeeded } = await getResearchRuns(15)
+  const { rows, migrationNeeded, error: historyError } = await getResearchRuns(15)
 
   return (
     <div className="flex flex-col gap-5">
@@ -41,6 +41,7 @@ export default async function ResearchAgentPage() {
         apiKeyMissing={apiKeyMissing}
         migrationNeeded={migrationNeeded}
         initialRuns={rows}
+        historyError={historyError}
       />
     </div>
   )

@@ -38,20 +38,29 @@ export default function ResearchResultsTable({ leads, runId }: Props) {
     setNote(null)
   }, [leads])
 
+  function toPayload(l: ResearchResultLead) {
+    return {
+      placeId: l.placeId, name: l.name, niche: l.niche, address: l.address, phone: l.phone,
+      website: l.website, googleMapsUrl: l.googleMapsUrl, rating: l.rating,
+      reviewCount: l.reviewCount, problemFound: l.problemFound, outreachAngle: l.outreachAngle,
+      firstDm: l.firstDm, coldEmailOpening: l.coldEmailOpening, leadScore: l.leadScore,
+    }
+  }
+
   interface SaveResult { savedCount: number; duplicateCount: number; message: string }
 
   async function save(rows: ResearchResultLead[]): Promise<SaveResult | null> {
     if (rows.length === 0) return null
     setError(null)
-    // Rows are already stored (status 'found') — saving promotes them by id.
+    // Results live in the run's raw_results until saved — saving inserts them.
     const res = await fetch('/api/research-agent/leads/save', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ runId, ids: rows.map((r) => r.id) }),
+      body: JSON.stringify({ runId, leads: rows.map(toPayload) }),
     })
     const data = await res.json().catch(() => ({}))
     if (!res.ok || !data?.ok) {
-      setError(data?.error ?? 'Could not save leads.')
+      setError((data?.error ?? 'Could not save leads.') + (data?.detail ? ` — ${data.detail}` : ''))
       return null
     }
     // Duplicates are not errors — the rows are in the DB either way, so mark

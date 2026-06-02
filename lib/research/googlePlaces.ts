@@ -18,6 +18,7 @@ const TEXT_SEARCH_URL = 'https://places.googleapis.com/v1/places:searchText'
 // The exact set of fields we request. Field masks are required by the new
 // Places API and keep the response (and billing) tight.
 const FIELD_MASK = [
+  'places.id',
   'places.displayName',
   'places.formattedAddress',
   'places.internationalPhoneNumber',
@@ -60,6 +61,7 @@ function s(v: unknown): string | null {
 
 // Shape of a single place in the Places API (New) response.
 interface RawPlace {
+  id?:                       string
   displayName?:              { text?: string }
   formattedAddress?:         string
   internationalPhoneNumber?: string
@@ -78,6 +80,7 @@ function toPlaceResult(p: RawPlace): PlaceResult | null {
   const name = s(p.displayName?.text)
   if (!name) return null // never keep a result without a real business name
   return {
+    placeId:        s(p.id),
     name,
     category:       s(p.primaryTypeDisplayName?.text) ?? s(p.primaryType) ?? (p.types?.[0] ?? null),
     address:        s(p.formattedAddress),
