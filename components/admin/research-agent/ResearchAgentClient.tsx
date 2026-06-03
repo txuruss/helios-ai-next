@@ -1,16 +1,19 @@
 'use client'
 
-// Orchestrates the Business Research Agent: form → run → results table,
-// plus a run history you can re-open ("View Results") or re-run. All work
-// happens server-side via the /api/research-agent routes; this only holds
-// UI state.
+// Orchestrates the Business Research Agent across three tabs:
+//   • Run Research    — the search form + live results
+//   • Research History — past runs ("View Results", "Re-run")
+//   • Saved Leads      — all saved leads across runs
+// All work happens server-side via the /api/research-agent routes; this only
+// holds UI state.
 
 import { useRef, useState } from 'react'
-import { AlertCircle, History as HistoryIcon, Loader2, X } from 'lucide-react'
+import { AlertCircle, History as HistoryIcon, Loader2, X, Search, Bookmark } from 'lucide-react'
 import type { ResearchRunSummary } from '@/lib/data/admin-research'
 import ResearchTaskForm, { type ResearchFormValues, type ResearchFormPrefill } from './ResearchTaskForm'
 import ResearchResultsTable, { type ResearchResultLead } from './ResearchResultsTable'
 import ResearchRunHistory from './ResearchRunHistory'
+import SavedLeadsTable from './SavedLeadsTable'
 
 interface Props {
   apiKeyMissing:   boolean
@@ -24,7 +27,11 @@ interface HistoryView {
   leads: ResearchResultLead[]
 }
 
+type Tab = 'run' | 'history' | 'saved'
+
 export default function ResearchAgentClient({ apiKeyMissing, migrationNeeded, initialRuns, historyError }: Props) {
+  const [tab, setTab] = useState<Tab>('run')
+
   const [loading, setLoading]   = useState(false)
   const [error, setError]       = useState<string | null>(null)
   const [leads, setLeads]       = useState<ResearchResultLead[]>([])
@@ -68,7 +75,6 @@ export default function ResearchAgentClient({ apiKeyMissing, migrationNeeded, in
       setLeads((data.leads ?? []) as ResearchResultLead[])
       setRunId(data.runId ?? null)
       setHasRun(true)
-      setHistoryView(null) // live results take over the results area
       if (typeof data.savedCount === 'number' && data.savedCount > 0) {
         setSavedNote(`${data.savedCount} qualified lead${data.savedCount !== 1 ? 's' : ''} saved automatically.`)
       }
@@ -109,6 +115,7 @@ export default function ResearchAgentClient({ apiKeyMissing, migrationNeeded, in
       radiusKm:   run.radius_km ?? 10,
       nonce:      Date.now(),
     })
+    setTab('run')
     topRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }
 
@@ -130,96 +137,135 @@ export default function ResearchAgentClient({ apiKeyMissing, migrationNeeded, in
 
       {migrationNeeded && (
         <div className="rounded-xl border border-[#ffae3c]/30 bg-[#ffae3c]/[0.05] px-4 py-2.5 text-[12.5px] text-[#ffae3c]">
-          Research history is unavailable until migration{' '}
+          Research storage is unavailable until migration{' '}
           <code className="font-mono text-[11.5px]">20260606120000_create_research_agent.sql</code> is applied in Supabase.
           You can still run searches, but runs and saved leads won&apos;t persist.
         </div>
       )}
 
-      <ResearchTaskForm onRun={handleRun} loading={loading} disabled={apiKeyMissing} prefill={prefill} />
+      {/* Tabs */}
+      <div className="flex items-center gap-1.5 border-b border-white/[0.06]">
+        <TabButton active={tab === 'run'}     onClick={() => setTab('run')}     icon={<Search size={13} />}      label="Run Research" />
+        <TabButton active={tab === 'history'} onClick={() => setTab('history')} icon={<HistoryIcon size={13} />} label="Research History" count={runs.length} />
+        <TabButton active={tab === 'saved'}   onClick={() => setTab('saved')}   icon={<Bookmark size={13} />}    label="Saved Leads" />
+      </div>
 
-      {error && (
-        <div className="rounded-xl border border-[#ff5247]/30 bg-[#ff5247]/[0.06] px-4 py-3 flex items-start gap-3">
-          <AlertCircle size={15} className="text-[#ff8a7a] shrink-0 mt-0.5" />
-          <div className="text-[12.5px] text-[#ff8a7a]">{error}</div>
-        </div>
-      )}
+      {/* ── Run Research ─────────────────────────────────────────── */}
+      {tab === 'run' && (
+        <>
+          <ResearchTaskForm onRun={handleRun} loading={loading} disabled={apiKeyMissing} prefill={prefill} />
 
-      {savedNote && (
-        <div className="rounded-xl border border-[#22d093]/30 bg-[#22d093]/[0.06] px-4 py-2.5 text-[12.5px] text-[#22d093]">
-          {savedNote}
-        </div>
-      )}
-
-      {/* Live run results */}
-      {hasRun && !error && (
-        leads.length === 0 ? (
-          <div className="rounded-2xl border border-white/[0.08] bg-[#0f1012]/80 px-5 py-10 text-center text-[13px] text-[#9a9a9d]">
-            No businesses matched that location and niche. Try a broader niche or a different location.
-          </div>
-        ) : (
-          <ResearchResultsTable leads={leads} runId={runId} />
-        )
-      )}
-
-      {/* Historical run results (View Results) */}
-      {historyViewError && (
-        <div className="rounded-xl border border-[#ff5247]/30 bg-[#ff5247]/[0.06] px-4 py-3 flex items-start gap-3">
-          <AlertCircle size={15} className="text-[#ff8a7a] shrink-0 mt-0.5" />
-          <div className="text-[12.5px] text-[#ff8a7a]">{historyViewError}</div>
-        </div>
-      )}
-
-      {historyView && (
-        <section className="rounded-2xl border border-[#ff7a18]/20 bg-[#ff7a18]/[0.03] overflow-hidden">
-          <header className="flex items-center justify-between gap-3 px-5 py-3.5 border-b border-[#ff7a18]/10">
-            <div className="flex items-center gap-2 min-w-0">
-              <HistoryIcon size={13} className="text-[#ff7a18] shrink-0" />
-              <div className="min-w-0">
-                <h2 className="text-[13.5px] font-semibold text-white truncate">
-                  Results — {historyView.run.title ?? '(untitled run)'}
-                </h2>
-                <p className="text-[11px] text-[#6a6a6e]">
-                  {new Date(historyView.run.created_at).toLocaleString()} ·{' '}
-                  {historyView.leads.length} found ·{' '}
-                  {historyView.leads.filter((l) => l.saved).length} saved
-                </p>
-              </div>
+          {error && (
+            <div className="rounded-xl border border-[#ff5247]/30 bg-[#ff5247]/[0.06] px-4 py-3 flex items-start gap-3">
+              <AlertCircle size={15} className="text-[#ff8a7a] shrink-0 mt-0.5" />
+              <div className="text-[12.5px] text-[#ff8a7a]">{error}</div>
             </div>
-            <button type="button" onClick={() => setHistoryView(null)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11.5px] font-medium
-                         bg-white/[0.04] border border-white/[0.1] text-[#cfd3dc]
-                         hover:bg-white/[0.08] hover:text-white transition-all shrink-0">
-              <X size={12} /> Close
-            </button>
-          </header>
-          <div className="p-4">
-            {historyView.leads.length === 0 ? (
-              <p className="px-1 py-6 text-center text-[12.5px] text-[#9a9a9d]">
-                No businesses were found in this run. Re-run the search with a broader niche or location.
-              </p>
+          )}
+
+          {savedNote && (
+            <div className="rounded-xl border border-[#22d093]/30 bg-[#22d093]/[0.06] px-4 py-2.5 text-[12.5px] text-[#22d093]">
+              {savedNote}
+            </div>
+          )}
+
+          {hasRun && !error && (
+            leads.length === 0 ? (
+              <div className="rounded-2xl border border-white/[0.08] bg-[#0f1012]/80 px-5 py-10 text-center text-[13px] text-[#9a9a9d]">
+                No businesses matched that location and niche. Try a broader niche or a different location.
+              </div>
             ) : (
-              <ResearchResultsTable leads={historyView.leads} runId={historyView.run.id} />
-            )}
-          </div>
-        </section>
+              <ResearchResultsTable leads={leads} runId={runId} />
+            )
+          )}
+        </>
       )}
 
-      <ResearchRunHistory
-        runs={runs}
-        loading={false}
-        error={historyError ?? null}
-        loadingRunId={historyLoadingId}
-        activeRunId={historyView?.run.id ?? null}
-        onViewResults={handleViewResults}
-        onRerun={handleRerun}
-      />
+      {/* ── Research History ─────────────────────────────────────── */}
+      {tab === 'history' && (
+        <>
+          {historyViewError && (
+            <div className="rounded-xl border border-[#ff5247]/30 bg-[#ff5247]/[0.06] px-4 py-3 flex items-start gap-3">
+              <AlertCircle size={15} className="text-[#ff8a7a] shrink-0 mt-0.5" />
+              <div className="text-[12.5px] text-[#ff8a7a]">{historyViewError}</div>
+            </div>
+          )}
 
-      {historyLoadingId && !historyView && (
-        <div className="flex items-center justify-center gap-2 text-[12px] text-[#9a9a9d] py-2">
-          <Loader2 size={13} className="animate-spin" /> Loading results…
-        </div>
+          {historyView && (
+            <section className="rounded-2xl border border-[#ff7a18]/20 bg-[#ff7a18]/[0.03] overflow-hidden">
+              <header className="flex items-center justify-between gap-3 px-5 py-3.5 border-b border-[#ff7a18]/10">
+                <div className="flex items-center gap-2 min-w-0">
+                  <HistoryIcon size={13} className="text-[#ff7a18] shrink-0" />
+                  <div className="min-w-0">
+                    <h2 className="text-[13.5px] font-semibold text-white truncate">
+                      Results — {historyView.run.title ?? '(untitled run)'}
+                    </h2>
+                    <p className="text-[11px] text-[#6a6a6e]">
+                      {new Date(historyView.run.created_at).toLocaleString()} ·{' '}
+                      {historyView.leads.length} found ·{' '}
+                      {historyView.leads.filter((l) => l.saved).length} saved
+                    </p>
+                  </div>
+                </div>
+                <button type="button" onClick={() => setHistoryView(null)}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11.5px] font-medium
+                             bg-white/[0.04] border border-white/[0.1] text-[#cfd3dc]
+                             hover:bg-white/[0.08] hover:text-white transition-all shrink-0">
+                  <X size={12} /> Close
+                </button>
+              </header>
+              <div className="p-4">
+                {historyView.leads.length === 0 ? (
+                  <p className="px-1 py-6 text-center text-[12.5px] text-[#9a9a9d]">
+                    No businesses were found in this run. Re-run the search with a broader niche or location.
+                  </p>
+                ) : (
+                  <ResearchResultsTable leads={historyView.leads} runId={historyView.run.id} />
+                )}
+              </div>
+            </section>
+          )}
+
+          <ResearchRunHistory
+            runs={runs}
+            loading={false}
+            error={historyError ?? null}
+            loadingRunId={historyLoadingId}
+            activeRunId={historyView?.run.id ?? null}
+            onViewResults={handleViewResults}
+            onRerun={handleRerun}
+          />
+
+          {historyLoadingId && !historyView && (
+            <div className="flex items-center justify-center gap-2 text-[12px] text-[#9a9a9d] py-2">
+              <Loader2 size={13} className="animate-spin" /> Loading results…
+            </div>
+          )}
+        </>
       )}
+
+      {/* ── Saved Leads ──────────────────────────────────────────── */}
+      {tab === 'saved' && <SavedLeadsTable migrationNeeded={migrationNeeded} />}
     </div>
+  )
+}
+
+function TabButton({
+  active, onClick, icon, label, count,
+}: {
+  active: boolean; onClick: () => void; icon: React.ReactNode; label: string; count?: number
+}) {
+  return (
+    <button type="button" onClick={onClick}
+      className={`inline-flex items-center gap-2 px-3.5 py-2.5 text-[13px] font-medium border-b-2 -mb-px transition-colors ${
+        active
+          ? 'border-[#ff7a18] text-white'
+          : 'border-transparent text-[#9a9a9d] hover:text-white'
+      }`}>
+      <span className={active ? 'text-[#ffae3c]' : 'text-[#6a6a6e]'}>{icon}</span>
+      {label}
+      {typeof count === 'number' && count > 0 && (
+        <span className="text-[10px] font-semibold px-1.5 py-[1px] rounded-full bg-white/[0.06] text-[#9a9a9d]">{count}</span>
+      )}
+    </button>
   )
 }

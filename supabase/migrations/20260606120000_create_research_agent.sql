@@ -94,7 +94,7 @@ CREATE TABLE IF NOT EXISTS public.research_leads (
   updated_at          timestamptz NOT NULL DEFAULT now(),
 
   CONSTRAINT research_leads_status_check CHECK (
-    status IN ('found', 'saved', 'new', 'reviewing', 'qualified', 'contacted', 'archived')
+    status IN ('found', 'saved', 'ready_for_outreach', 'new', 'reviewing', 'qualified', 'contacted', 'archived')
   )
 );
 
@@ -104,10 +104,10 @@ ALTER TABLE public.research_leads ADD COLUMN IF NOT EXISTS is_saved boolean NOT 
 ALTER TABLE public.research_leads ADD COLUMN IF NOT EXISTS saved_at timestamptz;
 ALTER TABLE public.research_leads ALTER COLUMN status SET DEFAULT 'saved';
 
--- Refresh the status check so 'found'/'saved' are always allowed.
+-- Refresh the status check so 'found'/'saved'/'ready_for_outreach' are allowed.
 ALTER TABLE public.research_leads DROP CONSTRAINT IF EXISTS research_leads_status_check;
 ALTER TABLE public.research_leads ADD CONSTRAINT research_leads_status_check CHECK (
-  status IN ('found', 'saved', 'new', 'reviewing', 'qualified', 'contacted', 'archived')
+  status IN ('found', 'saved', 'ready_for_outreach', 'new', 'reviewing', 'qualified', 'contacted', 'archived')
 );
 
 COMMENT ON TABLE public.research_leads IS 'Saved research leads (a subset of a run kept by the founder). Real Google Places data only.';

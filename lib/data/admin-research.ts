@@ -62,6 +62,34 @@ export interface ResearchRunDetail {
   error:           string | null
 }
 
+// A saved research lead (is_saved=true) shown in the Saved Leads view.
+export interface SavedResearchLead {
+  id:              string
+  research_run_id: string | null
+  business_name:   string
+  niche:           string | null
+  address:         string | null
+  phone:           string | null
+  website:         string | null
+  google_maps_url: string | null
+  rating:          number | null
+  review_count:    number | null
+  problem_found:   string | null
+  outreach_angle:  string | null
+  first_dm:        string | null
+  cold_email_opening: string | null
+  lead_score:      number | null
+  status:          string
+  created_at:      string
+  saved_at:        string | null
+}
+
+export interface SavedResearchLeadsResult {
+  rows:            SavedResearchLead[]
+  migrationNeeded: boolean
+  error:           string | null
+}
+
 function isMissingTable(e: { code?: string; message?: string } | null): boolean {
   if (!e) return false
   if (e.code === '42P01') return true
@@ -261,5 +289,75 @@ export async function getResearchRunDetail(runId: string): Promise<ResearchRunDe
   } catch (err) {
     console.error('[getResearchRunDetail]', err instanceof Error ? err.message : err)
     return { ...empty, error: 'Could not load research run.' }
+  }
+}
+
+function toSavedLead(r: Record<string, unknown>): SavedResearchLead {
+  return {
+    id:                 String(r.id ?? ''),
+    research_run_id:    ns(r.research_run_id),
+    business_name:      typeof r.business_name === 'string' ? r.business_name : '(unnamed)',
+    niche:              ns(r.niche),
+    address:            ns(r.address),
+    phone:              ns(r.phone),
+    website:            ns(r.website),
+    google_maps_url:    ns(r.google_maps_url),
+    rating:             nnum(r.rating),
+    review_count:       nnum(r.review_count),
+    problem_found:      ns(r.problem_found),
+    outreach_angle:     ns(r.outreach_angle),
+    first_dm:           ns(r.first_dm),
+    cold_email_opening: ns(r.cold_email_opening),
+    lead_score:         nnum(r.lead_score),
+    status:             typeof r.status === 'string' ? r.status : 'saved',
+    created_at:         typeof r.created_at === 'string' ? r.created_at : new Date(0).toISOString(),
+    saved_at:           ns(r.saved_at),
+  }
+}
+
+// All saved research leads across runs, newest-saved first. Archived leads are
+// excluded. De-duplicated by business (place id / domain / phone / name+addr),
+// keeping the most recently saved row.
+export async function getSavedResearchLeads(): Promise<SavedResearchLeadsResult> {
+  await requireAdmin({ path: '/admin/mission-control/research-agent' })
+  const empty: SavedResearchLeadsResult = { rows: [], migrationNeeded: false, error: null }
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    return { ...empty, error: 'Server configuration error.' }
+  }
+
+  try {
+    const db = createServiceRoleClient()
+    const { data, error } = await db
+      .from('research_leads')
+      .select('id, research_run_id, place_id, business_name, niche, address, phone, website, google_maps_url, rating, review_count, problem_found, outreach_angle, first_dm, cold_email_opening, lead_score, status, created_at, saved_at')
+      .eq('is_saved', true)
+      .neq('status', 'archived')
+      .order('saved_at', { ascending: false, nullsFirst: false })
+      .order('created_at', { ascending: false })
+
+    if (error) {
+      if (isMissingTable(error)) return { rows: [], migrationNeeded: true, error: null }
+      throw error
+    }
+
+    // De-dupe by business, keeping the first (most recently saved) row.
+    const seen = new Set<string>()
+    const rows: SavedResearchLead[] = []
+    for (const raw of (data ?? []) as Record<string, unknown>[]) {
+      const key = leadDedupKey({
+        placeId: raw.place_id as string | null,
+        website: raw.website as string | null,
+        phone:   raw.phone as string | null,
+        name:    raw.business_name as string | null,
+        address: raw.address as string | null,
+      })
+      if (seen.has(key)) continue
+      seen.add(key)
+      rows.push(toSavedLead(raw))
+    }
+    return { rows, migrationNeeded: false, error: null }
+  } catch (err) {
+    console.error('[getSavedResearchLeads]', err instanceof Error ? err.message : err)
+    return { ...empty, error: 'Could not load saved leads.' }
   }
 }
