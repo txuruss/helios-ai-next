@@ -5,7 +5,6 @@
 // server-side. Status actions only change the lead's status — nothing is sent.
 
 import { useEffect, useState } from 'react'
-import { useRouter } from 'next/navigation'
 import { ExternalLink, Loader2, RefreshCw, Eye } from 'lucide-react'
 import type { SavedResearchLead } from '@/lib/data/admin-research'
 import LeadScoreBadge from './LeadScoreBadge'
@@ -34,7 +33,6 @@ function StatusPill({ status }: { status: string }) {
 }
 
 export default function SavedLeadsTable({ migrationNeeded }: { migrationNeeded: boolean }) {
-  const router = useRouter()
   const [leads, setLeads]       = useState<SavedResearchLead[]>([])
   const [loading, setLoading]   = useState(true)
   const [error, setError]       = useState<string | null>(null)
@@ -83,15 +81,10 @@ export default function SavedLeadsTable({ migrationNeeded }: { migrationNeeded: 
       }
       // Status-only update — the lead stays in the list and moves between
       // pipeline buckets (including Archived), reflected in the summary + filter.
+      // Sending to Client Outreach is an explicit click in the detail modal
+      // ("Open in Client Outreach"), never an automatic redirect here.
       setLeads((prev) => prev.map((l) => (l.id === id ? { ...l, status } : l)))
       setSelected((cur) => (cur?.id === id ? { ...cur, status } : cur))
-
-      // "Ready for Outreach" hands the lead to Client Outreach: open its
-      // Add-lead form prefilled. No message is sent — the founder reviews
-      // and clicks Add lead there.
-      if (status === 'ready_for_outreach') {
-        router.push(`/admin/outreach?prefillResearchLeadId=${id}`)
-      }
     } catch {
       setError('Could not reach the research service.')
     } finally {

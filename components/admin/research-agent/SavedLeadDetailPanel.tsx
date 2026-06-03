@@ -1,21 +1,21 @@
 'use client'
 
-// Reusable detail drawer for a saved research lead. Right-side drawer on
-// desktop, full-width sheet on small screens. Scrollable body with the status
-// actions pinned to the bottom. Copy buttons help manual outreach — nothing is
+// Centered detail modal for a saved research lead (full-screen sheet on
+// mobile). Groups the lead into clear sections and exposes a reversible
+// "Outreach Status" selector. Copy buttons help manual outreach — nothing is
 // ever sent automatically; status actions only change the lead's status.
 
 import { useEffect, useRef, useState } from 'react'
+import { useRouter } from 'next/navigation'
 import {
-  X, Copy, Check, AlertTriangle, ExternalLink, Megaphone, Phone, Archive, Loader2,
-  ThumbsUp, ThumbsDown, CalendarCheck,
+  X, Copy, Check, AlertTriangle, ExternalLink, Archive, Loader2, RotateCcw, ArrowRight,
 } from 'lucide-react'
 import type { SavedResearchLead } from '@/lib/data/admin-research'
 import LeadScoreBadge from './LeadScoreBadge'
 
 // The manual-outreach pipeline statuses a founder can set from the UI.
 export type LeadStatusAction =
-  | 'ready_for_outreach' | 'contacted' | 'interested'
+  | 'saved' | 'ready_for_outreach' | 'contacted' | 'interested'
   | 'call_booked' | 'not_interested' | 'archived'
 
 // Single source of truth for status labels + colors (shared with the table).
@@ -30,14 +30,11 @@ export const LEAD_STATUS_META: Record<string, { label: string; color: string }> 
   found:              { label: 'Found',               color: '#6a6a6e' },
 }
 
-// Pipeline display order for summary cards + filters.
+// Pipeline display order for summary cards + filters + the status selector.
 export const LEAD_STATUS_ORDER = [
   'saved', 'ready_for_outreach', 'contacted', 'interested',
   'call_booked', 'not_interested', 'archived',
 ] as const
-
-// Statuses that mean outreach has already happened.
-const CONTACTED_STATUSES = ['contacted', 'interested', 'call_booked', 'not_interested']
 
 function fmtDateTime(v: string | null): string {
   if (!v) return '—'
@@ -57,6 +54,9 @@ interface Props {
 }
 
 export default function SavedLeadDetailPanel({ lead, busy, onClose, onStatusChange }: Props) {
+  const router = useRouter()
+  const [confirmArchive, setConfirmArchive] = useState(false)
+
   // Close on Escape.
   useEffect(() => {
     function onKey(e: KeyboardEvent) { if (e.key === 'Escape') onClose() }
@@ -65,15 +65,29 @@ export default function SavedLeadDetailPanel({ lead, busy, onClose, onStatusChan
   }, [onClose])
 
   const status = LEAD_STATUS_META[lead.status] ?? { label: lead.status, color: '#6a6a6e' }
-  const alreadyContacted = CONTACTED_STATUSES.includes(lead.status)
+
+  // Click a status chip → update (Archived routes through a confirm).
+  function pick(next: LeadStatusAction) {
+    if (busy || next === lead.status) return
+    if (next === 'archived') { setConfirmArchive(true); return }
+    onStatusChange(lead.id, next)
+  }
+  function doArchive() {
+    setConfirmArchive(false)
+    onStatusChange(lead.id, 'archived')
+    onClose() // archived leads drop out of the active view
+  }
+  function openInOutreach() {
+    router.push(`/admin/outreach?prefillResearchLeadId=${lead.id}`)
+  }
 
   return (
-    <div className="fixed inset-0 z-50 flex justify-end">
-      {/* Backdrop */}
-      <div className="absolute inset-0 bg-black/55 backdrop-blur-sm" onClick={onClose} />
-
-      {/* Drawer (full-width sheet on mobile, right drawer on desktop) */}
-      <aside className="relative h-full w-full sm:max-w-[460px] bg-[#0c0d0f] border-l border-white/[0.08] flex flex-col shadow-2xl">
+    <div
+      className="fixed inset-0 z-50 flex items-stretch sm:items-center justify-center bg-black/65 backdrop-blur-sm sm:px-4"
+      role="dialog" aria-modal="true"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose() }}
+    >
+      <div className="w-full sm:max-w-[680px] h-full sm:h-auto sm:max-h-[92vh] bg-[#0f1012] border-0 sm:border border-white/[0.10] sm:rounded-2xl shadow-2xl flex flex-col">
         {/* Header */}
         <header className="flex items-start justify-between gap-3 px-5 py-4 border-b border-white/[0.06] shrink-0">
           <div className="min-w-0">
@@ -95,6 +109,55 @@ export default function SavedLeadDetailPanel({ lead, busy, onClose, onStatusChan
 
         {/* Scrollable body */}
         <div className="flex-1 overflow-y-auto px-5 py-4 flex flex-col gap-5">
+          {/* Outreach Status (interactive, reversible) */}
+          <Section title="Outreach Status">
+            <div className="px-3.5 py-3 flex flex-col gap-3">
+              <div className="flex flex-wrap gap-1.5">
+                {LEAD_STATUS_ORDER.map((s) => (
+                  <StatusChip key={s} meta={LEAD_STATUS_META[s]} active={lead.status === s} disabled={busy}
+                    onClick={() => pick(s)} />
+                ))}
+              </div>
+
+              <div className="flex items-center gap-2 flex-wrap pt-0.5">
+                <SmallBtn onClick={() => pick('saved')} disabled={busy || lead.status === 'saved'} icon={<RotateCcw size={12} />}>
+                  Reset to Saved
+                </SmallBtn>
+                <SmallBtn onClick={() => setConfirmArchive(true)} disabled={busy} icon={<Archive size={12} />}>
+                  Archive Lead
+                </SmallBtn>
+                {busy && <Loader2 size={13} className="animate-spin text-[#6a6a6e]" />}
+              </div>
+
+              {/* Confirm archive (inline — no auto-removal without confirming) */}
+              {confirmArchive && (
+                <div className="rounded-xl border border-white/[0.1] bg-white/[0.03] px-3.5 py-3 flex flex-col gap-2.5">
+                  <p className="text-[12.5px] text-[#cfd3dc]">Archive this lead? You can still view it under Archived.</p>
+                  <div className="flex items-center gap-2">
+                    <button type="button" onClick={doArchive} disabled={busy}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11.5px] font-medium
+                                 bg-[#ff5247]/[0.12] border border-[#ff5247]/35 text-[#ff8a7a] hover:bg-[#ff5247]/20 hover:text-white transition-all disabled:opacity-50">
+                      <Archive size={12} /> Archive lead
+                    </button>
+                    <button type="button" onClick={() => setConfirmArchive(false)} disabled={busy}
+                      className="px-3 py-1.5 rounded-lg text-[11.5px] font-medium text-[#9a9a9d] border border-white/[0.08] bg-white/[0.03] hover:bg-white/[0.06] hover:text-white transition-all disabled:opacity-50">
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* Client Outreach handoff — explicit, never automatic */}
+              {lead.status === 'ready_for_outreach' && (
+                <button type="button" onClick={openInOutreach}
+                  className="inline-flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl text-[12.5px] font-medium w-fit
+                             bg-[#ff7a18]/[0.14] border border-[#ff7a18]/40 text-[#ffae3c] hover:bg-[#ff7a18]/25 hover:text-white transition-all">
+                  Open in Client Outreach <ArrowRight size={13} />
+                </button>
+              )}
+            </div>
+          </Section>
+
           {/* Business */}
           <Section title="Business">
             <InfoRow label="Niche"   value={lead.niche} />
@@ -135,56 +198,54 @@ export default function SavedLeadDetailPanel({ lead, busy, onClose, onStatusChan
           {/* Notes / Next Action */}
           <Section title="Notes / Next Action">
             <div className="px-3.5 py-3 text-[12px] text-[#9a9a9d] leading-relaxed">
-              Research leads don&apos;t store notes. Use{' '}
-              <span className="text-[#ffae3c]">Ready for Outreach</span> to send this business to Client
-              Outreach, where you can track next actions and notes.
+              Research leads don&apos;t store notes. Set{' '}
+              <span className="text-[#ffae3c]">Ready for Outreach</span> above, then use{' '}
+              <span className="text-[#ffae3c]">Open in Client Outreach</span> to track next actions and notes there.
             </div>
           </Section>
         </div>
-
-        {/* Pinned actions */}
-        <footer className="shrink-0 border-t border-white/[0.06] px-5 py-3.5 flex flex-col gap-2">
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#6a6a6e]">Actions</span>
-            {busy && <Loader2 size={13} className="animate-spin text-[#6a6a6e]" />}
-          </div>
-          <div className="flex items-center gap-2 flex-wrap">
-            {!alreadyContacted ? (
-              <>
-                <ActionBtn onClick={() => onStatusChange(lead.id, 'contacted')} disabled={busy} tone="red" icon={<Phone size={12} />}>
-                  Contact
-                </ActionBtn>
-                <ActionBtn onClick={() => onStatusChange(lead.id, 'ready_for_outreach')} disabled={busy} tone="orange" icon={<Megaphone size={12} />}>
-                  Ready for Outreach
-                </ActionBtn>
-                <ActionBtn onClick={() => onStatusChange(lead.id, 'archived')} disabled={busy} tone="neutral" icon={<Archive size={12} />}>
-                  Archive
-                </ActionBtn>
-              </>
-            ) : (
-              <>
-                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11.5px] font-medium border
-                                 border-[#22d093]/35 bg-[#22d093]/[0.12] text-[#22d093]">
-                  <Check size={12} /> Contacted
-                </span>
-                <ActionBtn onClick={() => onStatusChange(lead.id, 'interested')} disabled={busy} tone="blue" icon={<ThumbsUp size={12} />}>
-                  Interested
-                </ActionBtn>
-                <ActionBtn onClick={() => onStatusChange(lead.id, 'call_booked')} disabled={busy} tone="green" icon={<CalendarCheck size={12} />}>
-                  Call Booked
-                </ActionBtn>
-                <ActionBtn onClick={() => onStatusChange(lead.id, 'not_interested')} disabled={busy} tone="red" icon={<ThumbsDown size={12} />}>
-                  Not Interested
-                </ActionBtn>
-                <ActionBtn onClick={() => onStatusChange(lead.id, 'archived')} disabled={busy} tone="neutral" icon={<Archive size={12} />}>
-                  Archive
-                </ActionBtn>
-              </>
-            )}
-          </div>
-        </footer>
-      </aside>
+      </div>
     </div>
+  )
+}
+
+// ── Status chip ───────────────────────────────────────────────────
+function StatusChip({
+  meta, active, disabled, onClick,
+}: {
+  meta: { label: string; color: string }; active: boolean; disabled?: boolean; onClick: () => void
+}) {
+  if (active) {
+    return (
+      <button type="button" onClick={onClick} disabled={disabled}
+        className="inline-flex items-center gap-1.5 text-[11.5px] font-semibold px-3 py-1.5 rounded-full border transition-all disabled:opacity-60"
+        style={{ color: meta.color, borderColor: meta.color, background: `${meta.color}22` }}>
+        <Check size={12} /> {meta.label}
+      </button>
+    )
+  }
+  return (
+    <button type="button" onClick={onClick} disabled={disabled}
+      className="inline-flex items-center text-[11.5px] font-medium px-3 py-1.5 rounded-full border
+                 border-white/[0.1] bg-white/[0.03] text-[#9a9a9d] hover:bg-white/[0.07] hover:text-white
+                 transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+      {meta.label}
+    </button>
+  )
+}
+
+function SmallBtn({
+  children, onClick, disabled, icon,
+}: {
+  children: React.ReactNode; onClick: () => void; disabled?: boolean; icon: React.ReactNode
+}) {
+  return (
+    <button type="button" onClick={onClick} disabled={disabled}
+      className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11.5px] font-medium
+                 bg-white/[0.04] border border-white/[0.1] text-[#cfd3dc]
+                 hover:bg-white/[0.08] hover:text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed">
+      {icon} {children}
+    </button>
   )
 }
 
@@ -200,7 +261,6 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   )
 }
 
-// A simple single-line label/value row (no copy).
 function InfoRow({ label, value }: { label: string; value: string | null }) {
   return (
     <div className="flex items-center justify-between gap-3 px-3.5 py-2.5">
@@ -210,7 +270,6 @@ function InfoRow({ label, value }: { label: string; value: string | null }) {
   )
 }
 
-// A single-line field with an optional link + copy button.
 function ContactRow({
   label, value, href, copyValue, copyable,
 }: {
@@ -239,7 +298,6 @@ function ContactRow({
   )
 }
 
-// A multi-line text block, optionally with a copy button in the header.
 function TextBlock({ label, value, copyable }: { label?: string; value: string | null; copyable?: boolean }) {
   return (
     <div className="px-3.5 py-3">
@@ -285,29 +343,6 @@ function CopyButton({ value }: { value: string }) {
       className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-medium border transition-all shrink-0 ${tone}`}>
       {state === 'ok' ? <Check size={12} /> : state === 'err' ? <AlertTriangle size={12} /> : <Copy size={12} />}
       {state === 'ok' ? 'Copied' : state === 'err' ? 'Failed' : 'Copy'}
-    </button>
-  )
-}
-
-// ── Status action button ──────────────────────────────────────────
-function ActionBtn({
-  children, onClick, disabled, tone, icon,
-}: {
-  children: React.ReactNode; onClick: () => void; disabled?: boolean
-  tone: 'orange' | 'green' | 'blue' | 'purple' | 'red' | 'neutral'; icon: React.ReactNode
-}) {
-  const tones = {
-    orange:  'bg-[#ff7a18]/[0.12] border-[#ff7a18]/40 text-[#ffae3c] hover:bg-[#ff7a18]/25 hover:text-white',
-    green:   'bg-[#22d093]/[0.12] border-[#22d093]/35 text-[#22d093] hover:bg-[#22d093]/20 hover:text-white',
-    blue:    'bg-[#3b9eff]/[0.12] border-[#3b9eff]/35 text-[#3b9eff] hover:bg-[#3b9eff]/20 hover:text-white',
-    purple:  'bg-[#a07cff]/[0.12] border-[#a07cff]/35 text-[#a07cff] hover:bg-[#a07cff]/20 hover:text-white',
-    red:     'bg-[#ff5247]/[0.12] border-[#ff5247]/35 text-[#ff8a7a] hover:bg-[#ff5247]/20 hover:text-white',
-    neutral: 'bg-white/[0.04] border-white/[0.1] text-[#cfd3dc] hover:bg-white/[0.08] hover:text-white',
-  }
-  return (
-    <button type="button" onClick={onClick} disabled={disabled}
-      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11.5px] font-medium border transition-all disabled:opacity-50 disabled:cursor-not-allowed ${tones[tone]}`}>
-      {icon} {children}
     </button>
   )
 }
