@@ -1,8 +1,9 @@
 'use client'
 
-// Reusable detail drawer for a saved research lead. Shows the full lead +
-// copy buttons for outreach material, plus status actions. It does NOT send
-// any message — copying is manual, status actions only change status.
+// Reusable detail drawer for a saved research lead. Right-side drawer on
+// desktop, full-width sheet on small screens. Scrollable body with the status
+// actions pinned to the bottom. Copy buttons help manual outreach — nothing is
+// ever sent automatically; status actions only change the lead's status.
 
 import { useEffect, useRef, useState } from 'react'
 import {
@@ -21,8 +22,8 @@ export type LeadStatusAction =
 export const LEAD_STATUS_META: Record<string, { label: string; color: string }> = {
   saved:              { label: 'Saved',              color: '#6db4ff' },
   ready_for_outreach: { label: 'Ready for Outreach', color: '#ffae3c' },
-  contacted:          { label: 'Contacted',          color: '#3b9eff' },
-  interested:         { label: 'Interested',         color: '#a07cff' },
+  contacted:          { label: 'Contacted',          color: '#22d093' },
+  interested:         { label: 'Interested',         color: '#3b9eff' },
   call_booked:        { label: 'Call Booked',        color: '#22d093' },
   not_interested:     { label: 'Not Interested',     color: '#ff8a7a' },
   archived:           { label: 'Archived',           color: '#6a6a6e' },
@@ -34,6 +35,9 @@ export const LEAD_STATUS_ORDER = [
   'saved', 'ready_for_outreach', 'contacted', 'interested',
   'call_booked', 'not_interested', 'archived',
 ] as const
+
+// Statuses that mean outreach has already happened.
+const CONTACTED_STATUSES = ['contacted', 'interested', 'call_booked', 'not_interested']
 
 function fmtDateTime(v: string | null): string {
   if (!v) return '—'
@@ -61,42 +65,43 @@ export default function SavedLeadDetailPanel({ lead, busy, onClose, onStatusChan
   }, [onClose])
 
   const status = LEAD_STATUS_META[lead.status] ?? { label: lead.status, color: '#6a6a6e' }
+  const alreadyContacted = CONTACTED_STATUSES.includes(lead.status)
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
       {/* Backdrop */}
       <div className="absolute inset-0 bg-black/55 backdrop-blur-sm" onClick={onClose} />
 
-      {/* Drawer */}
-      <aside className="relative h-full w-full max-w-[480px] bg-[#0c0d0f] border-l border-white/[0.08] flex flex-col shadow-2xl">
+      {/* Drawer (full-width sheet on mobile, right drawer on desktop) */}
+      <aside className="relative h-full w-full sm:max-w-[460px] bg-[#0c0d0f] border-l border-white/[0.08] flex flex-col shadow-2xl">
         {/* Header */}
         <header className="flex items-start justify-between gap-3 px-5 py-4 border-b border-white/[0.06] shrink-0">
           <div className="min-w-0">
             <h2 className="text-[16px] font-bold text-white leading-tight break-words">{lead.business_name}</h2>
-            <p className="text-[12px] text-[#9a9a9d] mt-0.5">{lead.niche ?? '—'}</p>
+            <div className="flex items-center gap-2 mt-1.5 flex-wrap">
+              <span className="text-[12px] text-[#9a9a9d]">{lead.niche ?? '—'}</span>
+              <span className="inline-flex items-center text-[10.5px] font-semibold px-2.5 py-[3px] rounded-full border whitespace-nowrap"
+                style={{ color: status.color, borderColor: `${status.color}33`, background: `${status.color}12` }}>
+                {status.label}
+              </span>
+            </div>
           </div>
-          <button type="button" onClick={onClose}
+          <button type="button" onClick={onClose} aria-label="Close"
             className="w-8 h-8 rounded-lg bg-white/[0.04] border border-white/[0.08] flex items-center justify-center
                        text-[#9a9a9d] hover:text-white hover:bg-white/[0.08] transition-all shrink-0">
             <X size={15} />
           </button>
         </header>
 
-        {/* Body */}
+        {/* Scrollable body */}
         <div className="flex-1 overflow-y-auto px-5 py-4 flex flex-col gap-5">
-          {/* Badges */}
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="inline-flex items-center text-[10.5px] font-semibold px-2.5 py-[3px] rounded-full border whitespace-nowrap"
-              style={{ color: status.color, borderColor: `${status.color}33`, background: `${status.color}12` }}>
-              {status.label}
-            </span>
-            {lead.lead_score !== null && <LeadScoreBadge score={lead.lead_score} showLabel />}
-            {lead.rating !== null && (
-              <span className="text-[11.5px] text-[#9a9a9d] tabular-nums">
-                {lead.rating.toFixed(1)}★ <span className="text-[#6a6a6e]">({lead.review_count ?? 0})</span>
-              </span>
-            )}
-          </div>
+          {/* Business */}
+          <Section title="Business">
+            <InfoRow label="Niche"   value={lead.niche} />
+            <InfoRow label="Rating"  value={lead.rating !== null ? `${lead.rating.toFixed(1)}★ (${lead.review_count ?? 0} reviews)` : null} />
+            <InfoRow label="Created" value={fmtDateTime(lead.created_at)} />
+            <InfoRow label="Saved"   value={fmtDateTime(lead.saved_at)} />
+          </Section>
 
           {/* Contact */}
           <Section title="Contact">
@@ -106,46 +111,76 @@ export default function SavedLeadDetailPanel({ lead, busy, onClose, onStatusChan
             <ContactRow label="Address"         value={lead.address} />
           </Section>
 
-          {/* Meta */}
-          <Section title="Details">
-            <ContactRow label="Created" value={fmtDateTime(lead.created_at)} />
-            <ContactRow label="Saved"   value={fmtDateTime(lead.saved_at)} />
+          {/* Lead Score */}
+          <Section title="Lead Score">
+            <div className="px-3.5 py-3 flex items-center gap-2">
+              {lead.lead_score !== null
+                ? <LeadScoreBadge score={lead.lead_score} showLabel />
+                : <span className="text-[12.5px] text-[#6a6a6e]">Not scored</span>}
+            </div>
           </Section>
 
-          {/* Outreach material */}
+          {/* Problem Found */}
+          <Section title="Problem Found">
+            <TextBlock value={lead.problem_found} />
+          </Section>
+
+          {/* Outreach Material */}
           <Section title="Outreach Material">
-            <TextBlock label="Problem Found"        value={lead.problem_found} />
             <TextBlock label="Outreach Angle"       value={lead.outreach_angle} copyable />
             <TextBlock label="Recommended First DM" value={lead.first_dm} copyable />
             <TextBlock label="Cold Email Opening"   value={lead.cold_email_opening} copyable />
           </Section>
+
+          {/* Notes / Next Action */}
+          <Section title="Notes / Next Action">
+            <div className="px-3.5 py-3 text-[12px] text-[#9a9a9d] leading-relaxed">
+              Research leads don&apos;t store notes. Use{' '}
+              <span className="text-[#ffae3c]">Ready for Outreach</span> to send this business to Client
+              Outreach, where you can track next actions and notes.
+            </div>
+          </Section>
         </div>
 
-        {/* Footer actions */}
+        {/* Pinned actions */}
         <footer className="shrink-0 border-t border-white/[0.06] px-5 py-3.5 flex flex-col gap-2">
           <div className="flex items-center gap-2">
-            <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#6a6a6e]">Update Status</span>
+            <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#6a6a6e]">Actions</span>
             {busy && <Loader2 size={13} className="animate-spin text-[#6a6a6e]" />}
           </div>
           <div className="flex items-center gap-2 flex-wrap">
-            <ActionBtn onClick={() => onStatusChange(lead.id, 'ready_for_outreach')} disabled={busy} tone="orange" icon={<Megaphone size={12} />}>
-              Ready for Outreach
-            </ActionBtn>
-            <ActionBtn onClick={() => onStatusChange(lead.id, 'contacted')} disabled={busy} tone="blue" icon={<Phone size={12} />}>
-              Contacted
-            </ActionBtn>
-            <ActionBtn onClick={() => onStatusChange(lead.id, 'interested')} disabled={busy} tone="purple" icon={<ThumbsUp size={12} />}>
-              Interested
-            </ActionBtn>
-            <ActionBtn onClick={() => onStatusChange(lead.id, 'call_booked')} disabled={busy} tone="green" icon={<CalendarCheck size={12} />}>
-              Call Booked
-            </ActionBtn>
-            <ActionBtn onClick={() => onStatusChange(lead.id, 'not_interested')} disabled={busy} tone="red" icon={<ThumbsDown size={12} />}>
-              Not Interested
-            </ActionBtn>
-            <ActionBtn onClick={() => onStatusChange(lead.id, 'archived')} disabled={busy} tone="neutral" icon={<Archive size={12} />}>
-              Archive
-            </ActionBtn>
+            {!alreadyContacted ? (
+              <>
+                <ActionBtn onClick={() => onStatusChange(lead.id, 'contacted')} disabled={busy} tone="red" icon={<Phone size={12} />}>
+                  Contact
+                </ActionBtn>
+                <ActionBtn onClick={() => onStatusChange(lead.id, 'ready_for_outreach')} disabled={busy} tone="orange" icon={<Megaphone size={12} />}>
+                  Ready for Outreach
+                </ActionBtn>
+                <ActionBtn onClick={() => onStatusChange(lead.id, 'archived')} disabled={busy} tone="neutral" icon={<Archive size={12} />}>
+                  Archive
+                </ActionBtn>
+              </>
+            ) : (
+              <>
+                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11.5px] font-medium border
+                                 border-[#22d093]/35 bg-[#22d093]/[0.12] text-[#22d093]">
+                  <Check size={12} /> Contacted
+                </span>
+                <ActionBtn onClick={() => onStatusChange(lead.id, 'interested')} disabled={busy} tone="blue" icon={<ThumbsUp size={12} />}>
+                  Interested
+                </ActionBtn>
+                <ActionBtn onClick={() => onStatusChange(lead.id, 'call_booked')} disabled={busy} tone="green" icon={<CalendarCheck size={12} />}>
+                  Call Booked
+                </ActionBtn>
+                <ActionBtn onClick={() => onStatusChange(lead.id, 'not_interested')} disabled={busy} tone="red" icon={<ThumbsDown size={12} />}>
+                  Not Interested
+                </ActionBtn>
+                <ActionBtn onClick={() => onStatusChange(lead.id, 'archived')} disabled={busy} tone="neutral" icon={<Archive size={12} />}>
+                  Archive
+                </ActionBtn>
+              </>
+            )}
           </div>
         </footer>
       </aside>
@@ -162,6 +197,16 @@ function Section({ title, children }: { title: string; children: React.ReactNode
         {children}
       </div>
     </section>
+  )
+}
+
+// A simple single-line label/value row (no copy).
+function InfoRow({ label, value }: { label: string; value: string | null }) {
+  return (
+    <div className="flex items-center justify-between gap-3 px-3.5 py-2.5">
+      <div className="text-[10px] font-semibold uppercase tracking-[0.07em] text-[#6a6a6e]">{label}</div>
+      <div className="text-[12.5px] text-[#cfd3dc] text-right break-words min-w-0">{value ?? '—'}</div>
+    </div>
   )
 }
 
@@ -194,14 +239,16 @@ function ContactRow({
   )
 }
 
-// A multi-line text block with a copy button in the header.
-function TextBlock({ label, value, copyable }: { label: string; value: string | null; copyable?: boolean }) {
+// A multi-line text block, optionally with a copy button in the header.
+function TextBlock({ label, value, copyable }: { label?: string; value: string | null; copyable?: boolean }) {
   return (
     <div className="px-3.5 py-3">
-      <div className="flex items-center justify-between gap-2 mb-1.5">
-        <div className="text-[10px] font-semibold uppercase tracking-[0.07em] text-[#6a6a6e]">{label}</div>
-        {copyable && value && <CopyButton value={value} label="Copy" />}
-      </div>
+      {(label || copyable) && (
+        <div className="flex items-center justify-between gap-2 mb-1.5">
+          {label && <div className="text-[10px] font-semibold uppercase tracking-[0.07em] text-[#6a6a6e]">{label}</div>}
+          {copyable && value && <CopyButton value={value} />}
+        </div>
+      )}
       <div className="text-[12.5px] text-[#cfd3dc] whitespace-pre-wrap break-words leading-relaxed">
         {value ?? '—'}
       </div>
@@ -210,7 +257,7 @@ function TextBlock({ label, value, copyable }: { label: string; value: string | 
 }
 
 // ── Copy button (clipboard with success / failure state) ──────────
-function CopyButton({ value, label }: { value: string; label?: string }) {
+function CopyButton({ value }: { value: string }) {
   const [state, setState] = useState<'idle' | 'ok' | 'err'>('idle')
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
@@ -234,10 +281,10 @@ function CopyButton({ value, label }: { value: string; label?: string }) {
     : 'border-white/[0.1] text-[#9a9a9d] bg-white/[0.04] hover:text-white hover:bg-white/[0.08]'
 
   return (
-    <button type="button" onClick={copy} aria-label={`Copy ${label ?? 'value'}`}
+    <button type="button" onClick={copy} aria-label="Copy"
       className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-medium border transition-all shrink-0 ${tone}`}>
       {state === 'ok' ? <Check size={12} /> : state === 'err' ? <AlertTriangle size={12} /> : <Copy size={12} />}
-      {state === 'ok' ? 'Copied' : state === 'err' ? 'Failed' : (label ?? 'Copy')}
+      {state === 'ok' ? 'Copied' : state === 'err' ? 'Failed' : 'Copy'}
     </button>
   )
 }

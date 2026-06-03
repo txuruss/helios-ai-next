@@ -361,3 +361,24 @@ export async function getSavedResearchLeads(): Promise<SavedResearchLeadsResult>
     return { ...empty, error: 'Could not load saved leads.' }
   }
 }
+
+// One saved research lead by id — used to prefill the Client Outreach
+// "Add lead" form when a lead is sent to outreach. Returns null on any miss.
+export async function getResearchLeadById(id: string): Promise<SavedResearchLead | null> {
+  await requireAdmin({ path: '/admin/outreach' })
+  if (!UUID_RE.test(id) || !process.env.SUPABASE_SERVICE_ROLE_KEY) return null
+
+  try {
+    const db = createServiceRoleClient()
+    const { data, error } = await db
+      .from('research_leads')
+      .select('id, research_run_id, place_id, business_name, niche, address, phone, website, google_maps_url, rating, review_count, problem_found, outreach_angle, first_dm, cold_email_opening, lead_score, status, created_at, saved_at')
+      .eq('id', id)
+      .maybeSingle()
+    if (error || !data) return null
+    return toSavedLead(data as Record<string, unknown>)
+  } catch (err) {
+    console.error('[getResearchLeadById]', err instanceof Error ? err.message : err)
+    return null
+  }
+}

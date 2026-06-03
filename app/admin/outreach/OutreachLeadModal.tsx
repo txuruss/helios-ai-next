@@ -14,9 +14,10 @@ import { createOutreachLead, updateOutreachLead } from '@/lib/actions/admin-outr
 import type { AdminOutreachLead } from '@/lib/data/admin-outreach'
 
 interface Props {
-  lead?:   AdminOutreachLead | null   // undefined/null = add mode
-  onClose: () => void
-  onSaved: () => void
+  lead?:    AdminOutreachLead | null          // undefined/null = add mode
+  prefill?: Partial<AdminOutreachLead> | null // seeds add mode (e.g. from Research Agent)
+  onClose:  () => void
+  onSaved:  () => void
 }
 
 const inputCls =
@@ -24,28 +25,30 @@ const inputCls =
   'placeholder-[#6a6a6e] focus:outline-none focus:border-[#ff7a18]/40 focus:bg-white/[0.04] transition-all'
 const labelCls = 'text-[11px] font-medium text-[#9a9a9d] mb-1 block'
 
-export default function OutreachLeadModal({ lead, onClose, onSaved }: Props) {
+export default function OutreachLeadModal({ lead, prefill, onClose, onSaved }: Props) {
   const editing = !!lead
-  const [businessName, setBusinessName] = useState(lead?.business_name ?? '')
-  const [niche,        setNiche]        = useState(lead?.niche ?? '')
-  const [location,     setLocation]     = useState(lead?.location ?? '')
-  const [contactMethod, setContactMethod] = useState(lead?.contact_method ?? 'instagram')
-  const [instagram,    setInstagram]    = useState(lead?.instagram_url ?? '')
-  const [website,      setWebsite]      = useState(lead?.website_url ?? '')
-  const [phone,        setPhone]        = useState(lead?.phone ?? '')
-  const [email,        setEmail]        = useState(lead?.email ?? '')
-  const [status,       setStatus]       = useState(lead?.reply_status ?? 'new')
-  const [followUp,     setFollowUp]     = useState(lead?.follow_up_date ?? '')
-  const [nextAction,   setNextAction]   = useState(lead?.next_action ?? '')
-  const [painFound,    setPainFound]    = useState(lead?.pain_found ?? '')
-  const [angle,        setAngle]        = useState(lead?.outreach_angle ?? '')
-  const [notes,        setNotes]        = useState(lead?.notes ?? '')
+  // In add mode, a prefill (e.g. from the Research Agent) seeds the fields.
+  const seed = lead ?? prefill ?? null
+  const [businessName, setBusinessName] = useState(seed?.business_name ?? '')
+  const [niche,        setNiche]        = useState(seed?.niche ?? '')
+  const [location,     setLocation]     = useState(seed?.location ?? '')
+  const [contactMethod, setContactMethod] = useState(seed?.contact_method ?? 'instagram')
+  const [instagram,    setInstagram]    = useState(seed?.instagram_url ?? '')
+  const [website,      setWebsite]      = useState(seed?.website_url ?? '')
+  const [phone,        setPhone]        = useState(seed?.phone ?? '')
+  const [email,        setEmail]        = useState(seed?.email ?? '')
+  const [status,       setStatus]       = useState(seed?.reply_status ?? 'new')
+  const [followUp,     setFollowUp]     = useState(seed?.follow_up_date ?? '')
+  const [nextAction,   setNextAction]   = useState(seed?.next_action ?? '')
+  const [painFound,    setPainFound]    = useState(seed?.pain_found ?? '')
+  const [angle,        setAngle]        = useState(seed?.outreach_angle ?? '')
+  const [notes,        setNotes]        = useState(seed?.notes ?? '')
 
   // Scoring — store as a boolean array of length 10; score = count true.
   const [checks, setChecks] = useState<boolean[]>(() => {
     const init = new Array(SCORING_ITEMS.length).fill(false) as boolean[]
-    const n = Math.max(0, Math.min(SCORING_ITEMS.length, lead?.score ?? 0))
-    for (let i = 0; i < n; i++) init[i] = true   // reflect existing score count
+    const n = Math.max(0, Math.min(SCORING_ITEMS.length, seed?.score ?? 0))
+    for (let i = 0; i < n; i++) init[i] = true   // reflect existing/seeded score count
     return init
   })
   const [showScoring, setShowScoring] = useState(false)

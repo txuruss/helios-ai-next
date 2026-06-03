@@ -2,18 +2,68 @@ import Link from 'next/link'
 import { ArrowLeft, Megaphone } from 'lucide-react'
 import { requireAdmin } from '@/lib/auth/require-admin'
 import { getAdminOutreachLeads, getOutreachDailyReview } from '@/lib/data/admin-outreach'
+import type { AdminOutreachLead } from '@/lib/data/admin-outreach'
+import { getResearchLeadById, type SavedResearchLead } from '@/lib/data/admin-research'
 import OutreachPageClient from './OutreachPageClient'
 
 export const metadata = { title: 'Outreach — Mission Control' }
 
-export default async function AdminOutreachPage() {
+// Map a saved research lead → an outreach Add-lead prefill. The research
+// lead's score is 0–100; outreach scores 0–10, so it is scaled. first_dm /
+// cold_email_opening have no dedicated outreach fields, so they (and the
+// source + research lead id) are preserved in notes. No schema change.
+function toOutreachPrefill(rl: SavedResearchLead): Partial<AdminOutreachLead> {
+  const contactMethod: AdminOutreachLead['contact_method'] =
+    rl.phone ? 'phone' : rl.website ? 'website' : 'instagram'
+  const score10 = rl.lead_score !== null
+    ? Math.max(0, Math.min(10, Math.round(rl.lead_score / 10)))
+    : 0
+
+  const notes: string[] = [`From Research Agent (lead ${rl.id}).`]
+  if (rl.google_maps_url)    notes.push(`Google Maps: ${rl.google_maps_url}`)
+  if (rl.first_dm)           notes.push(`\nSuggested first DM:\n${rl.first_dm}`)
+  if (rl.cold_email_opening) notes.push(`\nCold email opening:\n${rl.cold_email_opening}`)
+
+  return {
+    business_name:  rl.business_name,
+    niche:          rl.niche ?? '',
+    location:       rl.address ?? '',
+    website_url:    rl.website ?? '',
+    phone:          rl.phone ?? '',
+    email:          '',
+    instagram_url:  '',
+    contact_method: contactMethod,
+    score:          score10,
+    pain_found:     rl.problem_found ?? '',
+    outreach_angle: rl.outreach_angle ?? '',
+    reply_status:   'new',
+    next_action:    'Send first message / call',
+    follow_up_date: null,
+    notes:          notes.join('\n'),
+  }
+}
+
+export default async function AdminOutreachPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ prefillResearchLeadId?: string }>
+}) {
   await requireAdmin({ path: '/admin/outreach' })
+
+  const { prefillResearchLeadId } = await searchParams
 
   const today = new Date().toISOString().slice(0, 10)
   const [{ rows, migrationNeeded, error }, review] = await Promise.all([
     getAdminOutreachLeads(),
     getOutreachDailyReview(today),
   ])
+
+  // Prefill from the Research Agent's "Ready for Outreach" action.
+  let prefill: Partial<AdminOutreachLead> | null = null
+  if (prefillResearchLeadId) {
+    const rl = await getResearchLeadById(prefillResearchLeadId)
+    if (rl) prefill = toOutreachPrefill(rl)
+  }
 
   return (
     <div className="flex flex-col gap-5">
@@ -52,7 +102,7 @@ export default async function AdminOutreachPage() {
         </div>
       )}
 
-      <OutreachPageClient leads={rows} initialReview={review} reviewDate={today} />
+      <OutreachPageClient leads={rows} initialReview={review} reviewDate={today} initialPrefill={prefill} />
     </div>
   )
 }

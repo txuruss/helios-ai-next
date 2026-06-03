@@ -48,18 +48,29 @@ const STATUS_FILTERS: { value: string; label: string }[] = [
 ]
 
 export default function OutreachPageClient({
-  leads, initialReview, reviewDate,
+  leads, initialReview, reviewDate, initialPrefill,
 }: {
-  leads:         AdminOutreachLead[]
-  initialReview: Review | null
-  reviewDate:    string
+  leads:          AdminOutreachLead[]
+  initialReview:  Review | null
+  reviewDate:     string
+  initialPrefill?: Partial<AdminOutreachLead> | null
 }) {
   const router = useRouter()
   const [search, setSearch]       = useState('')
   const [statusF, setStatusF]     = useState('all')
   const [expandedId, setExpandedId] = useState<string | null>(null)
-  const [modalOpen, setModalOpen] = useState(false)
+  // A prefill (e.g. from the Research Agent) opens Add lead pre-populated.
+  const [activePrefill, setActivePrefill] = useState<Partial<AdminOutreachLead> | null>(initialPrefill ?? null)
+  const [modalOpen, setModalOpen] = useState(!!initialPrefill)
   const [editLead, setEditLead]   = useState<AdminOutreachLead | null>(null)
+
+  function closeModal() {
+    setModalOpen(false)
+    setEditLead(null)
+    // Drop the prefill + its query param so a refresh/return doesn't re-open.
+    if (activePrefill) router.replace('/admin/outreach')
+    setActivePrefill(null)
+  }
   const [archiveId, setArchiveId] = useState<string | null>(null)
   const [archiving, startArchive] = useTransition()
   // Daily plan checklist — local only (a daily guide, not persisted).
@@ -135,7 +146,7 @@ export default function OutreachPageClient({
               className="px-3 py-2 rounded-xl border border-white/[0.08] bg-[#0f1012] text-[13px] text-white cursor-pointer focus:outline-none focus:border-[#ff7a18]/40 transition-all">
               {STATUS_FILTERS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
-            <button type="button" onClick={() => { setEditLead(null); setModalOpen(true) }}
+            <button type="button" onClick={() => { setEditLead(null); setActivePrefill(null); setModalOpen(true) }}
               className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl text-[13px] font-medium bg-[#ff7a18]/[0.14] border border-[#ff7a18]/40 text-[#ffae3c] hover:bg-[#ff7a18]/25 hover:text-white transition-all shrink-0">
               <Plus size={14} /> Add lead
             </button>
@@ -238,7 +249,7 @@ export default function OutreachPageClient({
                                   <OutreachRowActions
                                     lead={l}
                                     onChanged={() => router.refresh()}
-                                    onEdit={() => { setEditLead(l); setModalOpen(true) }}
+                                    onEdit={() => { setEditLead(l); setActivePrefill(null); setModalOpen(true) }}
                                     onArchive={() => setArchiveId(l.id)}
                                   />
                                 }
@@ -292,8 +303,9 @@ export default function OutreachPageClient({
       {modalOpen && (
         <OutreachLeadModal
           lead={editLead}
-          onClose={() => { setModalOpen(false); setEditLead(null) }}
-          onSaved={() => { setModalOpen(false); setEditLead(null); router.refresh() }}
+          prefill={editLead ? null : activePrefill}
+          onClose={closeModal}
+          onSaved={() => { closeModal(); router.refresh() }}
         />
       )}
 
