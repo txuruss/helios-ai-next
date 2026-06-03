@@ -8,12 +8,13 @@
 // holds UI state.
 
 import { useRef, useState } from 'react'
-import { AlertCircle, History as HistoryIcon, Loader2, X, Search, Bookmark } from 'lucide-react'
+import { AlertCircle, History as HistoryIcon, Loader2, X, Search, Bookmark, Bot } from 'lucide-react'
 import type { ResearchRunSummary } from '@/lib/data/admin-research'
 import ResearchTaskForm, { type ResearchFormValues, type ResearchFormPrefill } from './ResearchTaskForm'
 import ResearchResultsTable, { type ResearchResultLead } from './ResearchResultsTable'
 import ResearchRunHistory from './ResearchRunHistory'
 import SavedLeadsTable from './SavedLeadsTable'
+import ResearchAgentTools from './ResearchAgentTools'
 
 interface Props {
   apiKeyMissing:   boolean
@@ -27,7 +28,7 @@ interface HistoryView {
   leads: ResearchResultLead[]
 }
 
-type Tab = 'run' | 'history' | 'saved'
+type Tab = 'run' | 'history' | 'saved' | 'agents'
 
 export default function ResearchAgentClient({ apiKeyMissing, migrationNeeded, initialRuns, historyError }: Props) {
   const [tab, setTab] = useState<Tab>('run')
@@ -148,6 +149,7 @@ export default function ResearchAgentClient({ apiKeyMissing, migrationNeeded, in
         <TabButton active={tab === 'run'}     onClick={() => setTab('run')}     icon={<Search size={13} />}      label="Run Research" />
         <TabButton active={tab === 'history'} onClick={() => setTab('history')} icon={<HistoryIcon size={13} />} label="Research History" count={runs.length} />
         <TabButton active={tab === 'saved'}   onClick={() => setTab('saved')}   icon={<Bookmark size={13} />}    label="Saved Leads" />
+        <TabButton active={tab === 'agents'}  onClick={() => setTab('agents')}  icon={<Bot size={13} />}         label="Agents" />
       </div>
 
       {/* ── Run Research ─────────────────────────────────────────── */}
@@ -245,6 +247,11 @@ export default function ResearchAgentClient({ apiKeyMissing, migrationNeeded, in
 
       {/* ── Saved Leads ──────────────────────────────────────────── */}
       {tab === 'saved' && <SavedLeadsTable migrationNeeded={migrationNeeded} />}
+
+      {/* ── Agents ───────────────────────────────────────────────── */}
+      {tab === 'agents' && (
+        <ResearchAgentTools migrationNeeded={migrationNeeded} onOpenSavedLeads={() => setTab('saved')} />
+      )}
     </div>
   )
 }
