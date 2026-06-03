@@ -7,19 +7,33 @@
 import { useEffect, useRef, useState } from 'react'
 import {
   X, Copy, Check, AlertTriangle, ExternalLink, Megaphone, Phone, Archive, Loader2,
+  ThumbsUp, ThumbsDown, CalendarCheck,
 } from 'lucide-react'
 import type { SavedResearchLead } from '@/lib/data/admin-research'
 import LeadScoreBadge from './LeadScoreBadge'
 
-export type LeadStatusAction = 'ready_for_outreach' | 'contacted' | 'archived'
+// The manual-outreach pipeline statuses a founder can set from the UI.
+export type LeadStatusAction =
+  | 'ready_for_outreach' | 'contacted' | 'interested'
+  | 'call_booked' | 'not_interested' | 'archived'
 
-const STATUS_META: Record<string, { label: string; color: string }> = {
-  saved:              { label: 'Saved',              color: '#3b9eff' },
+// Single source of truth for status labels + colors (shared with the table).
+export const LEAD_STATUS_META: Record<string, { label: string; color: string }> = {
+  saved:              { label: 'Saved',              color: '#6db4ff' },
   ready_for_outreach: { label: 'Ready for Outreach', color: '#ffae3c' },
-  contacted:          { label: 'Contacted',          color: '#22d093' },
+  contacted:          { label: 'Contacted',          color: '#3b9eff' },
+  interested:         { label: 'Interested',         color: '#a07cff' },
+  call_booked:        { label: 'Call Booked',        color: '#22d093' },
+  not_interested:     { label: 'Not Interested',     color: '#ff8a7a' },
   archived:           { label: 'Archived',           color: '#6a6a6e' },
   found:              { label: 'Found',               color: '#6a6a6e' },
 }
+
+// Pipeline display order for summary cards + filters.
+export const LEAD_STATUS_ORDER = [
+  'saved', 'ready_for_outreach', 'contacted', 'interested',
+  'call_booked', 'not_interested', 'archived',
+] as const
 
 function fmtDateTime(v: string | null): string {
   if (!v) return '—'
@@ -46,7 +60,7 @@ export default function SavedLeadDetailPanel({ lead, busy, onClose, onStatusChan
     return () => window.removeEventListener('keydown', onKey)
   }, [onClose])
 
-  const status = STATUS_META[lead.status] ?? { label: lead.status, color: '#6a6a6e' }
+  const status = LEAD_STATUS_META[lead.status] ?? { label: lead.status, color: '#6a6a6e' }
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end">
@@ -108,18 +122,31 @@ export default function SavedLeadDetailPanel({ lead, busy, onClose, onStatusChan
         </div>
 
         {/* Footer actions */}
-        <footer className="shrink-0 border-t border-white/[0.06] px-5 py-3.5 flex items-center gap-2 flex-wrap">
-          <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#6a6a6e] mr-0.5">Actions</span>
-          <ActionBtn onClick={() => onStatusChange(lead.id, 'ready_for_outreach')} disabled={busy} tone="orange" icon={<Megaphone size={12} />}>
-            Ready for Outreach
-          </ActionBtn>
-          <ActionBtn onClick={() => onStatusChange(lead.id, 'contacted')} disabled={busy} tone="green" icon={<Phone size={12} />}>
-            Contacted
-          </ActionBtn>
-          <ActionBtn onClick={() => onStatusChange(lead.id, 'archived')} disabled={busy} tone="neutral" icon={<Archive size={12} />}>
-            Archive
-          </ActionBtn>
-          {busy && <Loader2 size={13} className="animate-spin text-[#6a6a6e]" />}
+        <footer className="shrink-0 border-t border-white/[0.06] px-5 py-3.5 flex flex-col gap-2">
+          <div className="flex items-center gap-2">
+            <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-[#6a6a6e]">Update Status</span>
+            {busy && <Loader2 size={13} className="animate-spin text-[#6a6a6e]" />}
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <ActionBtn onClick={() => onStatusChange(lead.id, 'ready_for_outreach')} disabled={busy} tone="orange" icon={<Megaphone size={12} />}>
+              Ready for Outreach
+            </ActionBtn>
+            <ActionBtn onClick={() => onStatusChange(lead.id, 'contacted')} disabled={busy} tone="blue" icon={<Phone size={12} />}>
+              Contacted
+            </ActionBtn>
+            <ActionBtn onClick={() => onStatusChange(lead.id, 'interested')} disabled={busy} tone="purple" icon={<ThumbsUp size={12} />}>
+              Interested
+            </ActionBtn>
+            <ActionBtn onClick={() => onStatusChange(lead.id, 'call_booked')} disabled={busy} tone="green" icon={<CalendarCheck size={12} />}>
+              Call Booked
+            </ActionBtn>
+            <ActionBtn onClick={() => onStatusChange(lead.id, 'not_interested')} disabled={busy} tone="red" icon={<ThumbsDown size={12} />}>
+              Not Interested
+            </ActionBtn>
+            <ActionBtn onClick={() => onStatusChange(lead.id, 'archived')} disabled={busy} tone="neutral" icon={<Archive size={12} />}>
+              Archive
+            </ActionBtn>
+          </div>
         </footer>
       </aside>
     </div>
@@ -219,12 +246,16 @@ function CopyButton({ value, label }: { value: string; label?: string }) {
 function ActionBtn({
   children, onClick, disabled, tone, icon,
 }: {
-  children: React.ReactNode; onClick: () => void; disabled?: boolean; tone: 'orange' | 'green' | 'neutral'; icon: React.ReactNode
+  children: React.ReactNode; onClick: () => void; disabled?: boolean
+  tone: 'orange' | 'green' | 'blue' | 'purple' | 'red' | 'neutral'; icon: React.ReactNode
 }) {
   const tones = {
     orange:  'bg-[#ff7a18]/[0.12] border-[#ff7a18]/40 text-[#ffae3c] hover:bg-[#ff7a18]/25 hover:text-white',
     green:   'bg-[#22d093]/[0.12] border-[#22d093]/35 text-[#22d093] hover:bg-[#22d093]/20 hover:text-white',
-    neutral: 'bg-white/[0.04] border-white/[0.1] text-[#cfd3dc] hover:bg-[#ff5247]/[0.12] hover:border-[#ff5247]/40 hover:text-[#ff8a7a]',
+    blue:    'bg-[#3b9eff]/[0.12] border-[#3b9eff]/35 text-[#3b9eff] hover:bg-[#3b9eff]/20 hover:text-white',
+    purple:  'bg-[#a07cff]/[0.12] border-[#a07cff]/35 text-[#a07cff] hover:bg-[#a07cff]/20 hover:text-white',
+    red:     'bg-[#ff5247]/[0.12] border-[#ff5247]/35 text-[#ff8a7a] hover:bg-[#ff5247]/20 hover:text-white',
+    neutral: 'bg-white/[0.04] border-white/[0.1] text-[#cfd3dc] hover:bg-white/[0.08] hover:text-white',
   }
   return (
     <button type="button" onClick={onClick} disabled={disabled}

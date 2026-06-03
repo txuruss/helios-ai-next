@@ -315,9 +315,10 @@ function toSavedLead(r: Record<string, unknown>): SavedResearchLead {
   }
 }
 
-// All saved research leads across runs, newest-saved first. Archived leads are
-// excluded. De-duplicated by business (place id / domain / phone / name+addr),
-// keeping the most recently saved row.
+// All saved research leads across runs (including archived, so the pipeline
+// summary + status filter can show them), newest-saved first. De-duplicated by
+// business (place id / domain / phone / name+addr), keeping the most recently
+// saved row.
 export async function getSavedResearchLeads(): Promise<SavedResearchLeadsResult> {
   await requireAdmin({ path: '/admin/mission-control/research-agent' })
   const empty: SavedResearchLeadsResult = { rows: [], migrationNeeded: false, error: null }
@@ -331,7 +332,6 @@ export async function getSavedResearchLeads(): Promise<SavedResearchLeadsResult>
       .from('research_leads')
       .select('id, research_run_id, place_id, business_name, niche, address, phone, website, google_maps_url, rating, review_count, problem_found, outreach_angle, first_dm, cold_email_opening, lead_score, status, created_at, saved_at')
       .eq('is_saved', true)
-      .neq('status', 'archived')
       .order('saved_at', { ascending: false, nullsFirst: false })
       .order('created_at', { ascending: false })
 

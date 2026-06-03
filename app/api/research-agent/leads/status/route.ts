@@ -28,7 +28,10 @@ function detailOf(err: unknown): string | undefined {
 
 const statusSchema = z.object({
   id:     z.string().regex(UUID_RE, 'Invalid lead id.'),
-  status: z.enum(['saved', 'ready_for_outreach', 'contacted', 'archived']),
+  status: z.enum([
+    'saved', 'ready_for_outreach', 'contacted',
+    'interested', 'call_booked', 'not_interested', 'archived',
+  ]),
 })
 
 export async function POST(request: NextRequest) {

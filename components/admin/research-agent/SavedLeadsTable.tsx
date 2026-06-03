@@ -8,15 +8,9 @@ import { useEffect, useState } from 'react'
 import { ExternalLink, Loader2, RefreshCw, Eye } from 'lucide-react'
 import type { SavedResearchLead } from '@/lib/data/admin-research'
 import LeadScoreBadge from './LeadScoreBadge'
-import SavedLeadDetailPanel, { type LeadStatusAction } from './SavedLeadDetailPanel'
-
-const STATUS_META: Record<string, { label: string; color: string }> = {
-  saved:              { label: 'Saved',              color: '#3b9eff' },
-  ready_for_outreach: { label: 'Ready for Outreach', color: '#ffae3c' },
-  contacted:          { label: 'Contacted',          color: '#22d093' },
-  archived:           { label: 'Archived',           color: '#6a6a6e' },
-  found:              { label: 'Found',               color: '#6a6a6e' },
-}
+import SavedLeadDetailPanel, {
+  type LeadStatusAction, LEAD_STATUS_META, LEAD_STATUS_ORDER,
+} from './SavedLeadDetailPanel'
 
 function host(url: string | null): string | null {
   if (!url) return null
@@ -29,7 +23,7 @@ function fmtDate(v: string | null): string {
 }
 
 function StatusPill({ status }: { status: string }) {
-  const m = STATUS_META[status] ?? { label: status, color: '#6a6a6e' }
+  const m = LEAD_STATUS_META[status] ?? { label: status, color: '#6a6a6e' }
   return (
     <span className="inline-flex items-center text-[10.5px] font-semibold px-2.5 py-[3px] rounded-full border whitespace-nowrap"
       style={{ color: m.color, borderColor: `${m.color}33`, background: `${m.color}12` }}>
@@ -44,6 +38,7 @@ export default function SavedLeadsTable({ migrationNeeded }: { migrationNeeded: 
   const [error, setError]       = useState<string | null>(null)
   const [selected, setSelected] = useState<SavedResearchLead | null>(null)
   const [busyId, setBusyId]     = useState<string | null>(null)
+  const [filter, setFilter]     = useState<string>('all')
 
   async function load() {
     setLoading(true)
@@ -84,13 +79,10 @@ export default function SavedLeadsTable({ migrationNeeded }: { migrationNeeded: 
         setError((data?.error ?? 'Could not update status.') + (data?.detail ? ` — ${data.detail}` : ''))
         return
       }
-      if (status === 'archived') {
-        setLeads((prev) => prev.filter((l) => l.id !== id))
-        setSelected((cur) => (cur?.id === id ? null : cur)) // archived → close drawer
-      } else {
-        setLeads((prev) => prev.map((l) => (l.id === id ? { ...l, status } : l)))
-        setSelected((cur) => (cur?.id === id ? { ...cur, status } : cur))
-      }
+      // Status-only update — the lead stays in the list and moves between
+      // pipeline buckets (including Archived), reflected in the summary + filter.
+      setLeads((prev) => prev.map((l) => (l.id === id ? { ...l, status } : l)))
+      setSelected((cur) => (cur?.id === id ? { ...cur, status } : cur))
     } catch {
       setError('Could not reach the research service.')
     } finally {
@@ -107,11 +99,21 @@ export default function SavedLeadsTable({ migrationNeeded }: { migrationNeeded: 
     )
   }
 
+  // Pipeline counts per status + the current filtered view.
+  const counts: Record<string, number> = {}
+  for (const s of LEAD_STATUS_ORDER) counts[s] = 0
+  for (const l of leads) if (l.status in counts) counts[l.status] += 1
+  const filtered = filter === 'all' ? leads : leads.filter((l) => l.status === filter)
+
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <p className="text-[12.5px] text-[#9a9a9d]">
-          {loading ? 'Loading saved leads…' : `${leads.length} saved lead${leads.length !== 1 ? 's' : ''} across all runs`}
+          {loading
+            ? 'Loading saved leads…'
+            : filter === 'all'
+              ? `${leads.length} saved lead${leads.length !== 1 ? 's' : ''} across all runs`
+              : `${filtered.length} of ${leads.length} saved leads`}
         </p>
         <button type="button" onClick={load} disabled={loading}
           className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11.5px] font-medium
@@ -120,6 +122,18 @@ export default function SavedLeadsTable({ migrationNeeded }: { migrationNeeded: 
           {loading ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />} Refresh
         </button>
       </div>
+
+      {/* Pipeline summary + filter (compact, clickable) */}
+      {!loading && leads.length > 0 && (
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 gap-2">
+          <SummaryCard label="All" count={leads.length} color="#ff7a18"
+            active={filter === 'all'} onClick={() => setFilter('all')} />
+          {LEAD_STATUS_ORDER.map((s) => (
+            <SummaryCard key={s} label={LEAD_STATUS_META[s].label} count={counts[s]} color={LEAD_STATUS_META[s].color}
+              active={filter === s} onClick={() => setFilter(s)} />
+          ))}
+        </div>
+      )}
 
       {error && <div className="text-[12px] text-[#ff8a7a]">{error}</div>}
 
@@ -134,6 +148,11 @@ export default function SavedLeadsTable({ migrationNeeded }: { migrationNeeded: 
             Run research and click <span className="text-[#ffae3c]">Save</span> on a result, or enable
             “Save qualified leads automatically”. Saved leads from every run appear here.
           </p>
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="rounded-2xl border border-white/[0.08] bg-[#0f1012]/80 px-5 py-10 text-center text-[13px] text-[#9a9a9d]">
+          No leads with status “{LEAD_STATUS_META[filter]?.label ?? filter}”.{' '}
+          <button type="button" onClick={() => setFilter('all')} className="text-[#ffae3c] hover:underline">Show all</button>
         </div>
       ) : (
         <div className="rounded-2xl border border-white/[0.08] bg-[#0f1012]/80 overflow-hidden">
@@ -154,7 +173,7 @@ export default function SavedLeadsTable({ migrationNeeded }: { migrationNeeded: 
                 </tr>
               </thead>
               <tbody>
-                {leads.map((l) => {
+                {filtered.map((l) => {
                   const web = host(l.website)
                   return (
                     <tr key={l.id} className="border-t border-white/[0.04] align-top hover:bg-white/[0.015] transition-colors">
@@ -214,5 +233,24 @@ export default function SavedLeadsTable({ migrationNeeded }: { migrationNeeded: 
         />
       )}
     </div>
+  )
+}
+
+// Compact, clickable pipeline summary card that doubles as the status filter.
+function SummaryCard({
+  label, count, color, active, onClick,
+}: {
+  label: string; count: number; color: string; active: boolean; onClick: () => void
+}) {
+  return (
+    <button type="button" onClick={onClick}
+      className="rounded-xl border px-3 py-2.5 text-left transition-all"
+      style={{
+        borderColor: active ? color : 'rgba(255,255,255,0.07)',
+        background:  active ? `${color}14` : 'rgba(255,255,255,0.02)',
+      }}>
+      <div className="text-[17px] font-bold tabular-nums leading-none" style={{ color }}>{count}</div>
+      <div className="text-[10px] text-[#9a9a9d] uppercase tracking-[0.06em] mt-1 truncate">{label}</div>
+    </button>
   )
 }
