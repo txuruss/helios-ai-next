@@ -4,9 +4,10 @@
 // research_leads (is_saved=true, not archived) across all runs, de-duplicated
 // server-side. Status actions only change the lead's status — nothing is sent.
 
-import { useEffect, useState } from 'react'
-import { ExternalLink, Loader2, RefreshCw, Eye } from 'lucide-react'
+import { Fragment, useEffect, useState } from 'react'
+import { ExternalLink, Loader2, RefreshCw } from 'lucide-react'
 import type { SavedResearchLead } from '@/lib/data/admin-research'
+import { ActionsToggle } from '@/components/admin/ui/ExpandableRow'
 import LeadScoreBadge from './LeadScoreBadge'
 import SavedLeadDetailPanel, {
   type LeadStatusAction, LEAD_STATUS_META, LEAD_STATUS_ORDER,
@@ -177,62 +178,62 @@ export default function SavedLeadsTable({ migrationNeeded }: { migrationNeeded: 
               <tbody>
                 {filtered.map((l) => {
                   const web = host(l.website)
+                  const isOpen = selected?.id === l.id
                   return (
-                    <tr key={l.id} className="border-t border-white/[0.04] align-top hover:bg-white/[0.015] transition-colors">
-                      <td className="px-3 py-2.5">
-                        <div className="text-white font-medium">{l.business_name}</div>
-                        {l.address && <div className="text-[10.5px] text-[#6a6a6e] mt-0.5 max-w-[200px]">{l.address}</div>}
-                        {l.google_maps_url && (
-                          <a href={l.google_maps_url} target="_blank" rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 text-[10.5px] text-[#6a6a6e] hover:text-[#ffae3c] mt-0.5 transition-colors">
-                            Maps <ExternalLink size={9} />
-                          </a>
-                        )}
-                      </td>
-                      <td className="px-3 py-2.5 text-[#9a9a9d] whitespace-nowrap">{l.niche ?? '—'}</td>
-                      <td className="px-3 py-2.5 text-[#9a9a9d] whitespace-nowrap">{l.phone ?? '—'}</td>
-                      <td className="px-3 py-2.5">
-                        {web ? (
-                          <a href={l.website!} target="_blank" rel="noopener noreferrer"
-                            className="inline-flex items-center gap-1 text-[#9a9a9d] hover:text-[#ffae3c] break-all transition-colors">
-                            {web.length > 26 ? web.slice(0, 26) + '…' : web} <ExternalLink size={9} className="shrink-0" />
-                          </a>
-                        ) : <span className="text-[#6a6a6e]">None</span>}
-                      </td>
-                      <td className="px-3 py-2.5 whitespace-nowrap text-[#9a9a9d] tabular-nums">
-                        {l.rating !== null ? <>{l.rating.toFixed(1)}★ <span className="text-[#6a6a6e]">({l.review_count ?? 0})</span></> : '—'}
-                      </td>
-                      <td className="px-3 py-2.5 text-[#9a9a9d] max-w-[240px]">{l.problem_found ?? '—'}</td>
-                      <td className="px-3 py-2.5">{l.lead_score !== null ? <LeadScoreBadge score={l.lead_score} /> : '—'}</td>
-                      <td className="px-3 py-2.5"><StatusPill status={l.status} /></td>
-                      <td className="px-3 py-2.5 text-[#9a9a9d] whitespace-nowrap tabular-nums">{fmtDate(l.saved_at)}</td>
-                      <td className="px-3 py-2.5">
-                        <div className="flex justify-end">
-                          <button type="button" onClick={() => setSelected(l)}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11.5px] font-medium
-                                       bg-white/[0.04] border border-white/[0.1] text-[#cfd3dc]
-                                       hover:bg-[#ff7a18]/[0.14] hover:border-[#ff7a18]/40 hover:text-[#ffae3c] transition-all">
-                            <Eye size={12} /> View
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
+                    <Fragment key={l.id}>
+                      <tr className={`border-t border-white/[0.04] align-top transition-colors ${isOpen ? 'bg-[#ff7a18]/[0.04]' : 'hover:bg-white/[0.015]'}`}>
+                        <td className="px-3 py-2.5">
+                          <div className="text-white font-medium">{l.business_name}</div>
+                          {l.address && <div className="text-[10.5px] text-[#6a6a6e] mt-0.5 max-w-[200px]">{l.address}</div>}
+                          {l.google_maps_url && (
+                            <a href={l.google_maps_url} target="_blank" rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 text-[10.5px] text-[#6a6a6e] hover:text-[#ffae3c] mt-0.5 transition-colors">
+                              Maps <ExternalLink size={9} />
+                            </a>
+                          )}
+                        </td>
+                        <td className="px-3 py-2.5 text-[#9a9a9d] whitespace-nowrap">{l.niche ?? '—'}</td>
+                        <td className="px-3 py-2.5 text-[#9a9a9d] whitespace-nowrap">{l.phone ?? '—'}</td>
+                        <td className="px-3 py-2.5">
+                          {web ? (
+                            <a href={l.website!} target="_blank" rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1 text-[#9a9a9d] hover:text-[#ffae3c] break-all transition-colors">
+                              {web.length > 26 ? web.slice(0, 26) + '…' : web} <ExternalLink size={9} className="shrink-0" />
+                            </a>
+                          ) : <span className="text-[#6a6a6e]">None</span>}
+                        </td>
+                        <td className="px-3 py-2.5 whitespace-nowrap text-[#9a9a9d] tabular-nums">
+                          {l.rating !== null ? <>{l.rating.toFixed(1)}★ <span className="text-[#6a6a6e]">({l.review_count ?? 0})</span></> : '—'}
+                        </td>
+                        <td className="px-3 py-2.5 text-[#9a9a9d] max-w-[240px]">{l.problem_found ?? '—'}</td>
+                        <td className="px-3 py-2.5">{l.lead_score !== null ? <LeadScoreBadge score={l.lead_score} /> : '—'}</td>
+                        <td className="px-3 py-2.5"><StatusPill status={l.status} /></td>
+                        <td className="px-3 py-2.5 text-[#9a9a9d] whitespace-nowrap tabular-nums">{fmtDate(l.saved_at)}</td>
+                        <td className="px-3 py-2.5">
+                          <div className="flex justify-end">
+                            <ActionsToggle open={isOpen} onToggle={() => setSelected(isOpen ? null : l)} label="View" />
+                          </div>
+                        </td>
+                      </tr>
+                      {isOpen && (
+                        <tr>
+                          <td colSpan={10} className="p-0">
+                            <SavedLeadDetailPanel
+                              lead={l}
+                              busy={busyId === l.id}
+                              onClose={() => setSelected(null)}
+                              onStatusChange={setStatus}
+                            />
+                          </td>
+                        </tr>
+                      )}
+                    </Fragment>
                   )
                 })}
               </tbody>
             </table>
           </div>
         </div>
-      )}
-
-      {/* Detail drawer */}
-      {selected && (
-        <SavedLeadDetailPanel
-          lead={selected}
-          busy={busyId === selected.id}
-          onClose={() => setSelected(null)}
-          onStatusChange={setStatus}
-        />
       )}
     </div>
   )
