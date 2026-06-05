@@ -33,7 +33,7 @@ import 'server-only'
 
 import { redirect } from 'next/navigation'
 import { requireTeam } from './require-team'
-import { canAccessAdminRoute } from './permissions'
+import { canAccessAdminRoute, isAdminCapableRole } from './permissions'
 import type { TeamSession } from './types'
 
 interface RequireAdminOptions {
@@ -49,10 +49,25 @@ function deniedRedirect(role: TeamSession['role']): never {
   redirect('/team/dashboard?error=admin_only')
 }
 
-// Guards an /admin route. founder_admin → full access. outreach_agent →
-// only the allowlisted outreach/research routes (canAccessAdminRoute).
-// The admin layout passes the real request path, so this gates every
-// /admin page; data/action/API call sites pass their own path too.
+// Layout-level gate for the whole /admin surface. Authenticates and admits
+// any admin-capable role WITHOUT inspecting the request path — so it can never
+// redirect-loop when the `x-pathname` header is missing from a Server
+// Component (the cause of the /admin/outreach black screen for outreach_agent
+// in production). Precise per-route access is still enforced by each page's
+// own requireAdmin({ path }) / requireFounderAdmin() call.
+export async function requireAdminShell(): Promise<TeamSession> {
+  const session = await requireTeam({ path: undefined })
+  if (isAdminCapableRole(session.role)) return session
+  // Authenticated, but not an admin-capable role — block the whole surface.
+  console.warn(`[requireAdminShell] blocked non-admin role from /admin: ${session.role}`)
+  redirect('/team/dashboard?error=admin_only')
+}
+
+// Guards an individual /admin route. founder_admin → full access.
+// outreach_agent → only the allowlisted outreach/research routes
+// (canAccessAdminRoute). Call sites pass their own hardcoded path, so this is
+// the authoritative per-page check (the layout gate above is intentionally
+// path-agnostic).
 export async function requireAdmin(
   options: RequireAdminOptions = {},
 ): Promise<TeamSession> {

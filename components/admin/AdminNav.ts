@@ -42,8 +42,11 @@ export const ADMIN_NAV_GROUPS: ReadonlyArray<AdminNavItem['group']> =
 const OUTREACH_AGENT_NAV_IDS = new Set(['research-agent', 'outreach'])
 
 export function adminNavForRole(role: TeamRole): AdminNavItem[] {
+  if (role === 'founder_admin') return ADMIN_NAV
   if (role === 'outreach_agent') {
     return ADMIN_NAV.filter((item) => OUTREACH_AGENT_NAV_IDS.has(item.id))
   }
-  return ADMIN_NAV
+  // No other role reaches the admin shell — render no nav links rather than
+  // exposing founder routes if one ever does.
+  return []
 }

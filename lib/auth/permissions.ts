@@ -174,6 +174,15 @@ export function canAccessAdminRoute(role: TeamRole, path?: string): Authorizatio
   }
 }
 
+// True when a role may enter the /admin shell AT ALL (i.e. has access to at
+// least one admin surface). The admin layout gates on THIS (role membership)
+// rather than the request path — so it never needs `x-pathname` and cannot
+// redirect-loop when that header is unavailable to a Server Component. The
+// precise per-route ACL is still enforced by each page's canAccessAdminRoute.
+export function isAdminCapableRole(role: TeamRole): boolean {
+  return role === 'founder_admin' || role === 'outreach_agent'
+}
+
 // ── team_member_id tracking helper ────────────────────────────────
 
 // Stamps an action with the team member who performed it.

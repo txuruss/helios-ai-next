@@ -23,8 +23,9 @@ interface Props {
   email:    string
 }
 
-export default function AdminSidebar({ open, onClose, items, role, fullName, email }: Props) {
+export default function AdminSidebar({ open, onClose, items = [], role, fullName, email }: Props) {
   const pathname = usePathname()
+  const navItems = Array.isArray(items) ? items : []
   const roleLabel = role === 'founder_admin' ? 'Founder' : role === 'outreach_agent' ? 'Outreach' : 'Team'
 
   return (
@@ -59,7 +60,7 @@ export default function AdminSidebar({ open, onClose, items, role, fullName, ema
 
         <div className="flex-1 overflow-y-auto py-2 px-2.5">
           {ADMIN_NAV_GROUPS.filter((g) => g !== 'Admin').map((group) => {
-            const groupItems = items.filter((i) => i.group === group)
+            const groupItems = navItems.filter((i) => i.group === group)
             if (!groupItems.length) return null
             return (
               <div key={group} className="mb-1">
@@ -96,7 +97,7 @@ export default function AdminSidebar({ open, onClose, items, role, fullName, ema
         </div>
 
         <div className="px-2.5 pb-[max(1rem,env(safe-area-inset-bottom,1rem))] pt-2 border-t border-white/[0.06]">
-          {items.filter((i) => i.group === 'Admin').map((item) => {
+          {navItems.filter((i) => i.group === 'Admin').map((item) => {
             const IconComp = ICONS[item.icon]
             const isActive = pathname.startsWith(item.href)
             return (
