@@ -82,6 +82,10 @@ export interface SavedResearchLead {
   status:          string
   created_at:      string
   saved_at:        string | null
+  // Attribution (migration 20260608120000). Null for legacy/unknown leads.
+  saved_by_team_member_id: string | null
+  saved_by_name:           string | null
+  saved_by_email:          string | null
 }
 
 export interface SavedResearchLeadsResult {
@@ -96,6 +100,25 @@ function isMissingTable(e: { code?: string; message?: string } | null): boolean 
   const m = (e.message ?? '').toLowerCase()
   return m.includes('relation') && m.includes('does not exist')
 }
+
+// Postgres "undefined_column" — raised when the attribution columns
+// (migration 20260608120000) aren't applied yet. Lets reads fall back to the
+// base column set instead of failing the whole Saved Leads view.
+function isMissingColumn(e: { code?: string; message?: string } | null): boolean {
+  if (!e) return false
+  if (e.code === '42703') return true
+  const m = (e.message ?? '').toLowerCase()
+  return m.includes('column') && m.includes('does not exist')
+}
+
+// Saved-lead column sets. The base set predates attribution; the attributed
+// set adds saved_by_*. Reads try the attributed set and fall back to base.
+const SAVED_LEAD_BASE_COLS =
+  'id, research_run_id, place_id, business_name, niche, address, phone, website, ' +
+  'google_maps_url, rating, review_count, problem_found, outreach_angle, first_dm, ' +
+  'cold_email_opening, lead_score, status, created_at, saved_at'
+const SAVED_LEAD_COLS =
+  SAVED_LEAD_BASE_COLS + ', saved_by_team_member_id, saved_by_name, saved_by_email'
 
 // lead_count carries the SAVED count (is_saved=true); leads_found carries the
 // total found (the column set at run completion).
@@ -312,6 +335,9 @@ function toSavedLead(r: Record<string, unknown>): SavedResearchLead {
     status:             typeof r.status === 'string' ? r.status : 'saved',
     created_at:         typeof r.created_at === 'string' ? r.created_at : new Date(0).toISOString(),
     saved_at:           ns(r.saved_at),
+    saved_by_team_member_id: ns(r.saved_by_team_member_id),
+    saved_by_name:           ns(r.saved_by_name),
+    saved_by_email:          ns(r.saved_by_email),
   }
 }
 
@@ -328,12 +354,20 @@ export async function getSavedResearchLeads(): Promise<SavedResearchLeadsResult>
 
   try {
     const db = createServiceRoleClient()
-    const { data, error } = await db
-      .from('research_leads')
-      .select('id, research_run_id, place_id, business_name, niche, address, phone, website, google_maps_url, rating, review_count, problem_found, outreach_angle, first_dm, cold_email_opening, lead_score, status, created_at, saved_at')
-      .eq('is_saved', true)
-      .order('saved_at', { ascending: false, nullsFirst: false })
-      .order('created_at', { ascending: false })
+    const runQuery = (cols: string) =>
+      db.from('research_leads')
+        .select(cols)
+        .eq('is_saved', true)
+        .order('saved_at', { ascending: false, nullsFirst: false })
+        .order('created_at', { ascending: false })
+
+    let res = await runQuery(SAVED_LEAD_COLS)
+    // Attribution columns not migrated yet → fall back to the base set so the
+    // Saved Leads view still loads (attribution shows as "Unknown").
+    if (res.error && isMissingColumn(res.error)) {
+      res = await runQuery(SAVED_LEAD_BASE_COLS)
+    }
+    const { data, error } = res
 
     if (error) {
       if (isMissingTable(error)) return { rows: [], migrationNeeded: true, error: null }
@@ -370,11 +404,14 @@ export async function getResearchLeadById(id: string): Promise<SavedResearchLead
 
   try {
     const db = createServiceRoleClient()
-    const { data, error } = await db
-      .from('research_leads')
-      .select('id, research_run_id, place_id, business_name, niche, address, phone, website, google_maps_url, rating, review_count, problem_found, outreach_angle, first_dm, cold_email_opening, lead_score, status, created_at, saved_at')
-      .eq('id', id)
-      .maybeSingle()
+    const runQuery = (cols: string) =>
+      db.from('research_leads').select(cols).eq('id', id).maybeSingle()
+
+    let res = await runQuery(SAVED_LEAD_COLS)
+    if (res.error && isMissingColumn(res.error)) {
+      res = await runQuery(SAVED_LEAD_BASE_COLS)
+    }
+    const { data, error } = res
     if (error || !data) return null
     return toSavedLead(data as Record<string, unknown>)
   } catch (err) {

@@ -52,6 +52,12 @@ function fmtDateTime(v: string | null): string {
   const d = new Date(v)
   return Number.isNaN(d.getTime()) ? '—' : d.toLocaleString()
 }
+
+// Display label for who saved a lead. Falls back name → email → "Unknown"
+// (legacy leads saved before attribution existed). Shared with the table.
+export function savedByLabel(lead: { saved_by_name: string | null; saved_by_email: string | null }): string {
+  return lead.saved_by_name || lead.saved_by_email || 'Unknown'
+}
 function host(url: string | null): string | null {
   if (!url) return null
   return url.replace(/^https?:\/\//, '').replace(/\/$/, '')
@@ -91,7 +97,8 @@ export default function SavedLeadDetailPanel({ lead, busy, onClose, onStatusChan
     { label: 'Rating',     value: lead.rating !== null ? `${lead.rating.toFixed(1)}★ (${lead.review_count ?? 0} reviews)` : '—' },
     { label: 'Lead Score', value: lead.lead_score !== null ? `${lead.lead_score}/100` : '—' },
     { label: 'Created',    value: fmtDateTime(lead.created_at) },
-    { label: 'Saved',      value: fmtDateTime(lead.saved_at) },
+    { label: 'Saved at',   value: fmtDateTime(lead.saved_at) },
+    { label: 'Saved by',   value: savedByLabel(lead) },
     { label: 'Problem Found',        value: lead.problem_found ?? '—', full: true },
     { label: 'Outreach Angle',       value: <CopyValue value={lead.outreach_angle} />, full: true },
     { label: 'Recommended First DM', value: <CopyValue value={lead.first_dm} />, full: true },

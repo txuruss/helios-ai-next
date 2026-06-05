@@ -56,7 +56,20 @@ const saveSchema = z.object({
 
 type Lead = z.infer<typeof leadSchema>
 
-function toRow(l: Lead, runId: string | null) {
+// Snapshot of the team member who saved the lead. team_member_id is only set
+// when it's a real UUID (the dev mock session uses a non-UUID id); name/email
+// are stored as a stable snapshot for display.
+interface SavedBy {
+  team_member_id: string | null
+  name:           string | null
+  email:          string | null
+}
+
+// Attribution column keys — stripped on retry if the migration that adds them
+// (20260608120000) has not been applied yet, so saving never breaks.
+const SAVED_BY_KEYS = ['saved_by_team_member_id', 'saved_by_name', 'saved_by_email'] as const
+
+function toRow(l: Lead, runId: string | null, savedBy: SavedBy) {
   return {
     research_run_id:    runId,
     place_id:           l.placeId ?? null,
@@ -76,14 +89,36 @@ function toRow(l: Lead, runId: string | null) {
     is_saved:           true,
     saved_at:           new Date().toISOString(),
     status:             'saved',
+    saved_by_team_member_id: savedBy.team_member_id,
+    saved_by_name:           savedBy.name,
+    saved_by_email:          savedBy.email,
   }
 }
 
+function withoutSavedBy(rows: ReturnType<typeof toRow>[]): Record<string, unknown>[] {
+  return rows.map((r) => {
+    const copy: Record<string, unknown> = { ...r }
+    for (const k of SAVED_BY_KEYS) delete copy[k]
+    return copy
+  })
+}
+
 export async function POST(request: NextRequest) {
-  await requireOutreachAccess({ path: '/admin/mission-control/research-agent' })
+  // Gate first (redirects on failure — must stay outside try/catch). The
+  // returned session is the authoritative "saved by" — never trust the client.
+  const session = await requireOutreachAccess({ path: '/admin/mission-control/research-agent' })
 
   if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
     return NextResponse.json({ error: 'Server configuration error.' }, { status: 500 })
+  }
+
+  // Resolve attribution from the session. If the id isn't a real UUID (e.g.
+  // the dev mock session), keep the name/email snapshot but null the
+  // relational link so the FK never fails — never crash on attribution.
+  const savedBy: SavedBy = {
+    team_member_id: session.teamMemberId && UUID_RE.test(session.teamMemberId) ? session.teamMemberId : null,
+    name:           session.fullName ?? null,
+    email:          session.email ?? null,
   }
 
   let body: unknown
@@ -137,12 +172,19 @@ export async function POST(request: NextRequest) {
       const key = leadDedupKey(l)
       if (existingKeys.has(key) || batchKeys.has(key)) { duplicateCount++; continue }
       batchKeys.add(key)
-      toInsert.push(toRow(l, runId))
+      toInsert.push(toRow(l, runId, savedBy))
     }
 
     let savedCount = 0
     if (toInsert.length > 0) {
-      const { data, error } = await db.from('research_leads').insert(toInsert).select('id')
+      let result = await db.from('research_leads').insert(toInsert).select('id')
+      // If the attribution columns aren't migrated yet (20260608120000),
+      // retry without them so saving still works — just without "saved by".
+      if (result.error && result.error.code === '42703') {
+        console.warn('[research/leads/save] saved_by_* columns missing — apply 20260608120000. Saving without attribution.')
+        result = await db.from('research_leads').insert(withoutSavedBy(toInsert)).select('id')
+      }
+      const { data, error } = result
       if (error) {
         // Unique-index race (per-run google_maps_url) → treat as duplicates.
         if (error.code === '23505') {

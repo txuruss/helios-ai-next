@@ -10,7 +10,7 @@ import type { SavedResearchLead } from '@/lib/data/admin-research'
 import { ActionsToggle } from '@/components/admin/ui/ExpandableRow'
 import LeadScoreBadge from './LeadScoreBadge'
 import SavedLeadDetailPanel, {
-  type LeadStatusAction, LEAD_STATUS_META, LEAD_STATUS_ORDER,
+  type LeadStatusAction, LEAD_STATUS_META, LEAD_STATUS_ORDER, savedByLabel,
 } from './SavedLeadDetailPanel'
 
 function host(url: string | null): string | null {
@@ -208,7 +208,10 @@ export default function SavedLeadsTable({ migrationNeeded }: { migrationNeeded: 
                         <td className="px-3 py-2.5 text-[#9a9a9d] max-w-[240px]">{l.problem_found ?? '—'}</td>
                         <td className="px-3 py-2.5">{l.lead_score !== null ? <LeadScoreBadge score={l.lead_score} /> : '—'}</td>
                         <td className="px-3 py-2.5"><StatusPill status={l.status} /></td>
-                        <td className="px-3 py-2.5 text-[#9a9a9d] whitespace-nowrap tabular-nums">{fmtDate(l.saved_at)}</td>
+                        <td className="px-3 py-2.5 whitespace-nowrap">
+                          <div className="text-[#9a9a9d] tabular-nums">{fmtDate(l.saved_at)}</div>
+                          <div className="text-[10px] text-[#6a6a6e] mt-0.5">by {savedByLabel(l)}</div>
+                        </td>
                         <td className="px-3 py-2.5">
                           <div className="flex justify-end">
                             <ActionsToggle open={isOpen} onToggle={() => setSelected(isOpen ? null : l)} label="View" />

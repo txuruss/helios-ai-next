@@ -136,15 +136,33 @@ function buildPatch(
 }
 
 // ── Create lead ────────────────────────────────────────────────────
+const CREATED_BY_KEYS = ['created_by_team_member_id', 'created_by_name', 'created_by_email']
+
 export async function createOutreachLead(input: OutreachLeadInput): Promise<OutreachActionResult> {
-  await requireAdmin({ path: '/admin/outreach' })
+  // The session is the authoritative "added by" — never trust the client.
+  const session = await requireAdmin({ path: '/admin/outreach' })
   const guard = guardServiceRole(); if (guard) return guard
 
   const built = buildPatch(input, { requireCore: true })
   if ('error' in built) return { ok: false, error: built.error }
 
+  // Record who added the lead: relational link (NULL if not a real UUID, e.g.
+  // dev mock) plus a stable name/email snapshot. Only set on create.
+  built.patch.created_by_team_member_id =
+    session.teamMemberId && UUID_RE.test(session.teamMemberId) ? session.teamMemberId : null
+  built.patch.created_by_name  = session.fullName ?? null
+  built.patch.created_by_email = session.email ?? null
+
   const db = createServiceRoleClient()
-  const { error } = await db.from('admin_outreach_leads').insert(built.patch)
+  let result = await db.from('admin_outreach_leads').insert(built.patch)
+  // created_by_* not migrated yet (20260608120000) → retry without them so
+  // adding a lead still works (just without attribution).
+  if (result.error && result.error.code === '42703') {
+    console.warn('[createOutreachLead] created_by_* columns missing — apply 20260608120000. Saving without attribution.')
+    for (const k of CREATED_BY_KEYS) delete built.patch[k]
+    result = await db.from('admin_outreach_leads').insert(built.patch)
+  }
+  const { error } = result
   if (error) {
     if (isMissingTable(error)) return { ok: false, error: MIGRATION_HINT }
     console.error('[createOutreachLead]', error.message, '| code:', error.code)
