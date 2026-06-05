@@ -4,7 +4,7 @@ import { useState } from 'react'
 import { usePathname } from 'next/navigation'
 import AdminSidebar from './AdminSidebar'
 import AdminTopbar from './AdminTopbar'
-import { ADMIN_NAV } from './AdminNav'
+import { adminNavForRole } from './AdminNav'
 import type { TeamSession } from '@/lib/auth/types'
 
 interface Props {
@@ -16,13 +16,17 @@ export default function AdminShell({ children, session }: Props) {
   const [open, setOpen] = useState(false)
   const pathname = usePathname()
 
-  const current = ADMIN_NAV.find((n) => pathname === n.href || pathname.startsWith(n.href + '/'))
+  // Role-scoped nav: outreach_agent sees only their two tools.
+  const nav = adminNavForRole(session.role)
+  const current = nav.find((n) => pathname === n.href || pathname.startsWith(n.href + '/'))
 
   return (
     <div className="flex h-screen overflow-hidden bg-[#070707]">
       <AdminSidebar
         open={open}
         onClose={() => setOpen(false)}
+        items={nav}
+        role={session.role}
         fullName={session.fullName}
         email={session.email}
       />

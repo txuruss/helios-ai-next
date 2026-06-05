@@ -19,12 +19,15 @@ const ICONS: Record<string, React.ComponentType<{ size?: number; className?: str
 }
 
 const ROLE_LABEL: Record<TeamRole, string> = {
-  founder_admin: 'Founder',
-  team_sales:    'Sales',
-  team_delivery: 'Delivery',
-  team_content:  'Content',
-  team_support:  'Support',
-  team_analyst:  'Analyst',
+  founder_admin:  'Founder',
+  team_sales:     'Sales',
+  team_delivery:  'Delivery',
+  team_content:   'Content',
+  team_support:   'Support',
+  team_analyst:   'Analyst',
+  outreach_agent: 'Outreach',
+  delivery_agent: 'Delivery',
+  viewer:         'Viewer',
 }
 
 interface Props {

@@ -1,10 +1,10 @@
 // GET /api/research-agent/runs/[id]
 //
-// Founder-only. Returns one research run's details plus all leads saved
+// Founder + outreach_agent. Returns one research run's details plus all leads saved
 // against it (research_run_id). Used by the "View Results" action.
 
 import { NextResponse, type NextRequest } from 'next/server'
-import { requireAdmin } from '@/lib/auth/require-admin'
+import { requireOutreachAccess } from '@/lib/auth/require-admin'
 import { getResearchRunDetail } from '@/lib/data/admin-research'
 
 export const runtime = 'nodejs'
@@ -14,7 +14,7 @@ export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> },
 ) {
-  await requireAdmin({ path: '/admin/mission-control/research-agent' })
+  await requireOutreachAccess({ path: '/admin/mission-control/research-agent' })
 
   const { id } = await params
   const detail = await getResearchRunDetail(id)

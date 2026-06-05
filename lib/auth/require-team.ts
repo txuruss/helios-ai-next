@@ -118,6 +118,66 @@ function normalizeTeamRole(raw: string | null | undefined): TeamRole {
   if (raw === 'team_content'  || raw === 'content')  return 'team_content'
   if (raw === 'team_support'  || raw === 'support')  return 'team_support'
   if (raw === 'team_analyst'  || raw === 'analyst')  return 'team_analyst'
+  // Scoped roles from 20260607120000_add_outreach_agent_roles.sql. These
+  // MUST be mapped explicitly — otherwise an outreach_agent row would fall
+  // through to the team_analyst default and silently lose its access.
+  if (raw === 'outreach_agent') return 'outreach_agent'
+  if (raw === 'delivery_agent') return 'delivery_agent'
+  if (raw === 'viewer')         return 'viewer'
   // Unknown role → least-privilege default
   return 'team_analyst'
+}
+
+// ── Non-redirecting accessor ──────────────────────────────────────
+// Returns the current active team member's session, or null when there
+// is no Supabase user / no active team_members row. Unlike requireTeam(),
+// this NEVER redirects — use it for conditional UI or callers that want to
+// branch on membership rather than gate a whole page.
+export async function getCurrentTeamMember(): Promise<TeamSession | null> {
+  if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
+    return mockAuthEnabled() ? MOCK_TEAM_SESSION : null
+  }
+
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return null
+
+  let teamRow: { id: string; role: string; full_name: string | null; email: string; status: string } | null = null
+  try {
+    const { data } = await supabase
+      .from('team_members')
+      .select('id, role, full_name, email, status')
+      .eq('user_id', user.id)
+      .eq('status', 'active')
+      .maybeSingle()
+    teamRow = data ?? null
+  } catch {
+    // Table may not exist yet — fall through to the service-role check.
+  }
+
+  if (!teamRow && process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    try {
+      const db = createServiceRoleClient()
+      const { data } = await db
+        .from('team_members')
+        .select('id, role, full_name, email, status')
+        .eq('user_id', user.id)
+        .eq('status', 'active')
+        .maybeSingle()
+      teamRow = data ?? null
+    } catch {
+      // Table not provisioned yet.
+    }
+  }
+
+  if (!teamRow) return null
+
+  return {
+    teamMemberId: teamRow.id,
+    userId:       user.id,
+    email:        teamRow.email,
+    fullName:     teamRow.full_name,
+    role:         normalizeTeamRole(teamRow.role),
+    avatarUrl:    null,
+  }
 }

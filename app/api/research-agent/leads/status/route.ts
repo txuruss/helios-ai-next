@@ -1,6 +1,6 @@
 // POST /api/research-agent/leads/status
 //
-// Founder-only. Updates a saved research lead's status:
+// Founder + outreach_agent. Updates a saved research lead's status:
 //   ready_for_outreach | contacted | archived | saved
 //
 // This ONLY changes the status field. It does NOT send any message, email,
@@ -8,7 +8,7 @@
 
 import { NextResponse, type NextRequest } from 'next/server'
 import { z } from 'zod'
-import { requireAdmin } from '@/lib/auth/require-admin'
+import { requireOutreachAccess } from '@/lib/auth/require-admin'
 import { createServiceRoleClient } from '@/lib/supabase/server'
 
 export const runtime = 'nodejs'
@@ -35,7 +35,7 @@ const statusSchema = z.object({
 })
 
 export async function POST(request: NextRequest) {
-  await requireAdmin({ path: '/admin/mission-control/research-agent' })
+  await requireOutreachAccess({ path: '/admin/mission-control/research-agent' })
 
   if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
     return NextResponse.json({ error: 'Server configuration error.' }, { status: 500 })

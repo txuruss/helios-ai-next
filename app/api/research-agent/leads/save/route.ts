@@ -1,6 +1,6 @@
 // POST /api/research-agent/leads/save
 //
-// Founder-only. Manually saves research results into research_leads (the
+// Founder + outreach_agent. Manually saves research results into research_leads (the
 // saved-leads CRM). Handles both "Save lead" and "Save all qualified" — the
 // client sends an array of lead payloads either way.
 //
@@ -13,7 +13,7 @@
 
 import { NextResponse, type NextRequest } from 'next/server'
 import { z } from 'zod'
-import { requireAdmin } from '@/lib/auth/require-admin'
+import { requireOutreachAccess } from '@/lib/auth/require-admin'
 import { createServiceRoleClient } from '@/lib/supabase/server'
 import { leadDedupKey } from '@/lib/research/leadScoring'
 
@@ -80,7 +80,7 @@ function toRow(l: Lead, runId: string | null) {
 }
 
 export async function POST(request: NextRequest) {
-  await requireAdmin({ path: '/admin/mission-control/research-agent' })
+  await requireOutreachAccess({ path: '/admin/mission-control/research-agent' })
 
   if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
     return NextResponse.json({ error: 'Server configuration error.' }, { status: 500 })

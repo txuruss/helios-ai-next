@@ -1,6 +1,6 @@
 // POST /api/research-agent/run
 //
-// Founder-only. Runs a Google Places search for one or more niches in a
+// Founder + outreach_agent. Runs a Google Places search for one or more niches in a
 // location, scores each real result with rule-based logic, and stores the
 // run in research_runs (with the full scored set in raw_results JSON).
 //
@@ -15,7 +15,7 @@
 
 import { NextResponse, type NextRequest } from 'next/server'
 import { z } from 'zod'
-import { requireAdmin } from '@/lib/auth/require-admin'
+import { requireOutreachAccess } from '@/lib/auth/require-admin'
 import { createServiceRoleClient } from '@/lib/supabase/server'
 import { googleMapsConfigured, searchPlaces, GooglePlacesError } from '@/lib/research/googlePlaces'
 import { scoreLead, leadDedupKey, QUALIFIED_SCORE, type ScoredLead } from '@/lib/research/leadScoring'
@@ -71,7 +71,7 @@ function toSavedLeadRow(lead: ScoredLead, runId: string) {
 
 export async function POST(request: NextRequest) {
   // Founder gate first (redirects on failure — must not be inside try/catch).
-  await requireAdmin({ path: '/admin/mission-control/research-agent' })
+  await requireOutreachAccess({ path: '/admin/mission-control/research-agent' })
 
   if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
     return fail('Server configuration error.', 500)

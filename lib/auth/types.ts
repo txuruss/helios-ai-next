@@ -26,7 +26,9 @@ export interface ClientSession {
 
 // Pass 31: role values aligned with the Supabase `team_members` CHECK
 // constraint (supabase/migrations/20260518120000_create_team_members.sql).
-// All non-founder team roles share the `team_` prefix.
+// All non-founder "team_" roles share the `team_` prefix. The outreach/
+// delivery/viewer roles were added by 20260607120000_add_outreach_agent_roles.sql
+// for scoped, tool-specific admin logins.
 export type TeamRole =
   | 'founder_admin'
   | 'team_sales'
@@ -34,6 +36,9 @@ export type TeamRole =
   | 'team_content'
   | 'team_support'
   | 'team_analyst'
+  | 'outreach_agent'
+  | 'delivery_agent'
+  | 'viewer'
 
 export interface TeamSession {
   teamMemberId: string

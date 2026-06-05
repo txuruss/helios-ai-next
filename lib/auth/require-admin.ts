@@ -33,14 +33,26 @@ import 'server-only'
 
 import { redirect } from 'next/navigation'
 import { requireTeam } from './require-team'
-import { founderCanAccessAdminRoute } from './permissions'
+import { canAccessAdminRoute } from './permissions'
 import type { TeamSession } from './types'
 
 interface RequireAdminOptions {
-  /** The current request path — used by requireTeam for redirectTo */
+  /** The current request path — drives the route-level ACL (and redirectTo) */
   path?: string
 }
 
+// Where to send a team member who is denied an /admin route. An
+// outreach_agent goes back to their own home (/admin/outreach) rather than
+// the parked /team/dashboard; everyone else keeps the original behavior.
+function deniedRedirect(role: TeamSession['role']): never {
+  if (role === 'outreach_agent') redirect('/admin/outreach')
+  redirect('/team/dashboard?error=admin_only')
+}
+
+// Guards an /admin route. founder_admin → full access. outreach_agent →
+// only the allowlisted outreach/research routes (canAccessAdminRoute).
+// The admin layout passes the real request path, so this gates every
+// /admin page; data/action/API call sites pass their own path too.
 export async function requireAdmin(
   options: RequireAdminOptions = {},
 ): Promise<TeamSession> {
@@ -48,10 +60,33 @@ export async function requireAdmin(
   // We pass path=undefined so we apply our own admin ACL, not the team one.
   const session = await requireTeam({ path: undefined })
 
-  const acl = founderCanAccessAdminRoute(session.role, options.path)
-  if (!acl.allowed) {
-    redirect('/team/dashboard?error=admin_only')
-  }
+  const acl = canAccessAdminRoute(session.role, options.path)
+  if (!acl.allowed) deniedRedirect(session.role)
 
+  return session
+}
+
+// Founder-only guard. Use for surfaces that must never be reachable by a
+// scoped role (e.g. /admin/team, billing, system config). `_options` is
+// accepted for call-site symmetry with requireAdmin (path is irrelevant —
+// a founder is allowed everywhere).
+export async function requireFounderAdmin(
+  _options: RequireAdminOptions = {},
+): Promise<TeamSession> {
+  const session = await requireTeam({ path: undefined })
+  if (session.role !== 'founder_admin') deniedRedirect(session.role)
+  return session
+}
+
+// Outreach-surface guard. Admits founder_admin and outreach_agent for the
+// outreach/research routes. This is the explicit, self-documenting gate
+// used by the research-agent API routes (equivalent to requireAdmin with
+// an outreach path, but named for intent).
+export async function requireOutreachAccess(
+  options: RequireAdminOptions = {},
+): Promise<TeamSession> {
+  const session = await requireTeam({ path: undefined })
+  const acl = canAccessAdminRoute(session.role, options.path)
+  if (!acl.allowed) deniedRedirect(session.role)
   return session
 }

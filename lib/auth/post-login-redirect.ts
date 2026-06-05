@@ -32,11 +32,13 @@
 import 'server-only'
 
 import { createClient, createServiceRoleClient } from '@/lib/supabase/server'
+import { isOutreachAgentAdminRoute } from './permissions'
 
 // ── Default destinations ─────────────────────────────────────────
 
-export const ADMIN_HOME  = '/admin/mission-control'
-export const CLIENT_HOME = '/dashboard'
+export const ADMIN_HOME    = '/admin/mission-control'
+export const OUTREACH_HOME = '/admin/outreach'
+export const CLIENT_HOME   = '/dashboard'
 // Lean Baseline: team portal and dashboard setup are parked. Team users
 // land on /dashboard like clients; new users also land on /dashboard
 // (the page itself handles the no-business case inline).
@@ -47,6 +49,7 @@ export const SETUP_HOME  = '/dashboard'
 
 export type RoleBucket =
   | 'founder_admin'
+  | 'outreach_agent'
   | 'team'
   | 'client'
   | 'unknown'
@@ -92,6 +95,11 @@ async function resolveRole(userId: string): Promise<ResolvedRole> {
 
   if (teamRole === 'founder_admin') {
     return { bucket: 'founder_admin', default: ADMIN_HOME, teamRole }
+  }
+
+  // Scoped outreach login — lands directly on its only home surface.
+  if (teamRole === 'outreach_agent') {
+    return { bucket: 'outreach_agent', default: OUTREACH_HOME, teamRole }
   }
 
   // Lean Baseline: non-founder team members fall through to /dashboard.
@@ -167,9 +175,12 @@ export function isSafeRedirectTo(path: string | null | undefined): boolean {
 // Used to enforce that a malicious or hand-crafted redirectTo can't
 // drop a client into /admin.
 export function canAccessPath(bucket: RoleBucket, path: string): boolean {
-  // /admin/* — founder_admin only
+  // /admin/* — founder_admin everywhere; outreach_agent only on its
+  // allowlisted routes (same source of truth as the route guard).
   if (path === '/admin' || path.startsWith('/admin/') || path.startsWith('/admin?')) {
-    return bucket === 'founder_admin'
+    if (bucket === 'founder_admin') return true
+    if (bucket === 'outreach_agent') return isOutreachAgentAdminRoute(path)
+    return false
   }
   // /team/* and /client/* are parked in the Lean Baseline. They still
   // exist as redirect stubs to /dashboard, but we refuse to honor them

@@ -3,25 +3,29 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { logout } from '@/lib/auth/actions'
-import { ADMIN_NAV, ADMIN_NAV_GROUPS } from './AdminNav'
+import { ADMIN_NAV_GROUPS, type AdminNavItem } from './AdminNav'
+import type { TeamRole } from '@/lib/auth/types'
 import { cn } from '@/components/ui/cn'
 import {
-  Compass, BarChart2, Users, Building2, Settings, LogOut, X, ClipboardList, Rocket, Megaphone, Telescope,
+  Compass, BarChart2, Users, Building2, Settings, LogOut, X, ClipboardList, Rocket, Megaphone, Telescope, UserCog,
 } from 'lucide-react'
 
 const ICONS: Record<string, React.ComponentType<{ size?: number; className?: string }>> = {
-  Compass, BarChart2, Users, Building2, Settings, ClipboardList, Rocket, Megaphone, Telescope,
+  Compass, BarChart2, Users, Building2, Settings, ClipboardList, Rocket, Megaphone, Telescope, UserCog,
 }
 
 interface Props {
   open:     boolean
   onClose:  () => void
+  items:    AdminNavItem[]
+  role:     TeamRole
   fullName: string | null
   email:    string
 }
 
-export default function AdminSidebar({ open, onClose, fullName, email }: Props) {
+export default function AdminSidebar({ open, onClose, items, role, fullName, email }: Props) {
   const pathname = usePathname()
+  const roleLabel = role === 'founder_admin' ? 'Founder' : role === 'outreach_agent' ? 'Outreach' : 'Team'
 
   return (
     <>
@@ -43,7 +47,7 @@ export default function AdminSidebar({ open, onClose, fullName, email }: Props) 
           <div className="flex-1 min-w-0">
             <div className="text-[13px] font-semibold truncate">Helios Admin</div>
             <div className="text-[10.5px] font-medium text-[#ffae3c] truncate">
-              Founder · {fullName ?? email.split('@')[0]}
+              {roleLabel} · {fullName ?? email.split('@')[0]}
             </div>
           </div>
           <button onClick={onClose}
@@ -55,15 +59,15 @@ export default function AdminSidebar({ open, onClose, fullName, email }: Props) 
 
         <div className="flex-1 overflow-y-auto py-2 px-2.5">
           {ADMIN_NAV_GROUPS.filter((g) => g !== 'Admin').map((group) => {
-            const items = ADMIN_NAV.filter((i) => i.group === group)
-            if (!items.length) return null
+            const groupItems = items.filter((i) => i.group === group)
+            if (!groupItems.length) return null
             return (
               <div key={group} className="mb-1">
                 <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-[#6a6a6e] px-2 py-2.5">
                   {group}
                 </div>
                 <nav className="flex flex-col gap-0.5">
-                  {items.map((item) => {
+                  {groupItems.map((item) => {
                     const IconComp = ICONS[item.icon]
                     const isActive = pathname === item.href || pathname.startsWith(item.href + '/')
                     return (
@@ -92,7 +96,7 @@ export default function AdminSidebar({ open, onClose, fullName, email }: Props) 
         </div>
 
         <div className="px-2.5 pb-[max(1rem,env(safe-area-inset-bottom,1rem))] pt-2 border-t border-white/[0.06]">
-          {ADMIN_NAV.filter((i) => i.group === 'Admin').map((item) => {
+          {items.filter((i) => i.group === 'Admin').map((item) => {
             const IconComp = ICONS[item.icon]
             const isActive = pathname.startsWith(item.href)
             return (

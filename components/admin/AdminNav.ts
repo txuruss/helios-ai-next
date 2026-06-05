@@ -2,6 +2,8 @@
 // Single source of truth for the admin sidebar. Order here defines
 // sidebar order. Icons are lucide-react component names.
 
+import type { TeamRole } from '@/lib/auth/types'
+
 export interface AdminNavItem {
   id:    string
   label: string
@@ -26,8 +28,22 @@ export const ADMIN_NAV: AdminNavItem[] = [
   { id: 'launch-readiness', label: 'Launch Readiness', href: '/admin/launch-readiness', icon: 'Rocket', group: 'Operations' },
 
   // Admin
+  { id: 'team',            label: 'Team',            href: '/admin/team',            icon: 'UserCog',   group: 'Admin' },
   { id: 'settings',        label: 'Settings',        href: '/admin/settings',        icon: 'Settings',  group: 'Admin' },
 ]
 
 export const ADMIN_NAV_GROUPS: ReadonlyArray<AdminNavItem['group']> =
   ['Overview', 'Sales', 'Operations', 'Admin']
+
+// Nav items visible to a given role. founder_admin sees everything; an
+// outreach_agent sees only their two scoped tools (Research Agent +
+// Outreach). This is UI hiding only — the real gate is canAccessAdminRoute
+// in lib/auth/permissions.ts, enforced server-side on every route.
+const OUTREACH_AGENT_NAV_IDS = new Set(['research-agent', 'outreach'])
+
+export function adminNavForRole(role: TeamRole): AdminNavItem[] {
+  if (role === 'outreach_agent') {
+    return ADMIN_NAV.filter((item) => OUTREACH_AGENT_NAV_IDS.has(item.id))
+  }
+  return ADMIN_NAV
+}
