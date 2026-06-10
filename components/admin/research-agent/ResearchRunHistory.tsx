@@ -89,6 +89,7 @@ export default function ResearchRunHistory({
                   <Meta label="Radius"       value={r.radius_km !== null ? `${r.radius_km} km` : '—'} />
                   <Meta label="Leads Found"  value={r.leads_found !== null ? String(r.leads_found) : '—'} />
                   <Meta label="Leads Saved"  value={String(r.lead_count)} />
+                  <Meta label="Run By"       value={r.created_by_name ?? r.created_by_email ?? 'Unknown'} />
                 </div>
               </div>
             )

@@ -40,6 +40,10 @@ export default function SavedLeadsTable({ migrationNeeded }: { migrationNeeded: 
   const [selected, setSelected] = useState<SavedResearchLead | null>(null)
   const [busyId, setBusyId]     = useState<string | null>(null)
   const [filter, setFilter]     = useState<string>('all')
+  // Saved-by filter — only meaningful for the founder master view. Agents
+  // are scoped server-side to their own leads, so they see ≤1 saver and the
+  // dropdown stays hidden. This is a view convenience, never the gate.
+  const [savedByF, setSavedByF] = useState<string>('all')
 
   async function load() {
     setLoading(true)
@@ -106,7 +110,14 @@ export default function SavedLeadsTable({ migrationNeeded }: { migrationNeeded: 
   const counts: Record<string, number> = {}
   for (const s of LEAD_STATUS_ORDER) counts[s] = 0
   for (const l of leads) if (l.status in counts) counts[l.status] += 1
-  const filtered = filter === 'all' ? leads : leads.filter((l) => l.status === filter)
+
+  // Distinct savers (for the founder's Saved-by filter). Agents only ever
+  // receive their own leads from the API, so this stays a single entry.
+  const savers = Array.from(new Set(leads.map((l) => savedByLabel(l)))).sort()
+  const noFilters = filter === 'all' && savedByF === 'all'
+  const filtered = leads.filter((l) =>
+    (filter === 'all' || l.status === filter) &&
+    (savedByF === 'all' || savedByLabel(l) === savedByF))
 
   return (
     <div className="flex flex-col gap-3">
@@ -114,16 +125,27 @@ export default function SavedLeadsTable({ migrationNeeded }: { migrationNeeded: 
         <p className="text-[12.5px] text-[#9a9a9d]">
           {loading
             ? 'Loading saved leads…'
-            : filter === 'all'
+            : noFilters
               ? `${leads.length} saved lead${leads.length !== 1 ? 's' : ''} across all runs`
               : `${filtered.length} of ${leads.length} saved leads`}
         </p>
-        <button type="button" onClick={load} disabled={loading}
-          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11.5px] font-medium
-                     bg-white/[0.04] border border-white/[0.1] text-[#cfd3dc]
-                     hover:bg-white/[0.08] hover:text-white transition-all disabled:opacity-50">
-          {loading ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />} Refresh
-        </button>
+        <div className="flex items-center gap-2 flex-wrap">
+          {savers.length > 1 && (
+            <select value={savedByF} onChange={(e) => setSavedByF(e.target.value)}
+              aria-label="Filter by team member"
+              className="px-2.5 py-1.5 rounded-lg text-[11.5px] font-medium bg-[#0f1012] border border-white/[0.1]
+                         text-[#cfd3dc] cursor-pointer focus:outline-none focus:border-[#ff7a18]/40 transition-all">
+              <option value="all">Saved by: All team</option>
+              {savers.map((s) => <option key={s} value={s}>{s}</option>)}
+            </select>
+          )}
+          <button type="button" onClick={load} disabled={loading}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11.5px] font-medium
+                       bg-white/[0.04] border border-white/[0.1] text-[#cfd3dc]
+                       hover:bg-white/[0.08] hover:text-white transition-all disabled:opacity-50">
+            {loading ? <Loader2 size={12} className="animate-spin" /> : <RefreshCw size={12} />} Refresh
+          </button>
+        </div>
       </div>
 
       {/* Pipeline summary + filter (compact, clickable) */}
@@ -154,8 +176,10 @@ export default function SavedLeadsTable({ migrationNeeded }: { migrationNeeded: 
         </div>
       ) : filtered.length === 0 ? (
         <div className="rounded-2xl border border-white/[0.08] bg-[#0f1012]/80 px-5 py-10 text-center text-[13px] text-[#9a9a9d]">
-          No leads with status “{LEAD_STATUS_META[filter]?.label ?? filter}”.{' '}
-          <button type="button" onClick={() => setFilter('all')} className="text-[#ffae3c] hover:underline">Show all</button>
+          {filter !== 'all'
+            ? <>No leads with status “{LEAD_STATUS_META[filter]?.label ?? filter}”{savedByF !== 'all' ? ` saved by ${savedByF}` : ''}.</>
+            : <>No leads saved by {savedByF}.</>}{' '}
+          <button type="button" onClick={() => { setFilter('all'); setSavedByF('all') }} className="text-[#ffae3c] hover:underline">Show all</button>
         </div>
       ) : (
         <div className="rounded-2xl border border-white/[0.08] bg-[#0f1012]/80 overflow-hidden">

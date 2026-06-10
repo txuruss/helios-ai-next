@@ -45,8 +45,18 @@ function fail(error: string, status: number, err?: unknown) {
   return NextResponse.json({ error, detail: detailOf(err) }, { status })
 }
 
-// A scored, qualified lead → a research_leads (saved) insert row.
-function toSavedLeadRow(lead: ScoredLead, runId: string) {
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+// Who ran the search / saved the leads — snapshot from the server session.
+interface RunActor {
+  team_member_id: string | null
+  name:           string | null
+  email:          string | null
+}
+
+// A scored, qualified lead → a research_leads (saved) insert row. Auto-saved
+// leads carry the runner's attribution so per-agent visibility applies.
+function toSavedLeadRow(lead: ScoredLead, runId: string, actor: RunActor) {
   return {
     research_run_id:    runId,
     place_id:           lead.placeId,
@@ -66,12 +76,36 @@ function toSavedLeadRow(lead: ScoredLead, runId: string) {
     is_saved:           true,
     saved_at:           new Date().toISOString(),
     status:             'saved',
+    saved_by_team_member_id: actor.team_member_id,
+    saved_by_name:           actor.name,
+    saved_by_email:          actor.email,
   }
 }
 
+const ATTRIBUTION_KEYS = [
+  'saved_by_team_member_id', 'saved_by_name', 'saved_by_email',
+  'created_by_team_member_id', 'created_by_name', 'created_by_email',
+] as const
+
+// Strip attribution keys for retry when the ownership migrations
+// (20260608120000 / 20260609120000) are not applied yet.
+function withoutAttribution(rows: Record<string, unknown>[]): Record<string, unknown>[] {
+  return rows.map((r) => {
+    const copy = { ...r }
+    for (const k of ATTRIBUTION_KEYS) delete copy[k]
+    return copy
+  })
+}
+
 export async function POST(request: NextRequest) {
-  // Founder gate first (redirects on failure — must not be inside try/catch).
-  await requireOutreachAccess({ path: '/admin/mission-control/research-agent' })
+  // Gate first (redirects on failure — must not be inside try/catch). The
+  // session stamps run ownership + auto-saved lead attribution server-side.
+  const session = await requireOutreachAccess({ path: '/admin/mission-control/research-agent' })
+  const actor: RunActor = {
+    team_member_id: session.teamMemberId && UUID_RE.test(session.teamMemberId) ? session.teamMemberId : null,
+    name:           session.fullName ?? null,
+    email:          session.email ?? null,
+  }
 
   if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
     return fail('Server configuration error.', 500)
@@ -94,12 +128,25 @@ export async function POST(request: NextRequest) {
   const db = createServiceRoleClient()
 
   // Create the run row up front (status running) so failures are recorded.
+  // Ownership is stamped here; if migration 20260609120000 isn't applied
+  // yet, retry without it so research keeps working (run shows as legacy).
   const title = `${niches.join(', ')} in ${location}`
-  const { data: runRow, error: runErr } = await db
+  const baseRun = { title, location, niches, radius_km: radiusKm, lead_target: leadTarget, status: 'running' }
+  let runIns = await db
     .from('research_runs')
-    .insert({ title, location, niches, radius_km: radiusKm, lead_target: leadTarget, status: 'running' })
+    .insert({
+      ...baseRun,
+      created_by_team_member_id: actor.team_member_id,
+      created_by_name:           actor.name,
+      created_by_email:          actor.email,
+    })
     .select('id')
     .single()
+  if (runIns.error && runIns.error.code === '42703') {
+    console.warn('[research/run] created_by_* columns missing — apply 20260609120000. Run saved without ownership.')
+    runIns = await db.from('research_runs').insert(baseRun).select('id').single()
+  }
+  const { data: runRow, error: runErr } = runIns
 
   if (runErr) {
     const missing = runErr.code === '42P01' || (runErr.message ?? '').toLowerCase().includes('does not exist')
@@ -146,10 +193,20 @@ export async function POST(request: NextRequest) {
     const savedKeys = new Set<string>()
     if (saveQualified && qualified.length > 0) {
       // qualified is already de-duped (it is a subset of `unique`).
-      const { data: savedRows, error: saveErr } = await db
+      const rows = qualified.map((l) => toSavedLeadRow(l, runId, actor))
+      let saveRes = await db
         .from('research_leads')
-        .insert(qualified.map((l) => toSavedLeadRow(l, runId)))
+        .insert(rows)
         .select('place_id, website, phone, business_name, address')
+      // saved_by_* not migrated (20260608120000) → save without attribution.
+      if (saveRes.error && saveRes.error.code === '42703') {
+        console.warn('[research/run] saved_by_* columns missing — apply 20260608120000. Auto-saving without attribution.')
+        saveRes = await db
+          .from('research_leads')
+          .insert(withoutAttribution(rows))
+          .select('place_id, website, phone, business_name, address')
+      }
+      const { data: savedRows, error: saveErr } = saveRes
       if (saveErr) {
         // Non-fatal: the run + raw_results still save. Surface in dev.
         console.error('[research/run] auto-save leads', saveErr)

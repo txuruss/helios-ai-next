@@ -99,6 +99,7 @@ export default function SavedLeadDetailPanel({ lead, busy, onClose, onStatusChan
     { label: 'Created',    value: fmtDateTime(lead.created_at) },
     { label: 'Saved at',   value: fmtDateTime(lead.saved_at) },
     { label: 'Saved by',   value: savedByLabel(lead) },
+    { label: 'Source',     value: 'Research Agent · Google Places' },
     { label: 'Problem Found',        value: lead.problem_found ?? '—', full: true },
     { label: 'Outreach Angle',       value: <CopyValue value={lead.outreach_angle} />, full: true },
     { label: 'Recommended First DM', value: <CopyValue value={lead.first_dm} />, full: true },

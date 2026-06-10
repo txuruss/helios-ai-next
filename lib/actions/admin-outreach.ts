@@ -15,6 +15,7 @@
 //     It never creates clients, leads, or contacts anyone.
 
 import { requireAdmin } from '@/lib/auth/require-admin'
+import { leadScopeFor, type LeadScope } from '@/lib/auth/permissions'
 import { createServiceRoleClient } from '@/lib/supabase/server'
 import { revalidatePath } from 'next/cache'
 import {
@@ -28,6 +29,22 @@ const DATE_RE = /^\d{4}-\d{2}-\d{2}$/
 
 const MIGRATION_HINT =
   'Outreach table not found. Apply migration 20260605120000_create_admin_outreach.sql in Supabase, then retry.'
+const OWNERSHIP_HINT =
+  'Per-agent lead visibility requires migration 20260608120000_add_saved_by_attribution.sql in Supabase.'
+
+// 42703 = undefined_column — created_by_* not migrated yet. Agents fail
+// closed in that case (we cannot verify which leads are theirs).
+function isMissingColumn(e: { code?: string; message?: string } | null): boolean {
+  if (!e) return false
+  if (e.code === '42703') return true
+  const m = (e.message ?? '').toLowerCase()
+  return m.includes('column') && m.includes('does not exist')
+}
+
+// True when the scope cannot match any row (unknown role / no owner id).
+function scopeDenied(scope: LeadScope): boolean {
+  return !scope.viewAll && !scope.ownTeamMemberId
+}
 
 function validId(raw: unknown): string | null {
   return typeof raw === 'string' && UUID_RE.test(raw) ? raw : null
@@ -173,8 +190,12 @@ export async function createOutreachLead(input: OutreachLeadInput): Promise<Outr
 }
 
 // ── Edit lead ──────────────────────────────────────────────────────
+// Scoped: an outreach_agent may only edit leads THEY added — anything else
+// behaves as not found (blocks direct-id edits of another agent's lead).
 export async function updateOutreachLead(leadId: string, input: OutreachLeadInput): Promise<OutreachActionResult> {
-  await requireAdmin({ path: '/admin/outreach' })
+  const session = await requireAdmin({ path: '/admin/outreach' })
+  const scope = leadScopeFor(session.role, session.teamMemberId)
+  if (scopeDenied(scope)) return { ok: false, error: 'Lead not found.' }
   const id = validId(leadId); if (!id) return { ok: false, error: 'Invalid lead id.' }
   const guard = guardServiceRole(); if (guard) return guard
 
@@ -183,58 +204,76 @@ export async function updateOutreachLead(leadId: string, input: OutreachLeadInpu
   if (Object.keys(built.patch).length === 0) return { ok: false, error: 'Nothing to update.' }
 
   const db = createServiceRoleClient()
-  const { error } = await db.from('admin_outreach_leads').update(built.patch).eq('id', id)
+  let q = db.from('admin_outreach_leads').update(built.patch).eq('id', id)
+  if (!scope.viewAll) q = q.eq('created_by_team_member_id', scope.ownTeamMemberId)
+  const { data, error } = await q.select('id')
   if (error) {
     if (isMissingTable(error)) return { ok: false, error: MIGRATION_HINT }
+    if (isMissingColumn(error) && !scope.viewAll) return { ok: false, error: OWNERSHIP_HINT }
     console.error('[updateOutreachLead]', error.message, '| code:', error.code)
     return { ok: false, error: 'Could not update lead. Try again.' }
   }
+  if (!data || data.length === 0) return { ok: false, error: 'Lead not found.' }
   revalidate()
   return { ok: true }
 }
 
 // ── Manual status change (quick marks) ─────────────────────────────
+// Scoped: agents can only change the status of leads they added.
 export async function setOutreachStatus(leadId: string, status: string): Promise<OutreachActionResult> {
-  await requireAdmin({ path: '/admin/outreach' })
+  const session = await requireAdmin({ path: '/admin/outreach' })
+  const scope = leadScopeFor(session.role, session.teamMemberId)
+  if (scopeDenied(scope)) return { ok: false, error: 'Lead not found.' }
   const id = validId(leadId); if (!id) return { ok: false, error: 'Invalid lead id.' }
   if (!isReplyStatus(status)) return { ok: false, error: 'Invalid status.' }
-  if (status === 'archived') return archiveOutreachLead(id) // route through soft-archive
+  if (status === 'archived') return archiveOutreachLead(id) // route through soft-archive (re-checks scope)
   const guard = guardServiceRole(); if (guard) return guard
 
   const update: Record<string, unknown> = { reply_status: status as OutreachReplyStatus }
-  // Marking contacted records the touch (manual — the founder sent it).
+  // Marking contacted records the touch (manual — the team member sent it).
   if (status === 'contacted') {
     update.first_message_sent = true
     update.last_contacted_at  = new Date().toISOString()
   }
 
   const db = createServiceRoleClient()
-  const { error } = await db.from('admin_outreach_leads').update(update).eq('id', id)
+  let q = db.from('admin_outreach_leads').update(update).eq('id', id)
+  if (!scope.viewAll) q = q.eq('created_by_team_member_id', scope.ownTeamMemberId)
+  const { data, error } = await q.select('id')
   if (error) {
     if (isMissingTable(error)) return { ok: false, error: MIGRATION_HINT }
+    if (isMissingColumn(error) && !scope.viewAll) return { ok: false, error: OWNERSHIP_HINT }
     console.error('[setOutreachStatus]', error.message, '| code:', error.code)
     return { ok: false, error: 'Could not update status. Try again.' }
   }
+  if (!data || data.length === 0) return { ok: false, error: 'Lead not found.' }
   revalidate()
   return { ok: true }
 }
 
 // ── Soft archive ───────────────────────────────────────────────────
+// Scoped: agents can only archive leads they added.
 export async function archiveOutreachLead(leadId: string): Promise<OutreachActionResult> {
-  await requireAdmin({ path: '/admin/outreach' })
+  const session = await requireAdmin({ path: '/admin/outreach' })
+  const scope = leadScopeFor(session.role, session.teamMemberId)
+  if (scopeDenied(scope)) return { ok: false, error: 'Lead not found.' }
   const id = validId(leadId); if (!id) return { ok: false, error: 'Invalid lead id.' }
   const guard = guardServiceRole(); if (guard) return guard
 
   const db = createServiceRoleClient()
-  const { error } = await db
+  let q = db
     .from('admin_outreach_leads')
     .update({ reply_status: 'archived', archived_at: new Date().toISOString() })
     .eq('id', id)
+  if (!scope.viewAll) q = q.eq('created_by_team_member_id', scope.ownTeamMemberId)
+  const { data, error } = await q.select('id')
   if (error) {
     if (isMissingTable(error)) return { ok: false, error: MIGRATION_HINT }
+    if (isMissingColumn(error) && !scope.viewAll) return { ok: false, error: OWNERSHIP_HINT }
     console.error('[archiveOutreachLead]', error.message, '| code:', error.code)
     return { ok: false, error: 'Could not archive lead. Try again.' }
   }
+  if (!data || data.length === 0) return { ok: false, error: 'Lead not found.' }
   revalidate()
   return { ok: true }
 }
@@ -289,19 +328,24 @@ export async function saveOutreachDailyReview(date: string, input: DailyReviewIn
 // (source='manual') so the lead can flow through the normal audit queue.
 // It does NOT create clients/leads, run the AI, or contact anyone.
 export async function createAuditFromOutreachLead(leadId: string): Promise<OutreachActionResult> {
-  await requireAdmin({ path: '/admin/outreach' })
+  const session = await requireAdmin({ path: '/admin/outreach' })
+  const scope = leadScopeFor(session.role, session.teamMemberId)
+  if (scopeDenied(scope)) return { ok: false, error: 'Lead not found.' }
   const id = validId(leadId); if (!id) return { ok: false, error: 'Invalid lead id.' }
   const guard = guardServiceRole(); if (guard) return guard
 
   const db = createServiceRoleClient()
 
-  const { data: lead, error: readErr } = await db
+  // Scoped read: agents can only convert leads they added.
+  let readQ = db
     .from('admin_outreach_leads')
     .select('business_name, niche, location, website_url, instagram_url, phone, email, pain_found')
     .eq('id', id)
-    .maybeSingle()
+  if (!scope.viewAll) readQ = readQ.eq('created_by_team_member_id', scope.ownTeamMemberId)
+  const { data: lead, error: readErr } = await readQ.maybeSingle()
   if (readErr) {
     if (isMissingTable(readErr)) return { ok: false, error: MIGRATION_HINT }
+    if (isMissingColumn(readErr) && !scope.viewAll) return { ok: false, error: OWNERSHIP_HINT }
     console.error('[createAuditFromOutreachLead] read', readErr.message)
     return { ok: false, error: 'Could not read lead. Try again.' }
   }

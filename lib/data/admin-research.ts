@@ -1,11 +1,16 @@
-// ── Founder-only reads: Business Research Agent (research_runs) ────
+// ── Role-scoped reads: Business Research Agent (research_runs) ─────
 //
 // SECURITY: requireAdmin() gates every call; service-role client used.
-// RESILIENCE: missing table → empty + migrationNeeded, never crashes.
+// OWNERSHIP: every read is scoped via leadScopeFor() — founder_admin sees
+// all runs/leads, outreach_agent sees ONLY rows they own. The scoping
+// happens HERE (server-side query layer), never just in the UI.
+// RESILIENCE: missing table → empty + migrationNeeded; missing ownership
+// columns → founder falls back to base columns, agents FAIL CLOSED.
 
 import 'server-only'
 
 import { requireAdmin } from '@/lib/auth/require-admin'
+import { leadScopeFor, type LeadScope } from '@/lib/auth/permissions'
 import { createServiceRoleClient } from '@/lib/supabase/server'
 import { leadDedupKey } from '@/lib/research/leadScoring'
 
@@ -20,6 +25,9 @@ export interface ResearchRunSummary {
   status:      string
   lead_count:  number
   created_at:  string
+  // Run ownership (migration 20260609120000). Null for legacy runs.
+  created_by_name:  string | null
+  created_by_email: string | null
 }
 
 export interface ResearchRunsResult {
@@ -112,13 +120,27 @@ function isMissingColumn(e: { code?: string; message?: string } | null): boolean
 }
 
 // Saved-lead column sets. The base set predates attribution; the attributed
-// set adds saved_by_*. Reads try the attributed set and fall back to base.
+// set adds saved_by_*. Founder reads try the attributed set and fall back to
+// base; agent reads NEVER fall back (ownership can't be verified → empty).
 const SAVED_LEAD_BASE_COLS =
   'id, research_run_id, place_id, business_name, niche, address, phone, website, ' +
   'google_maps_url, rating, review_count, problem_found, outreach_angle, first_dm, ' +
   'cold_email_opening, lead_score, status, created_at, saved_at'
 const SAVED_LEAD_COLS =
   SAVED_LEAD_BASE_COLS + ', saved_by_team_member_id, saved_by_name, saved_by_email'
+
+// Run column sets — same pattern for run ownership (20260609120000).
+const RUN_BASE_COLS =
+  'id, title, location, niches, radius_km, lead_target, leads_found, status, created_at'
+const RUN_COLS =
+  RUN_BASE_COLS + ', created_by_team_member_id, created_by_name, created_by_email'
+
+// User-safe hints shown when an agent's view requires a not-yet-applied
+// ownership migration. Agents fail closed (no rows) rather than seeing all.
+const LEAD_OWNERSHIP_HINT =
+  'Per-agent lead visibility requires migration 20260608120000_add_saved_by_attribution.sql in Supabase.'
+const RUN_OWNERSHIP_HINT =
+  'Per-agent run history requires migration 20260609120000_add_research_run_ownership.sql in Supabase.'
 
 // lead_count carries the SAVED count (is_saved=true); leads_found carries the
 // total found (the column set at run completion).
@@ -134,6 +156,8 @@ function toSummary(r: Record<string, unknown>, savedCount: number): ResearchRunS
     status:      typeof r.status === 'string' ? r.status : 'pending',
     lead_count:  savedCount,
     created_at:  typeof r.created_at === 'string' ? r.created_at : new Date(0).toISOString(),
+    created_by_name:  ns(r.created_by_name),
+    created_by_email: ns(r.created_by_email),
   }
 }
 
@@ -199,20 +223,32 @@ function rawToRunLead(raw: Record<string, unknown>, savedKeys: Set<string>): Res
 }
 
 // Recent research runs (newest first) with a saved-lead count per run.
+// Scoped: founder sees all runs; outreach_agent sees only their own.
 export async function getResearchRuns(limit = 15): Promise<ResearchRunsResult> {
-  await requireAdmin({ path: '/admin/mission-control/research-agent' })
+  const session = await requireAdmin({ path: '/admin/mission-control/research-agent' })
+  const scope = leadScopeFor(session.role, session.teamMemberId)
   const empty: ResearchRunsResult = { rows: [], migrationNeeded: false, error: null }
   if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
     return { ...empty, error: 'Server configuration error.' }
   }
+  if (!scope.viewAll && !scope.ownTeamMemberId) return empty // deny: no owner identity
 
   try {
     const db = createServiceRoleClient()
-    const { data, error } = await db
-      .from('research_runs')
-      .select('id, title, location, niches, radius_km, lead_target, leads_found, status, created_at')
-      .order('created_at', { ascending: false })
-      .limit(Math.max(1, Math.min(50, limit)))
+    const runQuery = (cols: string) => {
+      let q = db.from('research_runs').select(cols)
+      if (!scope.viewAll) q = q.eq('created_by_team_member_id', scope.ownTeamMemberId)
+      return q.order('created_at', { ascending: false }).limit(Math.max(1, Math.min(50, limit)))
+    }
+
+    let res = await runQuery(RUN_COLS)
+    if (res.error && isMissingColumn(res.error)) {
+      // Ownership columns not migrated: founder degrades to the base view;
+      // an agent fails closed (we cannot verify which runs are theirs).
+      if (!scope.viewAll) return { ...empty, error: RUN_OWNERSHIP_HINT }
+      res = await runQuery(RUN_BASE_COLS)
+    }
+    const { data, error } = res
 
     if (error) {
       if (isMissingTable(error)) return { rows: [], migrationNeeded: true, error: null }
@@ -251,22 +287,32 @@ export async function getResearchRuns(limit = 15): Promise<ResearchRunsResult> {
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 // One research run plus EVERY lead found in it (saved + unsaved), for
-// "View Results".
+// "View Results". Scoped: an outreach_agent can only open their OWN runs —
+// any other run id behaves as not found (no existence leak).
 export async function getResearchRunDetail(runId: string): Promise<ResearchRunDetail> {
-  await requireAdmin({ path: '/admin/mission-control/research-agent' })
+  const session = await requireAdmin({ path: '/admin/mission-control/research-agent' })
+  const scope = leadScopeFor(session.role, session.teamMemberId)
   const empty: ResearchRunDetail = { run: null, leads: [], migrationNeeded: false, notFound: false, error: null }
 
   if (!UUID_RE.test(runId)) return { ...empty, error: 'Invalid run id.' }
   if (!process.env.SUPABASE_SERVICE_ROLE_KEY) return { ...empty, error: 'Server configuration error.' }
+  if (!scope.viewAll && !scope.ownTeamMemberId) return { ...empty, notFound: true } // deny
 
   try {
     const db = createServiceRoleClient()
 
-    const { data: runData, error: runErr } = await db
-      .from('research_runs')
-      .select('id, title, location, niches, radius_km, lead_target, leads_found, status, created_at, raw_results')
-      .eq('id', runId)
-      .maybeSingle()
+    const runQuery = (cols: string) => {
+      let q = db.from('research_runs').select(cols).eq('id', runId)
+      if (!scope.viewAll) q = q.eq('created_by_team_member_id', scope.ownTeamMemberId)
+      return q.maybeSingle()
+    }
+
+    let runRes = await runQuery(RUN_COLS + ', raw_results')
+    if (runRes.error && isMissingColumn(runRes.error)) {
+      if (!scope.viewAll) return { ...empty, error: RUN_OWNERSHIP_HINT }
+      runRes = await runQuery(RUN_BASE_COLS + ', raw_results')
+    }
+    const { data: runData, error: runErr } = runRes
 
     if (runErr) {
       if (isMissingTable(runErr)) return { ...empty, migrationNeeded: true }
@@ -346,25 +392,30 @@ function toSavedLead(r: Record<string, unknown>): SavedResearchLead {
 // business (place id / domain / phone / name+addr), keeping the most recently
 // saved row.
 export async function getSavedResearchLeads(): Promise<SavedResearchLeadsResult> {
-  await requireAdmin({ path: '/admin/mission-control/research-agent' })
+  const session = await requireAdmin({ path: '/admin/mission-control/research-agent' })
+  const scope = leadScopeFor(session.role, session.teamMemberId)
   const empty: SavedResearchLeadsResult = { rows: [], migrationNeeded: false, error: null }
   if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
     return { ...empty, error: 'Server configuration error.' }
   }
+  if (!scope.viewAll && !scope.ownTeamMemberId) return empty // deny: no owner identity
 
   try {
     const db = createServiceRoleClient()
-    const runQuery = (cols: string) =>
-      db.from('research_leads')
-        .select(cols)
-        .eq('is_saved', true)
+    const runQuery = (cols: string) => {
+      let q = db.from('research_leads').select(cols).eq('is_saved', true)
+      if (!scope.viewAll) q = q.eq('saved_by_team_member_id', scope.ownTeamMemberId)
+      return q
         .order('saved_at', { ascending: false, nullsFirst: false })
         .order('created_at', { ascending: false })
+    }
 
     let res = await runQuery(SAVED_LEAD_COLS)
-    // Attribution columns not migrated yet → fall back to the base set so the
-    // Saved Leads view still loads (attribution shows as "Unknown").
+    // Attribution columns not migrated yet → founder falls back to the base
+    // set (attribution shows "Unknown"); an agent FAILS CLOSED — without the
+    // columns we cannot tell which leads are theirs.
     if (res.error && isMissingColumn(res.error)) {
+      if (!scope.viewAll) return { ...empty, error: LEAD_OWNERSHIP_HINT }
       res = await runQuery(SAVED_LEAD_BASE_COLS)
     }
     const { data, error } = res
@@ -398,17 +449,25 @@ export async function getSavedResearchLeads(): Promise<SavedResearchLeadsResult>
 
 // One saved research lead by id — used to prefill the Client Outreach
 // "Add lead" form when a lead is sent to outreach. Returns null on any miss.
+// Scoped: an outreach_agent can only fetch their OWN lead — any other id
+// behaves as not found (blocks direct-URL prefill of someone else's lead).
 export async function getResearchLeadById(id: string): Promise<SavedResearchLead | null> {
-  await requireAdmin({ path: '/admin/outreach' })
+  const session = await requireAdmin({ path: '/admin/outreach' })
+  const scope = leadScopeFor(session.role, session.teamMemberId)
   if (!UUID_RE.test(id) || !process.env.SUPABASE_SERVICE_ROLE_KEY) return null
+  if (!scope.viewAll && !scope.ownTeamMemberId) return null // deny
 
   try {
     const db = createServiceRoleClient()
-    const runQuery = (cols: string) =>
-      db.from('research_leads').select(cols).eq('id', id).maybeSingle()
+    const runQuery = (cols: string) => {
+      let q = db.from('research_leads').select(cols).eq('id', id)
+      if (!scope.viewAll) q = q.eq('saved_by_team_member_id', scope.ownTeamMemberId)
+      return q.maybeSingle()
+    }
 
     let res = await runQuery(SAVED_LEAD_COLS)
     if (res.error && isMissingColumn(res.error)) {
+      if (!scope.viewAll) return null // agent: fail closed without ownership columns
       res = await runQuery(SAVED_LEAD_BASE_COLS)
     }
     const { data, error } = res

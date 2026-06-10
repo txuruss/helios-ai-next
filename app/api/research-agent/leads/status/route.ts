@@ -9,6 +9,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { z } from 'zod'
 import { requireOutreachAccess } from '@/lib/auth/require-admin'
+import { leadScopeFor } from '@/lib/auth/permissions'
 import { createServiceRoleClient } from '@/lib/supabase/server'
 
 export const runtime = 'nodejs'
@@ -35,10 +36,16 @@ const statusSchema = z.object({
 })
 
 export async function POST(request: NextRequest) {
-  await requireOutreachAccess({ path: '/admin/mission-control/research-agent' })
+  // The session scopes the update: an outreach_agent may only change the
+  // status of leads THEY saved — anything else behaves as not found.
+  const session = await requireOutreachAccess({ path: '/admin/mission-control/research-agent' })
+  const scope = leadScopeFor(session.role, session.teamMemberId)
 
   if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
     return NextResponse.json({ error: 'Server configuration error.' }, { status: 500 })
+  }
+  if (!scope.viewAll && !scope.ownTeamMemberId) {
+    return NextResponse.json({ error: 'Lead not found.' }, { status: 404 })
   }
 
   let body: unknown
@@ -53,14 +60,24 @@ export async function POST(request: NextRequest) {
   const { id, status } = parsed.data
 
   const db = createServiceRoleClient()
-  const { data, error } = await db
+  let query = db
     .from('research_leads')
     .update({ status })
     .eq('id', id)
     .eq('is_saved', true) // only saved leads can change status here
-    .select('id, status')
+  if (!scope.viewAll) {
+    // Server-side ownership filter: 0 rows for someone else's lead → 404.
+    query = query.eq('saved_by_team_member_id', scope.ownTeamMemberId)
+  }
+  const { data, error } = await query.select('id, status')
 
   if (error) {
+    if (error.code === '42703' && !scope.viewAll) {
+      return NextResponse.json(
+        { error: 'Per-agent lead visibility requires migration 20260608120000_add_saved_by_attribution.sql in Supabase.', detail: detailOf(error) },
+        { status: 503 },
+      )
+    }
     const missing = error.code === '42P01' || (error.message ?? '').toLowerCase().includes('does not exist')
     if (missing) {
       return NextResponse.json(

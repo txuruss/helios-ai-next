@@ -183,6 +183,34 @@ export function isAdminCapableRole(role: TeamRole): boolean {
   return role === 'founder_admin' || role === 'outreach_agent'
 }
 
+// ── Lead ownership scope ──────────────────────────────────────────
+// Decides how lead/run reads and id-based writes are scoped for a team
+// session. Enforced SERVER-SIDE in the data/API layer — frontend hiding is
+// never the gate.
+//   founder_admin  → sees/edits every lead (master view)
+//   outreach_agent → only rows they own (saved_by/created_by = their id)
+//   any other role → no access at all (deny everything)
+
+const TEAM_MEMBER_UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
+
+export interface LeadScope {
+  /** True when the viewer may read every lead (founder master view). */
+  viewAll: boolean
+  /** Owner id to scope queries by when viewAll is false. Null while
+   *  viewAll is false means DENY ALL (unknown role, or a non-UUID id such
+   *  as the dev mock session — never let that match arbitrary rows). */
+  ownTeamMemberId: string | null
+}
+
+export function leadScopeFor(role: TeamRole, teamMemberId: string | null | undefined): LeadScope {
+  if (role === 'founder_admin') return { viewAll: true, ownTeamMemberId: null }
+  if (role === 'outreach_agent') {
+    const id = teamMemberId && TEAM_MEMBER_UUID_RE.test(teamMemberId) ? teamMemberId : null
+    return { viewAll: false, ownTeamMemberId: id }
+  }
+  return { viewAll: false, ownTeamMemberId: null }
+}
+
 // ── team_member_id tracking helper ────────────────────────────────
 
 // Stamps an action with the team member who performed it.

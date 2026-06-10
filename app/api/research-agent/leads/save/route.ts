@@ -14,6 +14,7 @@
 import { NextResponse, type NextRequest } from 'next/server'
 import { z } from 'zod'
 import { requireOutreachAccess } from '@/lib/auth/require-admin'
+import { leadScopeFor } from '@/lib/auth/permissions'
 import { createServiceRoleClient } from '@/lib/supabase/server'
 import { leadDedupKey } from '@/lib/research/leadScoring'
 
@@ -121,6 +122,12 @@ export async function POST(request: NextRequest) {
     email:          session.email ?? null,
   }
 
+  // Ownership scope: founder saves into any run; an agent only into their own.
+  const scope = leadScopeFor(session.role, session.teamMemberId)
+  if (!scope.viewAll && !scope.ownTeamMemberId) {
+    return NextResponse.json({ error: 'Not authorized.' }, { status: 403 })
+  }
+
   let body: unknown
   try { body = await request.json() } catch {
     return NextResponse.json({ error: 'Invalid JSON.' }, { status: 400 })
@@ -136,6 +143,27 @@ export async function POST(request: NextRequest) {
   const db = createServiceRoleClient()
 
   try {
+    // Agents may only save into a run they own — block writing leads into
+    // another agent's run by a forged runId. Founder is unrestricted.
+    if (runId && !scope.viewAll) {
+      const { data: ownRun, error: ownErr } = await db
+        .from('research_runs')
+        .select('id')
+        .eq('id', runId)
+        .eq('created_by_team_member_id', scope.ownTeamMemberId)
+        .maybeSingle()
+      if (ownErr) {
+        if (ownErr.code === '42703') {
+          return NextResponse.json(
+            { error: 'Per-agent run ownership requires migration 20260609120000_add_research_run_ownership.sql in Supabase.', detail: detailOf(ownErr) },
+            { status: 503 },
+          )
+        }
+        throw ownErr
+      }
+      if (!ownRun) return NextResponse.json({ error: 'Run not found.' }, { status: 404 })
+    }
+
     // Existing saved leads for this run → dedupe set.
     const existingKeys = new Set<string>()
     if (runId) {
