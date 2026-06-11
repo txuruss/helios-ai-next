@@ -402,3 +402,66 @@ export async function updateClientOnboarding(
   revalidate()
   return { ok: true }
 }
+
+// ── Update retainer tracking (setup fee + monthly retainer model) ──
+// Sets the retainer state, next monthly review date, and last report
+// date on a client. Manual by design — the founder controls the cycle.
+const RETAINER_STATUSES = ['active', 'paused', 'cancelled', 'needs_review'] as const
+const ACTION_DATE_RE = /^\d{4}-\d{2}-\d{2}$/
+
+// '' or null → clear (null); valid YYYY-MM-DD → kept; anything else → undefined (reject).
+function parseActionDate(raw: unknown): string | null | undefined {
+  if (raw === null || raw === undefined) return null
+  if (typeof raw !== 'string') return undefined
+  const t = raw.trim()
+  if (t === '') return null
+  if (!ACTION_DATE_RE.test(t) || Number.isNaN(Date.parse(t))) return undefined
+  return t
+}
+
+export async function updateClientRetainer(
+  clientId: string,
+  input: { retainer_status?: string; next_review_date?: string | null; last_report_date?: string | null },
+): Promise<AdminClientActionResult> {
+  await requireAdmin({ path: '/admin/clients' })
+
+  const id = validId(clientId)
+  if (!id) return { ok: false, error: 'Invalid client id.' }
+
+  const update: Record<string, unknown> = {}
+  if (input.retainer_status !== undefined) {
+    if (!RETAINER_STATUSES.includes(input.retainer_status as (typeof RETAINER_STATUSES)[number])) {
+      return { ok: false, error: 'Invalid retainer status.' }
+    }
+    update.retainer_status = input.retainer_status
+  }
+  if (input.next_review_date !== undefined) {
+    const d = parseActionDate(input.next_review_date)
+    if (d === undefined) return { ok: false, error: 'Invalid next review date.' }
+    update.next_review_date = d
+  }
+  if (input.last_report_date !== undefined) {
+    const d = parseActionDate(input.last_report_date)
+    if (d === undefined) return { ok: false, error: 'Invalid last report date.' }
+    update.last_report_date = d
+  }
+  if (Object.keys(update).length === 0) return { ok: false, error: 'Nothing to update.' }
+
+  const guard = guardServiceRole()
+  if (guard) return guard
+
+  const db = createServiceRoleClient()
+  const { error } = await db.from('admin_clients').update(update).eq('id', id)
+
+  if (error) {
+    if (isMissingTable(error)) return { ok: false, error: MIGRATION_HINT }
+    if (error.code === '42703') {
+      return { ok: false, error: 'Retainer fields not found. Apply migration 20260611120000_add_retainer_tracking.sql in Supabase, then retry.' }
+    }
+    console.error('[updateClientRetainer]', error.message, '| code:', error.code)
+    return { ok: false, error: 'Could not update retainer tracking. Try again.' }
+  }
+
+  revalidate()
+  return { ok: true }
+}

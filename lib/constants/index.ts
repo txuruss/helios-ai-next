@@ -63,14 +63,19 @@ export const PLAN_LABEL_MAP: Record<string, string> = {
   free:    'Free',
 }
 
+// Business model: setup fee (builds the system) + monthly retainer (active
+// monthly optimization, monitoring, support, and reporting — never
+// "maintenance only"). Canonical package data: lib/billing/packages.ts.
+// `features` = what the SETUP builds; `monthlyIncludes` = what the retainer
+// actively covers every month.
 export const PRICING_TIERS = [
   {
     id: 'starter',
-    name: 'Starter',
+    name: 'Starter Lead Response System',
     internalPlan: 'starter',
-    tagline: 'Simple website chat, FAQs, and lead capture.',
-    outcome: 'Stop missing inquiries. Reply 24/7.',
-    bestFor: 'Simple website chat, FAQs, lead capture',
+    tagline: 'A simple system to help local businesses stop missing customer inquiries.',
+    outcome: 'Stop missing customer inquiries — every lead is captured and you’re notified instantly.',
+    bestFor: 'Small salons, barbershops, solo service providers, and small local businesses',
     // Public flat pricing
     setupRange: '$997 setup',
     monthlyRange: '$149/mo',
@@ -78,12 +83,17 @@ export const PRICING_TIERS = [
     internalSetupRange: '$497 to $1,500',
     internalMonthlyRange: '$99 to $299/mo',
     features: [
-      'Website AI chat',
-      'FAQ answering',
-      'Lead capture form',
-      'Email notification to owner',
+      'Website chat or simple lead form',
+      'FAQ responses',
+      'Customer detail capture',
+      'Owner email notification',
       'Basic dashboard',
-      '1 revision round',
+    ],
+    monthlyIncludes: [
+      'System monitoring',
+      '1 monthly update',
+      'Lead-flow check',
+      'Basic support',
     ],
     cta: 'Get Started',
     featured: false,
@@ -92,9 +102,9 @@ export const PRICING_TIERS = [
     id: 'growth',
     name: 'Booking OS',
     internalPlan: 'pro',
-    tagline: 'Website chat, WhatsApp, booking flow, and owner notifications.',
-    outcome: 'Turn every conversation into a booked appointment.',
-    bestFor: 'Website chat, WhatsApp, booking flow, notifications',
+    tagline: 'A booking and lead-response system that turns customer messages into appointments.',
+    outcome: 'Turn customer messages into booked appointments — on the website and WhatsApp.',
+    bestFor: 'Spas, med spas, clinics, gyms, busy salons, and appointment-based businesses',
     // Public flat pricing
     setupRange: '$2,500 setup',
     monthlyRange: '$399/mo',
@@ -103,14 +113,19 @@ export const PRICING_TIERS = [
     internalMonthlyRange: '$299 to $750/mo',
     badge: 'Recommended',
     features: [
-      'Website AI chat',
+      'Website chat',
       'WhatsApp assistant',
-      'FAQ answering',
-      'Lead capture',
-      'Appointment request flow',
-      'Owner notifications',
-      'Basic CRM / dashboard',
+      'Booking request flow',
+      'FAQ automation',
+      'Lead dashboard',
+      'Owner/team notifications',
+      'Follow-up messages',
+    ],
+    monthlyIncludes: [
       'Monthly optimization',
+      'Lead-flow review',
+      'Monthly reporting',
+      'Monitoring and support',
     ],
     cta: 'Book a Demo',
     featured: true,
@@ -119,9 +134,9 @@ export const PRICING_TIERS = [
     id: 'command',
     name: 'Ops Center',
     internalPlan: 'scale',
-    tagline: 'Multi-location, dashboard, automation workflows, and reporting.',
-    outcome: 'Manage every conversation, booking, and alert from one system.',
-    bestFor: 'Multi-location, dashboard, automation workflows, reporting',
+    tagline: 'A full lead management and automation system for inquiries, bookings, and follow-ups.',
+    outcome: 'Full control over inquiries, bookings, and follow-ups — one system for the whole team.',
+    bestFor: 'Larger service businesses, multi-service teams, and businesses that need stronger lead management',
     // Public flat pricing
     setupRange: '$5,000 setup',
     monthlyRange: '$999/mo',
@@ -130,13 +145,17 @@ export const PRICING_TIERS = [
     internalMonthlyRange: '$750 to $2,000+/mo',
     features: [
       'Full AI booking system',
-      'Website chat + WhatsApp automation',
+      'Website chat and WhatsApp automation',
       'Lead dashboard',
-      'Client onboarding flow',
+      'Client intake flow',
       'Admin notifications',
       'Follow-up automation',
-      'Analytics / reporting',
+    ],
+    monthlyIncludes: [
+      'Monthly optimization',
+      'Analytics and reporting',
       'Priority support',
+      'Monthly strategy review',
     ],
     cta: 'Talk to Sales',
     featured: false,
@@ -169,7 +188,7 @@ export const AGENT_DEFINITIONS = [
   {
     id: 'sales',
     name: 'Sales Offer Builder',
-    description: 'Builds personalized proposals and system packages for qualified prospects.',
+    description: 'Builds personalized proposals: recommended package, setup fee, monthly retainer, setup vs monthly deliverables, and next step.',
   },
   {
     id: 'content',

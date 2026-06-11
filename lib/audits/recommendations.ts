@@ -1,7 +1,11 @@
 // ── Audit recommendation engine ────────────────────────────────────
-// Maps audit findings to the right Helios AI package.
+// Maps audit findings to the right Helios AI package under the
+// setup fee + monthly retainer model (Audit → Setup → Monthly Retainer).
+// Language rule: never claim guaranteed revenue or assert lost leads
+// without evidence — use "may", "could", "should be verified".
 
 import type { AuditInput, AuditScores } from './scoring'
+import { PACKAGES, RETAINER_EXPLANATION } from '@/lib/billing/packages'
 
 export interface AuditRecommendation {
   plan:             'starter' | 'pro' | 'scale'
@@ -9,15 +13,19 @@ export interface AuditRecommendation {
   setupFee:         string
   monthlyFee:       string
   reason:           string
-  includedFeatures: string[]
+  includedFeatures: string[]   // legacy combined list — kept for stored audits
   nextSteps:        string[]
+  // Setup-vs-retainer split (optional: audits stored before this model
+  // reconstruct without them; the report falls back to includedFeatures).
+  setupIncludes?:   string[]
+  monthlyIncludes?: string[]
 }
 
-// Public flat pricing (from Phase 25)
+// Public flat pricing — sourced from the canonical package definitions.
 const PLAN_PRICING: Record<string, { setup: string; monthly: string }> = {
-  starter: { setup: '$997 setup', monthly: '$149/mo' },
-  pro:     { setup: '$2,500 setup', monthly: '$399/mo' },
-  scale:   { setup: '$5,000 setup', monthly: '$999/mo' },
+  starter: { setup: `${PACKAGES.starter.setupFeeLabel} setup`, monthly: PACKAGES.starter.monthlyFeeLabel },
+  pro:     { setup: `${PACKAGES.pro.setupFeeLabel} setup`,     monthly: PACKAGES.pro.monthlyFeeLabel },
+  scale:   { setup: `${PACKAGES.scale.setupFeeLabel} setup`,   monthly: PACKAGES.scale.monthlyFeeLabel },
 }
 
 export function determineRecommendation(
@@ -61,8 +69,8 @@ function buildRec(
   const configs: Record<typeof plan, Omit<AuditRecommendation, 'setupFee' | 'monthlyFee'>> = {
     starter: {
       plan,
-      displayName: 'Starter',
-      reason:      'Your business would benefit from a website AI chat assistant that answers FAQs, captures leads, and notifies you instantly when a new inquiry comes in. This is the fastest way to stop losing customers to slow replies.',
+      displayName: 'Starter Lead Response System',
+      reason:      'Your business may be missing inquiries when nobody can reply right away. A simple lead-response system answers FAQs, captures customer details, and notifies you instantly when a new inquiry comes in — so slow replies could stop costing you bookings.',
       includedFeatures: [
         'Website AI chat assistant',
         'FAQ answering',
@@ -71,6 +79,8 @@ function buildRec(
         'Basic dashboard',
         '1 revision round',
       ],
+      setupIncludes:   PACKAGES.starter.setupIncludes,
+      monthlyIncludes: PACKAGES.starter.monthlyIncludes,
       nextSteps: [
         'Complete the onboarding intake at /dashboard/onboarding',
         'Add services and FAQs to /dashboard/services',
@@ -82,7 +92,7 @@ function buildRec(
     pro: {
       plan,
       displayName: 'Booking OS',
-      reason:      'Your business needs more than just a chat widget. Booking OS gives you a full AI assistant on both website and WhatsApp that can reply instantly, handle FAQs, capture leads, and accept booking requests — with an owner dashboard to manage everything.',
+      reason:      'Your business appears to rely on appointments, so the gap between "inquiry" and "booked" matters most. Booking OS gives you an AI assistant on both website and WhatsApp that replies instantly, handles FAQs, captures leads, and accepts booking requests — with an owner dashboard to manage everything.',
       includedFeatures: [
         'Website AI chat assistant',
         'WhatsApp assistant',
@@ -93,6 +103,8 @@ function buildRec(
         'Inbox with human handoff',
         'Monthly optimization',
       ],
+      setupIncludes:   PACKAGES.pro.setupIncludes,
+      monthlyIncludes: PACKAGES.pro.monthlyIncludes,
       nextSteps: [
         'Complete the onboarding intake at /dashboard/onboarding',
         'Connect Cal.com at /dashboard/calcom',
@@ -116,6 +128,8 @@ function buildRec(
         'Analytics / reporting',
         'Priority support',
       ],
+      setupIncludes:   PACKAGES.scale.setupIncludes,
+      monthlyIncludes: PACKAGES.scale.monthlyIncludes,
       nextSteps: [
         'Complete onboarding intake with full team and location details',
         'Connect all booking calendars via Cal.com',
@@ -200,14 +214,25 @@ export function generateMarkdownReport(params: {
   lines.push(``)
   lines.push(`## Recommended Package: ${recommendation.displayName}`)
   lines.push(``)
-  lines.push(`**Setup:** ${recommendation.setupFee}  |  **Monthly:** ${recommendation.monthlyFee}`)
+  lines.push(`**Setup fee:** ${recommendation.setupFee}  |  **Monthly retainer:** ${recommendation.monthlyFee}`)
   lines.push(``)
   lines.push(recommendation.reason)
   lines.push(``)
-  lines.push(`**What's included:**`)
-  for (const f of recommendation.includedFeatures) {
-    lines.push(`- ${f}`)
+  if (recommendation.setupIncludes?.length && recommendation.monthlyIncludes?.length) {
+    lines.push(`**What the setup includes (one-time build):**`)
+    for (const f of recommendation.setupIncludes) lines.push(`- ${f}`)
+    lines.push(``)
+    lines.push(`**What the monthly retainer covers (active ongoing work):**`)
+    for (const f of recommendation.monthlyIncludes) lines.push(`- ${f}`)
+  } else {
+    // Stored audits from before the setup/retainer split.
+    lines.push(`**What's included:**`)
+    for (const f of recommendation.includedFeatures) lines.push(`- ${f}`)
   }
+  lines.push(``)
+  lines.push(`**Why the monthly retainer matters:**`)
+  lines.push(``)
+  lines.push(RETAINER_EXPLANATION)
   lines.push(``)
   lines.push(`**Next steps:**`)
   for (const s of recommendation.nextSteps) {

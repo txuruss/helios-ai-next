@@ -92,6 +92,33 @@ After the change:
 
 ---
 
+## Sales Offer Builder — proposal draft
+
+```
+You are drafting a Helios AI client proposal. Read docs/obsidian-brain/02-offers-and-pricing.md and docs/templates/proposal-template.md first. Package data source of truth: lib/billing/packages.ts (or call buildProposalMarkdown in lib/sales/proposal.ts).
+
+Business: [name, niche, location]
+Audit findings: [what was actually observed — no invented claims]
+Recommended package: [starter | pro | scale] because [reason]
+
+The proposal MUST include, in this order:
+1. Business problem (careful language: "may be losing inquiries", "should be verified" — never unverified claims, never guaranteed revenue)
+2. Recommended system + primary outcome
+3. Package recommendation with BOTH numbers together: setup fee + monthly retainer
+4. Setup deliverables (what the one-time build includes)
+5. Monthly deliverables (what the retainer actively covers — never "maintenance only")
+6. Why the retainer matters — use this exact paragraph:
+   "The setup fee covers building the system. The monthly retainer covers keeping it useful. Each month, we monitor the system, update FAQs, review the lead flow, improve responses, fix issues, and help capture more customer inquiries from your website, WhatsApp, or booking channels."
+7. Timeline
+8. What we need from the client
+9. Next step
+10. Optional: founder-rate note for early clients
+
+Output: clean Markdown only. No HTML. Keep it client-ready and practical.
+```
+
+---
+
 ## Mission Control feature build
 
 ```

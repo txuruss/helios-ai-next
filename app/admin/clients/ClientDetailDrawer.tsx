@@ -13,7 +13,7 @@ import {
 import { createClient as createBrowserSupabase } from '@/lib/supabase/client'
 import type {
   AdminClientDetail, ClientNote, ClientPaymentEvent,
-  PaymentStatus, AdminClientStatus, OnboardingStage, NoteType,
+  PaymentStatus, AdminClientStatus, OnboardingStage, NoteType, RetainerStatus,
 } from '@/lib/data/admin-clients'
 import type { ClientTask, TaskStatus, TaskPriority, TaskCategory } from '@/lib/data/admin-client-tasks'
 import type { ClientFile } from '@/lib/data/admin-client-files'
@@ -24,7 +24,7 @@ import {
 } from '@/lib/actions/admin-client-files'
 import {
   loadClientDetail, loadClientNotes, loadClientPaymentEvents,
-  addClientNote, updateClientOnboarding,
+  addClientNote, updateClientOnboarding, updateClientRetainer,
 } from '@/lib/actions/admin-clients'
 import {
   loadClientTasks, seedDefaultClientTasks, createClientTask,
@@ -56,6 +56,15 @@ const STATUS_COLORS: Record<AdminClientStatus, string> = {
   active: '#22d093', onboarding: '#3b9eff', paused: '#ffae3c', churned: '#ff8a7a',
 }
 const PLAN_LABELS: Record<string, string> = { starter: 'Starter', pro: 'Booking OS', scale: 'Ops Center', free: 'Free' }
+
+// Monthly retainer state (distinct from the client lifecycle status).
+const RETAINER_COLORS: Record<RetainerStatus, string> = {
+  active: '#22d093', paused: '#ffae3c', cancelled: '#6a6a6e', needs_review: '#ff8a7a',
+}
+const RETAINER_LABELS: Record<RetainerStatus, string> = {
+  active: 'Active', paused: 'Paused', cancelled: 'Cancelled', needs_review: 'Needs Review',
+}
+const RETAINER_OPTIONS: RetainerStatus[] = ['active', 'paused', 'cancelled', 'needs_review']
 
 const ONBOARDING_STEPS: { value: OnboardingStage; label: string; next: string }[] = [
   { value: 'not_started',       label: 'Not started',       next: 'Send the intake form to the client.' },
@@ -347,20 +356,109 @@ function OverviewTab({
         <Field label="Source lead"  value={detail.source_lead_id} mono />
       </Section>
 
-      <Section title="Revenue & Plan">
-        <Field label="Plan"        value={PLAN_LABELS[detail.plan] ?? detail.plan} />
-        <Field label="Setup fee"   value={`$${detail.setup_fee.toLocaleString()}`} />
-        <Field label="Monthly fee" value={`$${detail.monthly_fee.toLocaleString()}/mo`} />
+      <Section title="Package & Revenue">
+        <Field label="Package"          value={PLAN_LABELS[detail.plan] ?? detail.plan} />
+        <Field label="Setup fee"        value={`$${detail.setup_fee.toLocaleString()} one-time`} />
+        <Field label="Monthly retainer" value={`$${detail.monthly_fee.toLocaleString()}/mo`} />
         <Field label="Est. MRR contribution" value={`$${mrr.toLocaleString()}/mo`} />
         <p className="text-[10.5px] text-[#6a6a6e] mt-1">
           Estimated — based on stored fees. Not verified by PayPal.
         </p>
       </Section>
 
+      <RetainerSection detail={detail} tasks={tasks} onChanged={onChanged} />
+
       <Section title="Activity Timeline">
         <Timeline detail={detail} notes={notes} events={events} />
       </Section>
     </div>
+  )
+}
+
+// ── Monthly Retainer (setup fee + monthly retainer model) ──────────
+// Shows and edits the retainer state, next monthly review date, and last
+// optimization-report date. Open support items come from the task list;
+// suggested optimization opportunities are the Client Suggestions above.
+function RetainerSection({
+  detail, tasks, onChanged,
+}: {
+  detail: AdminClientDetail; tasks: ClientTask[]; onChanged: () => void
+}) {
+  const [editing, setEditing]   = useState(false)
+  const [status, setStatus]     = useState<RetainerStatus>(detail.retainer_status)
+  const [nextReview, setNextReview] = useState(detail.next_review_date ?? '')
+  const [lastReport, setLastReport] = useState(detail.last_report_date ?? '')
+  const [err, setErr]           = useState<string | null>(null)
+  const [saving, startSave]     = useTransition()
+
+  const openSupport = tasks.filter((t) => t.category === 'support' && t.status !== 'done').length
+  const today = new Date().toISOString().slice(0, 10)
+  const reviewDue = detail.retainer_status === 'active' && (!detail.next_review_date || detail.next_review_date <= today)
+
+  function save() {
+    setErr(null)
+    startSave(async () => {
+      const r = await updateClientRetainer(detail.id, {
+        retainer_status: status,
+        next_review_date: nextReview || null,
+        last_report_date: lastReport || null,
+      })
+      if (r.ok) { setEditing(false); onChanged() }
+      else setErr(r.error ?? 'Could not update retainer tracking.')
+    })
+  }
+
+  const inputCls = 'w-full px-3 py-2 rounded-xl border border-white/[0.08] bg-[#0f1012] text-[13px] text-white focus:outline-none focus:border-[#ff7a18]/40 transition-all'
+
+  return (
+    <Section title="Monthly Retainer"
+      action={
+        <button type="button" onClick={() => { setErr(null); setEditing((v) => !v) }}
+          className="text-[11.5px] font-medium px-2.5 py-1 rounded-lg bg-white/[0.04] border border-white/[0.10] text-[#cfd3dc]
+                     hover:bg-white/[0.08] hover:text-white transition-all">
+          {editing ? 'Cancel' : 'Update'}
+        </button>
+      }>
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="text-[11px] text-[#6a6a6e]">Retainer:</span>
+        <Pill color={RETAINER_COLORS[detail.retainer_status]} label={RETAINER_LABELS[detail.retainer_status]} />
+        {reviewDue && <Pill color="#ffae3c" label="Monthly review due" />}
+      </div>
+      <Field label="Next monthly review" value={detail.next_review_date ? new Date(detail.next_review_date).toLocaleDateString() : 'Not scheduled'} />
+      <Field label="Last monthly report" value={detail.last_report_date ? new Date(detail.last_report_date).toLocaleDateString() : 'None yet'} />
+      <Field label="Open support items"  value={String(openSupport)} />
+      <p className="text-[10.5px] text-[#6a6a6e]">
+        The retainer covers monitoring, FAQ updates, lead-flow review, response improvements, and the monthly
+        optimization report (docs/templates). Optimization opportunities appear under Client Suggestions.
+      </p>
+
+      {editing && (
+        <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] p-3.5 flex flex-col gap-3 mt-1">
+          <div>
+            <label className="text-[11px] font-medium text-[#9a9a9d] mb-1 block">Retainer status</label>
+            <select value={status} onChange={(e) => setStatus(e.target.value as RetainerStatus)} className={`${inputCls} cursor-pointer`}>
+              {RETAINER_OPTIONS.map((s) => <option key={s} value={s}>{RETAINER_LABELS[s]}</option>)}
+            </select>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="text-[11px] font-medium text-[#9a9a9d] mb-1 block">Next review date</label>
+              <input type="date" value={nextReview} onChange={(e) => setNextReview(e.target.value)} className={inputCls} />
+            </div>
+            <div>
+              <label className="text-[11px] font-medium text-[#9a9a9d] mb-1 block">Last report date</label>
+              <input type="date" value={lastReport} onChange={(e) => setLastReport(e.target.value)} className={inputCls} />
+            </div>
+          </div>
+          {err && <p className="text-[12px] text-[#ff8a7a]">{err}</p>}
+          <button type="button" onClick={save} disabled={saving}
+            className="self-start text-[12.5px] font-medium px-3.5 py-1.5 rounded-lg bg-[#ff7a18]/[0.14] border border-[#ff7a18]/40
+                       text-[#ffae3c] hover:bg-[#ff7a18]/25 hover:text-white transition-all disabled:opacity-50">
+            {saving ? 'Saving…' : 'Save retainer tracking'}
+          </button>
+        </div>
+      )}
+    </Section>
   )
 }
 

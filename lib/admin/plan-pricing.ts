@@ -20,9 +20,11 @@ export interface PlanFees {
   est_value:   number   // default lead estimated_value (first-year-ish anchor)
 }
 
-// Defaults sourced from PricingSection public pricing + internal ranges.
+// Defaults match the published setup + monthly retainer model
+// (lib/billing/packages.ts): $997 / $2,500 / $5,000 setup,
+// $149 / $399 / $999 monthly.
 export const PLAN_FEES: Record<AdminPlan, PlanFees> = {
-  starter: { label: 'Starter',    setup_fee:  497, monthly_fee: 149, est_value: 1000 },
+  starter: { label: 'Starter',    setup_fee:  997, monthly_fee: 149, est_value: 1000 },
   pro:     { label: 'Booking OS', setup_fee: 2500, monthly_fee: 399, est_value: 2500 },
   scale:   { label: 'Ops Center', setup_fee: 5000, monthly_fee: 999, est_value: 5000 },
 }

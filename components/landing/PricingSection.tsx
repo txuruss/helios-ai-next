@@ -73,10 +73,10 @@ export default function PricingSection() {
                 </div>
               )}
 
-              {/* Features */}
+              {/* Setup deliverables */}
               <div>
                 <div className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-[#6a6a6e] mb-3">
-                  Includes
+                  Setup includes
                 </div>
                 <ul className="flex flex-col gap-2.5 flex-1">
                   {tier.features.map((f) => (
@@ -89,6 +89,25 @@ export default function PricingSection() {
                   ))}
                 </ul>
               </div>
+
+              {/* Monthly retainer deliverables — active ongoing work, not maintenance */}
+              {'monthlyIncludes' in tier && (
+                <div>
+                  <div className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-[#ffae3c] mb-3">
+                    Every month
+                  </div>
+                  <ul className="flex flex-col gap-2.5">
+                    {tier.monthlyIncludes.map((f) => (
+                      <li key={f} className="flex gap-2.5 items-start text-[13px] text-[#cfd3dc]">
+                        <span className="w-3.5 h-3.5 rounded-full border border-[#ffae3c]/40
+                                          bg-[radial-gradient(circle,#ffae3c_30%,transparent_35%)]
+                                          bg-[#ffae3c]/10 shrink-0 mt-0.5" />
+                        {f}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
 
               {/* Outcome */}
               <div className="p-3.5 rounded-xl bg-[#ff7a18]/[0.08] border border-[#ff7a18]/20 flex flex-col gap-1 mt-auto">
@@ -111,7 +130,8 @@ export default function PricingSection() {
         </div>
 
         <p className="text-center mt-7 text-[13px] text-[#6a6a6e]">
-          Flat public pricing keeps setup simple. Custom requirements, extra locations, advanced workflows, or complex integrations may require add-ons.
+          The setup fee builds your system. The monthly retainer keeps it useful — monitoring, FAQ updates,
+          lead-flow reviews, response improvements, and monthly reporting. Custom requirements or extra locations may require add-ons.
         </p>
         <div className="mt-4 max-w-[640px] mx-auto flex items-start gap-2.5 p-4 rounded-xl
                         bg-white/[0.02] border border-white/[0.06] text-[13px] text-[#9a9a9d]">

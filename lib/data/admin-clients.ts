@@ -31,6 +31,13 @@ export type PaymentMethod = 'paypal' | 'bank_transfer' | 'cash' | 'other'
 export type OnboardingStage =
   | 'not_started' | 'intake_needed' | 'setup_in_progress' | 'testing' | 'live' | 'complete'
 
+// Monthly retainer state (migration 20260611120000). Distinct from the
+// client lifecycle status: a client can be lifecycle-active while their
+// retainer needs review. 'active' is ONLY ever set explicitly by the
+// founder — legacy/unknown rows default to 'needs_review' so no client is
+// silently counted as an active retainer.
+export type RetainerStatus = 'active' | 'paused' | 'cancelled' | 'needs_review'
+
 export type NoteType = 'general' | 'payment' | 'onboarding' | 'support' | 'retention'
 
 // Full client record for the detail drawer (superset of AdminClientRow).
@@ -63,6 +70,10 @@ export interface AdminClientDetail {
   onboarding_notes:  string | null
   onboarding_completed_at: string | null
   legacy_notes:      string | null   // admin_clients.notes free-text field
+  // Retainer tracking (migration 20260611120000; defaults when missing).
+  retainer_status:   RetainerStatus
+  next_review_date:  string | null   // YYYY-MM-DD
+  last_report_date:  string | null   // YYYY-MM-DD
 }
 
 export interface ClientNote {
@@ -368,7 +379,126 @@ export async function getAdminClientPaymentHealth(): Promise<AdminClientPaymentH
   }
 }
 
+// ── Retainer health (Mission Control) ──────────────────────────────
+//
+// Rollup for the setup fee + monthly retainer model. Computed from real
+// admin_clients rows (+ open support tasks). Resilient: when migration
+// 20260611120000 is not applied yet, falls back to defaults and flags it.
+
+export interface RetainerHealth {
+  activeRetainers:  number                  // lifecycle active + retainer active
+  byPackage:        { starter: number; pro: number; scale: number }
+  needsReview:      number                  // flagged needs_review, or review due/never done
+  upcomingReports:  number                  // next_review_date within the next 14 days
+  churnRisk:        number                  // paused/cancelled retainers or overdue payments
+  openSupportTasks: number                  // admin_client_tasks: category support, not done
+  migrationNeeded:  boolean                 // retainer columns missing
+  error:            string | null
+}
+
+export async function getRetainerHealth(): Promise<RetainerHealth> {
+  await requireAdmin({ path: '/admin/mission-control' })
+
+  const empty: RetainerHealth = {
+    activeRetainers: 0, byPackage: { starter: 0, pro: 0, scale: 0 },
+    needsReview: 0, upcomingReports: 0, churnRisk: 0, openSupportTasks: 0,
+    migrationNeeded: false, error: null,
+  }
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) return empty
+
+  try {
+    const db = createServiceRoleClient()
+
+    const FULL = 'status, plan, monthly_fee, payment_status, retainer_status, next_review_date, last_report_date'
+    const BASE = 'status, plan, monthly_fee, payment_status'
+
+    let migrationNeeded = false
+    let res = await db.from('admin_clients').select(FULL).neq('status', 'archived')
+    if (res.error && isMissingColumn(res.error)) {
+      migrationNeeded = true
+      res = await db.from('admin_clients').select(BASE).neq('status', 'archived')
+    }
+    if (res.error) {
+      if (isMissingTable(res.error)) return empty
+      throw res.error
+    }
+
+    const rows = (res.data ?? []) as {
+      status?: string; plan?: string; monthly_fee?: number; payment_status?: string
+      retainer_status?: string; next_review_date?: string | null; last_report_date?: string | null
+    }[]
+
+    const today  = new Date().toISOString().slice(0, 10)
+    const in14   = new Date(Date.now() + 14 * 86_400_000).toISOString().slice(0, 10)
+    const health = { ...empty, migrationNeeded }
+
+    for (const r of rows) {
+      const lifecycle  = normalizeStatus(r.status)
+      const retainer   = normalizeRetainerStatus(r.retainer_status)
+      const review     = dateStr(r.next_review_date)
+      const payment    = normalizePaymentStatus(r.payment_status)
+      const hasPackage = r.plan === 'starter' || r.plan === 'pro' || r.plan === 'scale'
+      // An ACTIVE retainer requires ALL of: a known package, a monthly fee,
+      // an active lifecycle, and an explicitly-confirmed retainer_status.
+      // Legacy rows default to needs_review, so nothing is counted by accident.
+      const isActiveRetainer =
+        hasPackage &&
+        lifecycle === 'active' &&
+        (typeof r.monthly_fee === 'number' ? r.monthly_fee : 0) > 0 &&
+        retainer === 'active'
+
+      if (isActiveRetainer) {
+        health.activeRetainers += 1
+        if (r.plan === 'starter') health.byPackage.starter += 1
+        else if (r.plan === 'pro') health.byPackage.pro += 1
+        else if (r.plan === 'scale') health.byPackage.scale += 1
+      }
+
+      // Needs monthly review: explicitly flagged (incl. unconfirmed legacy
+      // rows), or a confirmed retainer whose review is due / never scheduled.
+      if (lifecycle !== 'churned') {
+        if (retainer === 'needs_review') health.needsReview += 1
+        else if (isActiveRetainer && (review === null || review <= today)) health.needsReview += 1
+      }
+
+      // Upcoming optimization reports (next 14 days, confirmed retainers only).
+      if (isActiveRetainer && review !== null && review > today && review <= in14) {
+        health.upcomingReports += 1
+      }
+
+      // Churn risk: paused/cancelled retainer on a non-churned client, a
+      // paused lifecycle, or an overdue payment.
+      const risky =
+        (lifecycle !== 'churned' && (retainer === 'paused' || retainer === 'cancelled')) ||
+        lifecycle === 'paused' ||
+        payment === 'overdue'
+      if (risky) health.churnRisk += 1
+    }
+
+    // Open support tasks across all clients (best-effort — table optional).
+    try {
+      const tasks = await db
+        .from('admin_client_tasks')
+        .select('status, category')
+        .eq('category', 'support')
+        .neq('status', 'done')
+      if (!tasks.error) health.openSupportTasks = (tasks.data ?? []).length
+    } catch { /* tasks table optional */ }
+
+    return health
+  } catch (err) {
+    console.error('[getRetainerHealth]', err instanceof Error ? err.message : err)
+    return { ...empty, error: 'Retainer health unavailable.' }
+  }
+}
+
 // ── Detail drawer reads ────────────────────────────────────────────
+
+function normalizeRetainerStatus(raw: unknown): RetainerStatus {
+  if (raw === 'active' || raw === 'paused' || raw === 'cancelled' || raw === 'needs_review') return raw
+  // Missing column (pre-migration) or unknown value → never assume Active.
+  return 'needs_review'
+}
 
 function normalizeOnboarding(raw: unknown): OnboardingStage {
   if (
@@ -441,6 +571,9 @@ export async function getClientDetail(clientId: string): Promise<AdminClientDeta
       onboarding_notes:  str(r.onboarding_notes),
       onboarding_completed_at: str(r.onboarding_completed_at),
       legacy_notes:      str(r.notes),
+      retainer_status:   normalizeRetainerStatus(r.retainer_status),
+      next_review_date:  dateStr(r.next_review_date),
+      last_report_date:  dateStr(r.last_report_date),
     }
   } catch (err) {
     console.error('[getClientDetail]', err instanceof Error ? err.message : err)

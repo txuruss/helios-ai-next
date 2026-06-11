@@ -5,7 +5,7 @@ import {
   getLatestAdminAuditSubmissions,
 } from '@/lib/data/admin-audits'
 import { getAdminMissionControlSummary } from '@/lib/data/admin-mission-control'
-import { getAdminClientRevenue, getAdminClientPaymentHealth } from '@/lib/data/admin-clients'
+import { getAdminClientRevenue, getAdminClientPaymentHealth, getRetainerHealth } from '@/lib/data/admin-clients'
 import { getOnboardingAlertSummary } from '@/lib/data/admin-client-tasks'
 import { getTopClientSuggestions } from '@/lib/data/admin-client-suggestions'
 import { getOutreachSummary } from '@/lib/data/admin-outreach'
@@ -63,7 +63,7 @@ function OutreachStat({ label, value, color }: { label: string; value: number; c
 export default async function AdminMissionControlPage() {
   const session = await requireAdmin({ path: '/admin/mission-control' })
 
-  const [auditMetrics, latestAudits, summary, revenue, payments, onboarding, clientSuggestions, outreach] = await Promise.all([
+  const [auditMetrics, latestAudits, summary, revenue, payments, onboarding, clientSuggestions, outreach, retainers] = await Promise.all([
     getAdminAuditMetrics(),
     getLatestAdminAuditSubmissions(6),
     getAdminMissionControlSummary(),
@@ -72,6 +72,7 @@ export default async function AdminMissionControlPage() {
     getOnboardingAlertSummary(),
     getTopClientSuggestions(3),
     getOutreachSummary(),
+    getRetainerHealth(),
   ])
 
   const firstName      = (session.fullName ?? session.email).split(' ')[0]
@@ -348,6 +349,47 @@ export default async function AdminMissionControlPage() {
           <RevenueCard label="Proj. 12-Month"    value={fmtUSD(projected12mo)} sublabel="ARR + setup"        tone="info"    />
           <RevenueCard label="Avg / Client"      value={fmtUSD(avgMonthly)}    sublabel={`${activeClients} active`} tone="info" />
         </div>
+      </section>
+
+      {/* ── Retainer Health (setup fee + monthly retainer model) ──── */}
+      <section className="rounded-2xl border border-white/[0.08] bg-[#0f1012]/80 overflow-hidden">
+        <header className="flex items-center justify-between px-5 py-3 border-b border-white/[0.04]">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <Activity size={13} className="text-[#6a6a6e] shrink-0" />
+            <h2 className="text-[13.5px] font-semibold text-white">Retainer Health</h2>
+            <span className="text-[11px] text-[#6a6a6e] hidden sm:inline truncate">
+              Setup builds the system — the retainer keeps it improving every month
+            </span>
+          </div>
+          <Link
+            href="/admin/clients"
+            className="text-[12px] text-[#ffae3c] hover:text-white inline-flex items-center gap-1.5 transition-colors shrink-0"
+          >
+            Manage <ArrowRight size={11} />
+          </Link>
+        </header>
+        {retainers.migrationNeeded ? (
+          <div className="px-5 py-4 text-[12.5px] text-[#ffae3c]">
+            Retainer tracking is unavailable until migration{' '}
+            <code className="font-mono text-[11.5px]">20260611120000_add_retainer_tracking.sql</code> is applied in Supabase.
+          </div>
+        ) : retainers.error ? (
+          <div className="px-5 py-4 text-[12.5px] text-[#ff8a7a]">{retainers.error}</div>
+        ) : (
+          <div className="px-4 py-3.5 grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5">
+            <RevenueCard label="Active Retainers"   value={String(retainers.activeRetainers)} sublabel="Paying monthly"       tone="orange" />
+            <RevenueCard
+              label="By Package"
+              value={`${retainers.byPackage.starter}·${retainers.byPackage.pro}·${retainers.byPackage.scale}`}
+              sublabel="Starter · OS · Ops"
+              tone="neutral"
+            />
+            <RevenueCard label="Needs Review"       value={String(retainers.needsReview)}      sublabel="Monthly review due"   tone={retainers.needsReview > 0 ? 'orange' : 'neutral'} />
+            <RevenueCard label="Upcoming Reports"   value={String(retainers.upcomingReports)}  sublabel="Next 14 days"         tone="info" />
+            <RevenueCard label="Churn Risk"         value={String(retainers.churnRisk)}        sublabel="Paused / overdue"     tone="neutral" />
+            <RevenueCard label="Support Tasks"      value={String(retainers.openSupportTasks)} sublabel="Open this month"      tone="neutral" />
+          </div>
+        )}
       </section>
 
       {/* ── Payment Tracking (manual — not PayPal-verified) ───────── */}

@@ -9,6 +9,7 @@ import { useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ExternalLink, RotateCcw, Archive, ArrowRight, Loader2 } from 'lucide-react'
 import type { SavedResearchLead } from '@/lib/data/admin-research'
+import { retainerFitForLead } from '@/lib/research/leadScoring'
 import ExpandableActionPanel, { PanelActionButton } from '@/components/admin/ui/ExpandableActionPanel'
 import CompactDataList, { type DataItem } from '@/components/admin/ui/CompactDataList'
 import LeadScoreBadge from './LeadScoreBadge'
@@ -74,6 +75,12 @@ export default function SavedLeadDetailPanel({ lead, busy, onClose, onStatusChan
   const router = useRouter()
   const [confirmArchive, setConfirmArchive] = useState(false)
   const status = LEAD_STATUS_META[lead.status] ?? { label: lead.status, color: '#6a6a6e' }
+  // Retainer fit — derived from the same rule set the scorer uses, so saved
+  // leads show a realistic package + retainer recommendation (no schema).
+  const fit = retainerFitForLead({
+    leadScore: lead.lead_score, rating: lead.rating,
+    reviewCount: lead.review_count, website: lead.website,
+  })
 
   function pick(next: LeadStatusAction) {
     if (busy || next === lead.status) return
@@ -100,6 +107,8 @@ export default function SavedLeadDetailPanel({ lead, busy, onClose, onStatusChan
     { label: 'Saved at',   value: fmtDateTime(lead.saved_at) },
     { label: 'Saved by',   value: savedByLabel(lead) },
     { label: 'Source',     value: 'Research Agent · Google Places' },
+    { label: 'Package Fit',  value: fit.goodFit ? fit.packageLabel : `${fit.packageLabel} (verify fit on a call)` },
+    { label: 'Retainer Fit', value: `${fit.tierLabel} retainer — ${fit.reason}`, full: true },
     { label: 'Problem Found',        value: lead.problem_found ?? '—', full: true },
     { label: 'Outreach Angle',       value: <CopyValue value={lead.outreach_angle} />, full: true },
     { label: 'Recommended First DM', value: <CopyValue value={lead.first_dm} />, full: true },

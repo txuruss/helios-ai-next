@@ -61,7 +61,7 @@ export const PLANS: Record<PlanId, Plan> = {
     monthlyRange:         '$149/mo',                // flat public price
     internalSetupRange:   '$497 to $1,500',         // internal quoting reference only
     internalMonthlyRange: '$99 to $299/mo',         // internal quoting reference only
-    bestFor:              'Simple website chat, FAQs, lead capture',
+    bestFor:              'Small salons, barbershops, and solo service providers',
     recommended:          false,
     cta:                  'Start with Starter',
     stripe_price_env:     'NEXT_PUBLIC_STRIPE_STARTER_PRICE_ID',
@@ -95,7 +95,7 @@ export const PLANS: Record<PlanId, Plan> = {
     monthlyRange:         '$399/mo',                // flat public price
     internalSetupRange:   '$1,500 to $3,500',       // internal quoting reference only
     internalMonthlyRange: '$299 to $750/mo',        // internal quoting reference only
-    bestFor:              'Website chat, WhatsApp, booking flow, notifications',
+    bestFor:              'Spas, clinics, gyms, and appointment-based businesses',
     recommended:          true,
     cta:                  'Upgrade to Booking OS',
     stripe_price_env:     'NEXT_PUBLIC_STRIPE_PRO_PRICE_ID',
@@ -132,7 +132,7 @@ export const PLANS: Record<PlanId, Plan> = {
     monthlyRange:         '$999/mo',                // flat public price
     internalSetupRange:   '$3,500 to $8,000+',      // internal quoting reference only
     internalMonthlyRange: '$750 to $2,000+/mo',     // internal quoting reference only
-    bestFor:              'Multi-location, dashboard, automation workflows, reporting',
+    bestFor:              'Larger service businesses and multi-service teams',
     recommended:          false,
     cta:                  'Upgrade to Ops Center',
     stripe_price_env:     'NEXT_PUBLIC_STRIPE_SCALE_PRICE_ID',

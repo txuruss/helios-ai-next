@@ -4,6 +4,23 @@ See also: [[02-offers-and-pricing]] | [[04-agent-workflows]] | [[03-mission-cont
 
 ---
 
+## Core delivery lifecycle (setup fee + monthly retainer)
+
+Every client follows the same commercial flow:
+
+```
+Audit → Proposal → Setup → Launch → Monthly Retainer → Monthly Optimization Report
+```
+
+- **Audit** — diagnose how inquiries and bookings are handled today (careful language: "may be losing inquiries", never unverified claims).
+- **Proposal** — Sales Offer Builder output using `docs/templates/proposal-template.md`: recommended package, setup fee, monthly retainer, setup vs monthly deliverables, next step.
+- **Setup** — the one-time build, covered by the setup fee (Phases 6–11 below).
+- **Launch** — QA + handoff (Phase 12).
+- **Monthly Retainer** — active ongoing work, never passive: monitoring, FAQ updates, lead-flow review, response improvements, support (see "Monthly retainer cycle" below).
+- **Monthly Optimization Report** — `docs/templates/monthly-optimization-report.md`, delivered every month; the `last_report_date` / `next_review_date` fields in admin_clients track the cycle.
+
+---
+
 ## Delivery phases
 
 ### Phase 1 — Lead Captured
@@ -71,11 +88,26 @@ See also: [[02-offers-and-pricing]] | [[04-agent-workflows]] | [[03-mission-cont
 - Client confirms all systems are working
 - Handoff signed off by team member
 
-### Phase 13 — Monthly Optimization
+### Phase 13 — Monthly Retainer (ongoing)
 - Monthly review call or async check-in
 - Performance metrics reviewed (leads captured, bookings made, response rate)
 - Adjustments made to AI widget, booking flow, or notifications
 - Optimization notes logged in client workspace
+- Monthly optimization report delivered; `last_report_date` and `next_review_date` updated on the client record
+
+---
+
+## Monthly retainer cycle
+
+The retainer is the business model — repeat this loop every month per client, using the templates in `docs/templates/`:
+
+1. **Monthly system check** — `monthly-system-check.md`: verify chat, booking flow, notifications, and dashboard all work.
+2. **FAQ update checklist** — `faq-update-checklist.md`: confirm services, prices, hours, and FAQ answers are current.
+3. **Lead-flow review** — `lead-flow-review.md`: review inquiries, response quality, and drop-off points.
+4. **Monthly optimization report** — `monthly-optimization-report.md`: send to the client; update `last_report_date` and set the next `next_review_date`.
+5. **Retainer check-in** — `retainer-renewal-checkin.md`: short message confirming value delivered and what's next.
+
+Tracking lives in Mission Control (Retainer Health panel) and the client drawer (Monthly Retainer section): retainer status (Active / Paused / Cancelled / Needs Review), next review date, last report date, open support items.
 
 ---
 

@@ -34,6 +34,11 @@ export interface ScoredLead extends PlaceResult {
   outreachAngle:    string
   firstDm:          string
   coldEmailOpening: string
+  // Retainer fit (setup fee + monthly retainer model). Rule-based and
+  // deliberately conservative — see retainerFitForLead().
+  recommendedPackage: 'starter' | 'pro' | 'scale'
+  retainerTier:       'light' | 'standard' | 'advanced'
+  retainerReason:     string
 }
 
 // Leads at or above this score are considered "qualified" (auto-save +
@@ -112,6 +117,77 @@ export function scoreBand(score: number): ScoreBand {
   return { label: 'Weak fit', color: '#6a6a6e' }
 }
 
+// ── Retainer fit (setup fee + monthly retainer model) ──────────────
+//
+// Rule-based, deliberately CONSERVATIVE recommendation for which package
+// is realistic and how heavy the monthly retainer should be. We never
+// overpitch small businesses — a solo provider gets a light retainer
+// suggestion, not Ops Center. All wording uses careful language ("may",
+// "could", "should be verified") because this is derived from public
+// listing data only. Works from saved-lead fields too, so the Saved Leads
+// detail view can derive the same answer without a schema change.
+
+export interface RetainerFitInput {
+  leadScore:   number | null
+  rating:      number | null
+  reviewCount: number | null
+  website:     string | null
+}
+
+export interface RetainerFit {
+  goodFit:            boolean
+  recommendedPackage: 'starter' | 'pro' | 'scale'
+  packageLabel:       string
+  retainerTier:       'light' | 'standard' | 'advanced'
+  tierLabel:          string
+  reason:             string
+}
+
+const PACKAGE_LABELS = { starter: 'Starter Lead Response System', pro: 'Booking OS', scale: 'Ops Center' } as const
+const TIER_LABELS    = { light: 'Light', standard: 'Standard', advanced: 'Advanced' } as const
+
+export function retainerFitForLead(input: RetainerFitInput): RetainerFit {
+  const score   = input.leadScore ?? 0
+  const reviews = input.reviewCount ?? 0
+  const hasSite = !!input.website
+
+  const make = (
+    pkg: RetainerFit['recommendedPackage'],
+    tier: RetainerFit['retainerTier'],
+    goodFit: boolean,
+    reason: string,
+  ): RetainerFit => ({
+    goodFit,
+    recommendedPackage: pkg,
+    packageLabel: PACKAGE_LABELS[pkg],
+    retainerTier: tier,
+    tierLabel: TIER_LABELS[tier],
+    reason,
+  })
+
+  // Weak overall fit → don't pitch a retainer from listing data alone.
+  if (score < 40) {
+    return make('starter', 'light', false,
+      'Weak fit from listing data alone — whether any ongoing retainer makes sense should be verified on a discovery call before pitching.')
+  }
+
+  // High-volume, established business → advanced retainer is realistic.
+  if (reviews >= 150 && hasSite) {
+    return make('scale', 'advanced', true,
+      `High inquiry volume is likely (${reviews} reviews), so changes to services, staff, and availability may be frequent — an advanced retainer keeps responses, FAQs, and follow-ups current across channels.`)
+  }
+
+  // Clear active demand → standard retainer on Booking OS.
+  if (reviews >= 40) {
+    return make('pro', 'standard', true,
+      `Active demand (${reviews} reviews) means missed or slow replies could cost bookings — a standard retainer covers monthly optimization, lead-flow review, and reporting.`)
+  }
+
+  // Small business → keep it realistic: light retainer, no overpitch.
+  return make('starter', 'light', true,
+    'Smaller operation — a light retainer (monitoring, one monthly update, and a lead-flow check) is usually enough; recommend upgrades only if inquiry volume grows.')
+}
+
 // ── The scorer ─────────────────────────────────────────────────────
 // Transparent, additive scoring. Disqualifiers (closed / no contact)
 // short-circuit to a low score so they never look "qualified".
@@ -147,6 +223,9 @@ export function scoreLead(place: PlaceResult, niche: string): ScoredLead {
 
   const { problemFound, outreachAngle } = deriveAngle(place, { appointment, hasWebsite, hasPhone, open })
   const display = place.name
+  const fit = retainerFitForLead({
+    leadScore: score, rating, reviewCount: reviews, website: place.website,
+  })
 
   return {
     ...place,
@@ -154,8 +233,11 @@ export function scoreLead(place: PlaceResult, niche: string): ScoredLead {
     leadScore:        score,
     problemFound,
     outreachAngle,
-    firstDm:          `Hi ${display} team — quick one: when someone messages or calls outside opening hours, who picks it up? I help local ${niche} businesses capture those missed enquiries automatically so they turn into booked appointments.`,
+    firstDm:          `Hi ${display} team — quick one: when someone messages or calls outside opening hours, who picks it up? I help local ${niche} businesses answer those enquiries automatically so they can turn into booked appointments.`,
     coldEmailOpening: `Hi ${display} — I looked you up while researching ${niche} businesses in the area. ${outreachAngle}`,
+    recommendedPackage: fit.recommendedPackage,
+    retainerTier:       fit.retainerTier,
+    retainerReason:     fit.reason,
   }
 }
 
@@ -177,7 +259,7 @@ function deriveAngle(
 
   if (!f.hasWebsite && f.hasPhone) {
     return {
-      problemFound:  'No website found — enquiries depend entirely on phone calls, so after-hours and missed calls are lost leads.',
+      problemFound:  'No website found — enquiries appear to depend on phone calls, so after-hours messages and missed calls may be going unanswered (worth verifying on a call).',
       outreachAngle: rating && rating >= 4.3
         ? `Great reputation (${rating}★ over ${reviews} reviews) but no website — an AI assistant can capture calls and DMs into booked appointments 24/7.`
         : 'With no website, a simple AI booking assistant can capture phone and social enquiries around the clock.',
@@ -186,10 +268,10 @@ function deriveAngle(
 
   if (f.hasWebsite) {
     return {
-      problemFound:  'Website exists but likely has no live chat or instant booking, so visitors who do not call drop off without converting.',
+      problemFound:  'Website exists but may have no live chat or instant booking — visitors who do not call could be dropping off without converting (should be verified).',
       outreachAngle: reviews >= 40
-        ? `Strong demand (${reviews} reviews) — adding an AI chat/booking layer would convert more of that website traffic into appointments.`
-        : 'Adding an AI chat/booking assistant to the site would convert more visitors into booked appointments.',
+        ? `Strong demand (${reviews} reviews) — adding an AI chat/booking layer could convert more of that website traffic into appointments.`
+        : 'Adding an AI chat/booking assistant to the site could help convert more visitors into booked appointments.',
     }
   }
 

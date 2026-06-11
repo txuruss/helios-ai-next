@@ -6,63 +6,86 @@ See also: [[01-brand-identity]] | [[06-client-delivery-system]] | [[00-source-of
 
 ---
 
+## The business model
+
+```
+Audit → Setup Project → Monthly Retainer
+```
+
+The **setup fee** covers building the system. The **monthly retainer** covers keeping it useful — each month we monitor the system, update FAQs, review the lead flow, improve responses, fix issues, and help capture more customer inquiries from the website, WhatsApp, or booking channels. The retainer is **active ongoing work**, never "maintenance only" and never a passive subscription.
+
+Canonical package data in code: `lib/billing/packages.ts`. Proposal generator: `lib/sales/proposal.ts` + `docs/templates/proposal-template.md`.
+
+---
+
 ## Current offer ladder
 
-### Package 1 — Starter
+### Package 1 — Starter Lead Response System ($997 setup + $149/mo)
 
-**Goal:** Stop missed inquiries. Reply to every lead 24/7.
+**Positioning:** A simple system to help local businesses stop missing customer inquiries.
 
-**What's included:**
-- Simple website AI chat widget
-- FAQ answering (trained on business info)
-- Lead capture (name, contact, enquiry type)
-- Owner email notification on new leads
-- Basic client dashboard (view leads, chat history)
+**Best for:** Small salons, barbershops, solo service providers, and small local businesses.
 
-**Who it's for:**
-- Business owners who are losing leads outside business hours
-- Businesses with no current chat or automation
-- Entry-level engagement — lowest friction to close
+**Setup includes (one-time build):**
+- Website chat or simple lead form
+- FAQ responses (trained on business info)
+- Customer detail capture
+- Owner email notification on new inquiries
+- Basic dashboard
+
+**Monthly retainer includes (light):**
+- System monitoring
+- 1 monthly update (FAQs, hours, services, or prices)
+- Lead-flow check
+- Basic support
 
 ---
 
-### Package 2 — Booking OS
+### Package 2 — Booking OS ($2,500 setup + $399/mo)
 
-**Goal:** Turn conversations into booked appointments.
+**Positioning:** A booking and lead-response system that helps turn customer messages into appointments.
 
-**What's included:**
-- Website AI chat widget
-- WhatsApp or email follow-up automation
-- Booking request flow (integrated with Cal.com or similar)
-- Lead capture with qualification questions
+**Best for:** Spas, med spas, clinics, gyms, busy salons, and appointment-based businesses.
+
+**Setup includes (one-time build):**
+- Website chat
+- WhatsApp assistant
+- Booking request flow
+- FAQ automation
+- Lead dashboard
 - Owner/team notifications
-- Basic CRM / lead dashboard
-- Monthly optimization review
+- Follow-up messages
 
-**Who it's for:**
-- Service businesses that rely on appointments (clinics, salons, trades, fitness)
-- Owners who want to automate the gap between "inquiry" and "booked"
+**Monthly retainer includes (standard):**
+- System monitoring and issue fixes
+- Monthly optimization (FAQs, responses, booking flow)
+- Lead-flow review
+- Monthly reporting on inquiries and bookings
+- Support
 
 ---
 
-### Package 3 — Ops Center
+### Package 3 — Ops Center ($5,000 setup + $999/mo)
 
-**Goal:** Manage all conversations, bookings, and operations from one system.
+**Positioning:** A full lead management and automation system for businesses that need better control over inquiries, bookings, and follow-ups.
 
-**What's included:**
-- Advanced business dashboard
+**Best for:** Larger service businesses, multi-service teams, and businesses that need stronger lead management.
+
+**Setup includes (one-time build):**
 - Full AI booking system
 - Website chat and WhatsApp automation
-- Client onboarding automation
-- Follow-up automation sequences
-- Analytics and reporting
+- Lead dashboard
+- Client intake flow
+- Admin notifications
+- Follow-up automation
+
+**Monthly retainer includes (advanced):**
+- System monitoring and issue fixes
+- Monthly optimization across all channels
+- Lead-flow review and response improvements
+- Analytics and monthly reporting
 - Priority support
 - Monthly strategy review
-
-**Who it's for:**
-- Established local businesses with higher volume
-- Owners who want a full operations layer, not just a chatbot
-- Businesses ready to invest in a full AI ops transformation
 
 ---
 
