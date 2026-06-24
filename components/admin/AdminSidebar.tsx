@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation'
 import { logout } from '@/lib/auth/actions'
 import { ADMIN_NAV_GROUPS, type AdminNavItem } from './AdminNav'
 import type { TeamRole } from '@/lib/auth/types'
+import { adminRoleLabel } from '@/lib/auth/permissions'
 import { cn } from '@/components/ui/cn'
 import {
   Compass, BarChart2, Users, Building2, Settings, LogOut, X, ClipboardList, Rocket, Megaphone, Telescope, UserCog,
@@ -26,7 +27,7 @@ interface Props {
 export default function AdminSidebar({ open, onClose, items = [], role, fullName, email }: Props) {
   const pathname = usePathname()
   const navItems = Array.isArray(items) ? items : []
-  const roleLabel = role === 'founder_admin' ? 'Founder' : role === 'outreach_agent' ? 'Outreach' : 'Team'
+  const roleLabel = adminRoleLabel(role)
 
   return (
     <>

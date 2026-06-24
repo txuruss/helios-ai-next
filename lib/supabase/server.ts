@@ -50,7 +50,8 @@ export function createServiceRoleClient() {
       'Add it to .env.local and restart the dev server.',
     )
   }
-  const { createClient: createSupabaseClient } = require('@supabase/supabase-js') // eslint-disable-line
+  // Dynamic require keeps the service-role client out of any client bundle.
+  const { createClient: createSupabaseClient } = require('@supabase/supabase-js')
   return createSupabaseClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY,

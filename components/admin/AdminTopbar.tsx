@@ -4,6 +4,7 @@ import { useState } from 'react'
 import { logout } from '@/lib/auth/actions'
 import { Menu, ChevronDown, LogOut, ShieldAlert } from 'lucide-react'
 import type { TeamSession } from '@/lib/auth/types'
+import { adminRoleLabel } from '@/lib/auth/permissions'
 
 interface Props {
   title:        string
@@ -14,6 +15,7 @@ interface Props {
 export default function AdminTopbar({ title, session, onMenuToggle }: Props) {
   const [open, setOpen] = useState(false)
 
+  const roleLabel = adminRoleLabel(session.role)
   const initials = (session.fullName ?? session.email)
     .split(' ').map((p) => p[0]).join('').slice(0, 2).toUpperCase()
 
@@ -39,7 +41,7 @@ export default function AdminTopbar({ title, session, onMenuToggle }: Props) {
         <div className="hidden sm:flex items-center gap-1.5 text-[11.5px] text-[#ffae3c]
                         px-2.5 py-1.5 rounded-full border border-[#ff7a18]/30 bg-[#ff7a18]/[0.08]">
           <ShieldAlert size={12} />
-          Founder
+          {roleLabel}
         </div>
 
         <div className="relative">
@@ -53,7 +55,7 @@ export default function AdminTopbar({ title, session, onMenuToggle }: Props) {
             </div>
             <div className="hidden sm:flex flex-col items-start leading-none">
               <span className="text-[13px] font-medium text-white">{(session.fullName ?? session.email).split(' ')[0]}</span>
-              <span className="text-[10.5px] text-[#6a6a6e]">founder admin</span>
+              <span className="text-[10.5px] text-[#6a6a6e]">{roleLabel}</span>
             </div>
             <ChevronDown size={12} className="text-[#6a6a6e]" />
           </button>

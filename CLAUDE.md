@@ -10,6 +10,30 @@ Read the Obsidian Brain source-of-truth files first:
 
 See [`docs/obsidian-brain/index.md`](docs/obsidian-brain/index.md) for the full knowledge base.
 
+**Before any work touching leads, clients, roles, auth, payments, or AI**, also read
+[`docs/security-guardrails.md`](docs/security-guardrails.md) — these are enforcement rules, not suggestions.
+
+---
+
+## Security guardrails (must follow — see docs/security-guardrails.md)
+
+- **Lead reads go through `lib/data/scoped-leads.ts`.** Any query against `research_leads`,
+  `research_runs`, `admin_outreach_leads`, `admin_clients`, saved leads, or outreach leads MUST use the
+  scoped layer (`getScopedResearchLeads`, `getScopedOutreachLeads`, `getScoped*LeadById`,
+  `getScopedLeadStats`, `assertCanAccessLead`). Per-agent isolation is enforced in app code, not RLS —
+  a direct query that forgets the ownership filter leaks every agent's leads. If a direct query is
+  unavoidable, apply `leadScopeFor()` yourself and explain why in a code comment.
+- **Founder/admin sees all; outreach agents see only their own** saved/created/assigned leads.
+- **Never rely on frontend role checks.** Re-check role server-side with a `require*` guard on every read,
+  mutation, and API route.
+- **Never expose the service-role client to client components.** `createServiceRoleClient()` is server-only;
+  no secret carries `NEXT_PUBLIC_`.
+- **No AI agent contacts an agency prospect without explicit human approval.** Draft → human approve → send.
+- **Keep agency sales leads separate from product/client leads**, and **manual agency billing separate from
+  Stripe/product subscription billing.**
+
+For reproducing or changing the Supabase schema, see [`docs/supabase-schema-management.md`](docs/supabase-schema-management.md).
+
 ---
 
 ## Non-negotiable rules

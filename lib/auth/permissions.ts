@@ -174,6 +174,24 @@ export function canAccessAdminRoute(role: TeamRole, path?: string): Authorizatio
   }
 }
 
+// Human-readable label for a team role — used by the admin sidebar AND
+// topbar so the role shown to the user is always consistent and accurate
+// (never hardcoded "Founder"). Pure + client-safe.
+export function adminRoleLabel(role: TeamRole): string {
+  switch (role) {
+    case 'founder_admin':  return 'Founder'
+    case 'outreach_agent': return 'Outreach Agent'
+    case 'delivery_agent': return 'Delivery Agent'
+    case 'viewer':         return 'Viewer'
+    case 'team_sales':
+    case 'team_delivery':
+    case 'team_content':
+    case 'team_support':
+    case 'team_analyst':   return 'Team Member'
+    default:               return 'Team Member'
+  }
+}
+
 // True when a role may enter the /admin shell AT ALL (i.e. has access to at
 // least one admin surface). The admin layout gates on THIS (role membership)
 // rather than the request path — so it never needs `x-pathname` and cannot
