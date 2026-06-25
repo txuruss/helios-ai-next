@@ -29,7 +29,7 @@ function relTime(ts: string): string {
   return h < 24 ? `${h}h ago` : `${Math.floor(h / 24)}d ago`
 }
 
-const PLAN_LABEL: Record<string, string> = { starter: 'Starter', pro: 'Booking OS', scale: 'Ops Center' }
+const PLAN_LABEL: Record<string, string> = { starter: 'Starter', pro: 'Booking OS', scale: 'Helios AIOS' }
 
 export default function AuditDashboardClient({ initialAudits, loadError }: Props) {
   const [audits,    setAudits]    = useState(initialAudits)

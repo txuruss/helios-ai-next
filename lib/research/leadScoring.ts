@@ -122,7 +122,7 @@ export function scoreBand(score: number): ScoreBand {
 // Rule-based, deliberately CONSERVATIVE recommendation for which package
 // is realistic and how heavy the monthly retainer should be. We never
 // overpitch small businesses — a solo provider gets a light retainer
-// suggestion, not Ops Center. All wording uses careful language ("may",
+// suggestion, not Helios AIOS. All wording uses careful language ("may",
 // "could", "should be verified") because this is derived from public
 // listing data only. Works from saved-lead fields too, so the Saved Leads
 // detail view can derive the same answer without a schema change.
@@ -143,7 +143,7 @@ export interface RetainerFit {
   reason:             string
 }
 
-const PACKAGE_LABELS = { starter: 'Starter Lead Response System', pro: 'Booking OS', scale: 'Ops Center' } as const
+const PACKAGE_LABELS = { starter: 'Starter Lead Response System', pro: 'Booking OS', scale: 'Helios AIOS' } as const
 const TIER_LABELS    = { light: 'Light', standard: 'Standard', advanced: 'Advanced' } as const
 
 export function retainerFitForLead(input: RetainerFitInput): RetainerFit {

@@ -3,7 +3,7 @@
 import type { NicheTemplate } from '@/lib/templates/niche-templates'
 import { capture } from '@/lib/analytics/posthog'
 
-const PLAN_LABEL: Record<string, string>  = { starter: 'Starter', pro: 'Booking OS', scale: 'Ops Center' }
+const PLAN_LABEL: Record<string, string>  = { starter: 'Starter', pro: 'Booking OS', scale: 'Helios AIOS' }
 const PLAN_COLOR: Record<string, string>  = { starter: 'text-[#9a9a9d]', pro: 'text-[#ffae3c]', scale: 'text-[#c084fc]' }
 const COMPLEXITY: Record<string, string>  = { simple: '⚡ Simple', standard: '🔧 Standard', advanced: '⚙ Advanced' }
 

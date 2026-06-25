@@ -37,14 +37,14 @@ const STAGE_OPTIONS = [
 const PLAN_CONFIG: Record<string, { label: string; color: string }> = {
   starter: { label: 'Starter',    color: '#3b9eff' },
   pro:     { label: 'Booking OS', color: '#a07cff' },
-  scale:   { label: 'Ops Center', color: '#ffae3c' },
+  scale:   { label: 'Helios AIOS', color: '#ffae3c' },
 }
 
 const PLAN_OPTIONS = [
   { value: 'all',     label: 'All plans'  },
   { value: 'starter', label: 'Starter'    },
   { value: 'pro',     label: 'Booking OS' },
-  { value: 'scale',   label: 'Ops Center' },
+  { value: 'scale',   label: 'Helios AIOS' },
 ]
 
 type ActionModal =

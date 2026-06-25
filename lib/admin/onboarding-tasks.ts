@@ -51,7 +51,7 @@ export interface SeedResult {
 
 // Idempotent: only seeds when the client has zero tasks. Never throws —
 // callers (conversion flow) treat seeding as non-fatal. The task list is
-// chosen by the client's plan (Starter / Booking OS / Ops Center), with
+// chosen by the client's plan (Starter / Booking OS / Helios AIOS), with
 // Starter as the safe fallback for unknown plans.
 export async function seedDefaultTasksFor(
   db: Db,

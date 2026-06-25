@@ -30,7 +30,7 @@ const STAGE_OPTIONS = [
 const PLAN_CONFIG: Record<string, { label: string; color: string }> = {
   starter: { label: 'Starter',    color: '#3b9eff' },
   pro:     { label: 'Booking OS', color: '#a07cff' },
-  scale:   { label: 'Ops Center', color: '#ffae3c' },
+  scale:   { label: 'Helios AIOS', color: '#ffae3c' },
 }
 
 export default function LeadsTableClient({ deals }: Props) {

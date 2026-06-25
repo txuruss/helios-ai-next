@@ -64,7 +64,7 @@ const READINESS_OPTIONS: { value: string; label: string }[] = [
 ]
 const PLAN_OPTIONS = [
   { value: 'all', label: 'All plans' }, { value: 'starter', label: 'Starter' },
-  { value: 'pro', label: 'Booking OS' }, { value: 'scale', label: 'Ops Center' },
+  { value: 'pro', label: 'Booking OS' }, { value: 'scale', label: 'Helios AIOS' },
 ]
 
 type StatusModal = { open: false } | { open: true; id: string; name: string; readiness: ClientHandoffReadiness }

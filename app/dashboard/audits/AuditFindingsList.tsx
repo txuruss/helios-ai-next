@@ -18,7 +18,7 @@ const CATEGORY_LABEL: Record<string, string> = {
 }
 
 const PLAN_LABEL: Record<string, string> = {
-  starter: 'Starter', pro: 'Booking OS', scale: 'Ops Center',
+  starter: 'Starter', pro: 'Booking OS', scale: 'Helios AIOS',
 }
 
 export default function AuditFindingsList({ findings }: Props) {

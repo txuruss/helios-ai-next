@@ -109,7 +109,7 @@ const PLAN_OPTIONS = [
   { value: 'all',     label: 'All plans'  },
   { value: 'starter', label: 'Starter'    },
   { value: 'pro',     label: 'Booking OS' },
-  { value: 'scale',   label: 'Ops Center' },
+  { value: 'scale',   label: 'Helios AIOS' },
 ]
 
 const STATUS_OPTIONS = [

@@ -4,7 +4,7 @@ import PlanGate from '@/components/client-portal/PlanGate'
 export default async function ClientReportsPage() {
   const session = await requireClient({ redirectFrom: '/client/reports' })
 
-  // Starter has 'basic_reports'; Booking OS has 'better_analytics'; Ops Center has 'advanced_analytics'.
+  // Starter has 'basic_reports'; Booking OS has 'better_analytics'; Helios AIOS has 'advanced_analytics'.
   return (
     <PlanGate plan={session.plan} feature="basic_reports">
       <div className="flex flex-col gap-6">
@@ -34,7 +34,7 @@ export default async function ClientReportsPage() {
           <div className="rounded-2xl border border-white/10 bg-[#0f1012]/60 p-6">
             <h3 className="text-[15px] font-semibold mb-2">Monthly insights</h3>
             <p className="text-[13.5px] text-[#9a9a9d]">
-              Ops Center plan unlocks monthly insight emails and automation performance reports.
+              Helios AIOS plan unlocks monthly insight emails and automation performance reports.
             </p>
           </div>
         )}

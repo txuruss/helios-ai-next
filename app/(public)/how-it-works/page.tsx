@@ -11,7 +11,7 @@ export const metadata: Metadata = {
 
 const STAGES = [
   { n: '01', title: 'Free Business Audit',     desc: 'We analyze your website, booking flow, lead capture, and current conversation channels. You get a clear report with specific gaps and what we will fix.' },
-  { n: '02', title: 'Choose Your Plan',        desc: 'Pick Starter, Booking OS, or Ops Center based on what your business needs today. We confirm scope before any work begins.' },
+  { n: '02', title: 'Choose Your Plan',        desc: 'Pick Starter, Booking OS, or Helios AIOS based on what your business needs today. We confirm scope before any work begins.' },
   { n: '03', title: 'Setup and Configuration', desc: 'We install the AI assistant on your website, configure WhatsApp, connect Cal.com, and load your services, hours, and FAQs.' },
   { n: '04', title: 'QA and Launch',           desc: 'Our delivery team runs full QA on the assistant, your booking flow, and your owner notifications before flipping it live.' },
   { n: '05', title: 'Monthly Optimization',    desc: 'You get monthly insights on what is converting, what to improve, and adjustments to the assistant prompts so results keep improving.' },

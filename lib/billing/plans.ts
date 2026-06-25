@@ -9,7 +9,7 @@ export type PlanId = 'starter' | 'pro' | 'scale'
 export const PLAN_DISPLAY_NAMES: Record<string, string> = {
   starter: 'Starter',
   pro:     'Booking OS',
-  scale:   'Ops Center',
+  scale:   'Helios AIOS',
   free:    'Free',
 }
 
@@ -32,7 +32,7 @@ export interface PlanLimits {
 export interface Plan {
   id:                   PlanId
   name:                 string   // internal name (preserved for backward compat)
-  displayName:          string   // public-facing label: Starter / Booking OS / Ops Center
+  displayName:          string   // public-facing label: Starter / Booking OS / Helios AIOS
   price_monthly:        number   // legacy — kept for backward compat, not shown publicly
   // Public flat pricing shown on landing and billing pages
   setupFeeRange:        string   // e.g. "$997 setup"
@@ -126,7 +126,7 @@ export const PLANS: Record<PlanId, Plan> = {
   scale: {
     id:                   'scale',
     name:                 'Scale',
-    displayName:          'Ops Center',
+    displayName:          'Helios AIOS',
     price_monthly:        199,                      // legacy — not shown publicly
     setupFeeRange:        '$5,000 setup',           // flat public price
     monthlyRange:         '$999/mo',                // flat public price
@@ -134,7 +134,7 @@ export const PLANS: Record<PlanId, Plan> = {
     internalMonthlyRange: '$750 to $2,000+/mo',     // internal quoting reference only
     bestFor:              'Larger service businesses and multi-service teams',
     recommended:          false,
-    cta:                  'Upgrade to Ops Center',
+    cta:                  'Upgrade to Helios AIOS',
     stripe_price_env:     'NEXT_PUBLIC_STRIPE_SCALE_PRICE_ID',
     limits: {
       ai_conversations_month: 10000,

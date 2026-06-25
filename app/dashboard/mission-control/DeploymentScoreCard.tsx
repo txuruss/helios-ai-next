@@ -12,7 +12,7 @@ interface Props {
   hasAudit:        boolean
 }
 
-const PLAN_LABEL: Record<string, string> = { starter: 'Starter', pro: 'Booking OS', scale: 'Ops Center' }
+const PLAN_LABEL: Record<string, string> = { starter: 'Starter', pro: 'Booking OS', scale: 'Helios AIOS' }
 
 export default function DeploymentScoreCard({ score, recommendedPlan, criticalCount, hasAudit }: Props) {
   useEffect(() => {

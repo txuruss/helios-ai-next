@@ -7,7 +7,7 @@ import PricingSection from '@/components/landing/PricingSection'
 export const metadata: Metadata = {
   title: 'Pricing | Helios AI',
   description:
-    'Helios AI installs AI booking systems for local businesses. Choose Starter, Booking OS, or Ops Center — flat setup plus monthly retainer.',
+    'Helios AI installs AI booking systems for local businesses. Choose Starter, Booking OS, or Helios AIOS — flat setup plus monthly retainer.',
 }
 
 export default function PricingPage() {

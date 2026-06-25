@@ -4,11 +4,11 @@
 // to import from both server actions and client components.
 //
 // Stored client plans are 'starter' | 'pro' | 'scale' (public labels:
-// Starter / Booking OS / Ops Center). Template keys mirror the public
+// Starter / Booking OS / Helios AIOS). Template keys mirror the public
 // product names. Mapping:
 //   starter            → Starter
 //   pro   / "booking"  → Booking OS
-//   scale / "ops"      → Ops Center
+//   scale / "ops"      → Helios AIOS
 //   missing / unknown  → Starter (safe fallback)
 
 import type { DefaultTask } from './onboarding-tasks'
@@ -74,7 +74,7 @@ const OPS_CENTER_TASKS: DefaultTask[] = [
 export const ONBOARDING_TASK_TEMPLATES: Record<OnboardingTemplateKey, OnboardingTemplate> = {
   starter:    { label: 'Starter',    tasks: STARTER_TASKS    },
   booking_os: { label: 'Booking OS', tasks: BOOKING_OS_TASKS },
-  ops_center: { label: 'Ops Center', tasks: OPS_CENTER_TASKS },
+  ops_center: { label: 'Helios AIOS', tasks: OPS_CENTER_TASKS },
 }
 
 // Maps a stored/loose plan string → a template key, or null when unknown.

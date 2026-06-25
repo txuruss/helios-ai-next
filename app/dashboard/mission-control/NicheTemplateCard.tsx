@@ -10,7 +10,7 @@ interface Props {
   lastAppliedTemplate:  string | null
 }
 
-const PLAN_LABEL: Record<string, string> = { starter: 'Starter', pro: 'Booking OS', scale: 'Ops Center' }
+const PLAN_LABEL: Record<string, string> = { starter: 'Starter', pro: 'Booking OS', scale: 'Helios AIOS' }
 
 export default function NicheTemplateCard({ businessType, lastAppliedTemplate }: Props) {
   const suggested = getRecommendedTemplateByBusinessType(businessType)

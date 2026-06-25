@@ -5,11 +5,11 @@
 //
 //   starter → 'Starter'       — dashboard, business profile, AI status, leads, basic reports
 //   pro     → 'Booking OS'    — + bookings, conversations, knowledge base, better analytics
-//   scale   → 'Ops Center'    — + advanced reports, follow-ups, monthly insights, staff
+//   scale   → 'Helios AIOS'    — + advanced reports, follow-ups, monthly insights, staff
 //
 // This is a PURE module. Safe to import from client or server.
 //
-// IMPORTANT: This is the CLIENT-FACING Ops Center, not the internal
+// IMPORTANT: This is the CLIENT-FACING Helios AIOS, not the internal
 // Helios AI Team Ops Control at /team. They are distinct surfaces.
 
 import type { PlanId } from '@/lib/billing/plans'
@@ -32,7 +32,7 @@ export const CLIENT_FEATURES = {
   conversation_review: 'conversation_review',
   faq_management:      'faq_management',
   better_analytics:    'better_analytics',
-  // Ops Center only
+  // Helios AIOS only
   advanced_command_center: 'advanced_command_center',
   staff_access:            'staff_access',
   workflow_activity:       'workflow_activity',
@@ -88,7 +88,7 @@ export function planAllowsFeature(plan: ClientPlan, feature: ClientFeature): boo
 }
 
 // Returns the minimum plan required to unlock a feature, used by
-// upgrade CTAs to show "Available on Booking OS" / "Available on Ops Center".
+// upgrade CTAs to show "Available on Booking OS" / "Available on Helios AIOS".
 export function minPlanForFeature(feature: ClientFeature): ClientPlan {
   if (STARTER_FEATURES.has(feature))         return 'starter'
   if (BOOKING_OS_ADDITIONAL.has(feature))    return 'pro'
@@ -99,7 +99,7 @@ export function minPlanForFeature(feature: ClientFeature): ClientPlan {
 export function planUpgradeLabel(feature: ClientFeature): string {
   const min = minPlanForFeature(feature)
   if (min === 'pro')    return 'Available on Booking OS'
-  if (min === 'scale')  return 'Available on Ops Center'
+  if (min === 'scale')  return 'Available on Helios AIOS'
   return 'Available on Starter'
 }
 
@@ -120,6 +120,6 @@ export function featuresForPlan(plan: ClientPlan): ClientFeature[] {
 export function clientPlanLabel(plan: ClientPlan): string {
   if (plan === 'starter') return 'Starter'
   if (plan === 'pro')     return 'Booking OS'
-  if (plan === 'scale')   return 'Ops Center'
+  if (plan === 'scale')   return 'Helios AIOS'
   return 'Free'
 }

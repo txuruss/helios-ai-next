@@ -10,7 +10,7 @@ interface Props {
 }
 
 const PLAN_DISPLAY: Record<string, string> = {
-  starter: 'Starter', pro: 'Booking OS', scale: 'Ops Center',
+  starter: 'Starter', pro: 'Booking OS', scale: 'Helios AIOS',
 }
 const PLAN_COLOR: Record<string, string> = {
   starter: 'border-white/10 bg-[#0f1012]',

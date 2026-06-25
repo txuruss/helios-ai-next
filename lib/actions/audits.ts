@@ -433,7 +433,7 @@ export async function generateAuditReport(
 
     const recForReport = recommendation ? {
       plan:              recommendation.recommended_plan as 'starter'|'pro'|'scale',
-      displayName:       recommendation.recommended_plan === 'pro' ? 'Booking OS' : recommendation.recommended_plan === 'scale' ? 'Ops Center' : 'Starter',
+      displayName:       recommendation.recommended_plan === 'pro' ? 'Booking OS' : recommendation.recommended_plan === 'scale' ? 'Helios AIOS' : 'Starter',
       setupFee:          recommendation.setup_fee ?? '',
       monthlyFee:        recommendation.monthly_fee ?? '',
       reason:            recommendation.reason ?? '',

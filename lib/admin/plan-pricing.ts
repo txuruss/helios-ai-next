@@ -26,7 +26,7 @@ export interface PlanFees {
 export const PLAN_FEES: Record<AdminPlan, PlanFees> = {
   starter: { label: 'Starter',    setup_fee:  997, monthly_fee: 149, est_value: 1000 },
   pro:     { label: 'Booking OS', setup_fee: 2500, monthly_fee: 399, est_value: 2500 },
-  scale:   { label: 'Ops Center', setup_fee: 5000, monthly_fee: 999, est_value: 5000 },
+  scale:   { label: 'Helios AIOS', setup_fee: 5000, monthly_fee: 999, est_value: 5000 },
 }
 
 export function isAdminPlan(v: unknown): v is AdminPlan {

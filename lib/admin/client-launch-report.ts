@@ -43,7 +43,7 @@ export interface ClientLaunchReport {
   markdown:            string
 }
 
-const PLAN_LABELS: Record<string, string> = { starter: 'Starter', pro: 'Booking OS', scale: 'Ops Center', free: 'Free' }
+const PLAN_LABELS: Record<string, string> = { starter: 'Starter', pro: 'Booking OS', scale: 'Helios AIOS', free: 'Free' }
 const PAYMENT_LABELS: Record<string, string> = {
   paid: 'Paid', deposit_paid: 'Deposit Paid', unpaid: 'Unpaid', overdue: 'Overdue', cancelled: 'Cancelled',
 }

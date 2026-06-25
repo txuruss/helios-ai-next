@@ -42,7 +42,7 @@ export interface AuditAnalysisInput {
 }
 
 export type LeadPriority = 'low' | 'medium' | 'high' | 'urgent'
-export type RecommendedOffer = 'Starter' | 'Booking OS' | 'Ops Center' | 'Custom'
+export type RecommendedOffer = 'Starter' | 'Booking OS' | 'Helios AIOS' | 'Custom'
 
 export interface AuditAiAnalysis {
   business_summary:         string | null
@@ -234,7 +234,7 @@ function offerOf(v: unknown): RecommendedOffer | null {
   const s = v.toLowerCase()
   if (s.includes('starter')) return 'Starter'
   if (s.includes('booking') || s === 'pro' || s.includes('growth')) return 'Booking OS'
-  if (s.includes('ops') || s === 'scale' || s.includes('command')) return 'Ops Center'
+  if (s.includes('ops') || s === 'scale' || s.includes('command')) return 'Helios AIOS'
   if (s.includes('custom')) return 'Custom'
   return 'Custom'
 }

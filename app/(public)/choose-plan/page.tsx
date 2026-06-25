@@ -7,7 +7,7 @@ import { PRICING_TIERS } from '@/lib/constants'
 export const metadata: Metadata = {
   title: 'Choose Your Plan | Helios AI',
   description:
-    'Pick the Helios AI plan that fits your business — Starter, Booking OS, or Ops Center. We install everything for you.',
+    'Pick the Helios AI plan that fits your business — Starter, Booking OS, or Helios AIOS. We install everything for you.',
 }
 
 export default function ChoosePlanPage() {

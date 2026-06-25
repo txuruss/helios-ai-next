@@ -152,8 +152,8 @@ export const REPLY_TEMPLATES: ReplyTemplate[] = [
 
 // First-client guidance shown in the reply panel.
 export const PRICING_GUIDANCE =
-  'Pricing — Starter: $997 setup, $149/mo · Booking OS: $2,500 setup, $399/mo · Ops Center: $5,000 setup, $999/mo. ' +
-  'For your first client, prioritize Starter or a light Booking OS — not Ops Center.'
+  'Pricing — Starter: $997 setup, $149/mo · Booking OS: $2,500 setup, $399/mo · Helios AIOS: $5,000 setup, $999/mo. ' +
+  'For your first client, prioritize Starter or a light Booking OS — not Helios AIOS.'
 
 // ── Daily plan + end-of-day checklists ─────────────────────────────
 export const DAILY_PLAN: string[] = [

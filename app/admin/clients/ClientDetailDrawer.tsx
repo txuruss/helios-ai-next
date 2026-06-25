@@ -55,7 +55,7 @@ const PAYMENT_LABELS: Record<PaymentStatus, string> = {
 const STATUS_COLORS: Record<AdminClientStatus, string> = {
   active: '#22d093', onboarding: '#3b9eff', paused: '#ffae3c', churned: '#ff8a7a',
 }
-const PLAN_LABELS: Record<string, string> = { starter: 'Starter', pro: 'Booking OS', scale: 'Ops Center', free: 'Free' }
+const PLAN_LABELS: Record<string, string> = { starter: 'Starter', pro: 'Booking OS', scale: 'Helios AIOS', free: 'Free' }
 
 // Monthly retainer state (distinct from the client lifecycle status).
 const RETAINER_COLORS: Record<RetainerStatus, string> = {

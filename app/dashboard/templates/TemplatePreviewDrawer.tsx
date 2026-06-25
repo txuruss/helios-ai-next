@@ -7,7 +7,7 @@ import type { TemplatePreview } from '@/lib/actions/templates'
 import type { ApplyMode } from '@/lib/validation/templates'
 import { capture } from '@/lib/analytics/posthog'
 
-const PLAN_LABEL: Record<string, string> = { starter: 'Starter', pro: 'Booking OS', scale: 'Ops Center' }
+const PLAN_LABEL: Record<string, string> = { starter: 'Starter', pro: 'Booking OS', scale: 'Helios AIOS' }
 
 interface Props {
   template:   NicheTemplate

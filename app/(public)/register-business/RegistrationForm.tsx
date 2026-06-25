@@ -144,7 +144,7 @@ export default function RegistrationForm({ defaultPlan }: { defaultPlan: 'starte
           options={[
             { value: 'starter', label: 'Starter ($997 setup + $149/mo)' },
             { value: 'pro',     label: 'Booking OS ($2,500 setup + $399/mo)' },
-            { value: 'scale',   label: 'Ops Center ($5,000 setup + $999/mo)' },
+            { value: 'scale',   label: 'Helios AIOS ($5,000 setup + $999/mo)' },
           ]}
         />
       </fieldset>

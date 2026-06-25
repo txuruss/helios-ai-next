@@ -53,13 +53,13 @@ export const BOOKING_STATUSES = ['pending', 'confirmed', 'cancelled', 'completed
 
 // ── Pricing ───────────────────────────────────────────────────────
 // Internal plan IDs stay starter/pro/scale (provider-agnostic).
-// Public labels map: starter→Starter, pro→Booking OS, scale→Ops Center.
+// Public labels map: starter→Starter, pro→Booking OS, scale→Helios AIOS.
 // setupRange/monthlyRange are the flat public prices shown on pricing cards.
 // internalSetupRange/internalMonthlyRange are for internal quoting only — never shown publicly.
 export const PLAN_LABEL_MAP: Record<string, string> = {
   starter: 'Starter',
   pro:     'Booking OS',
-  scale:   'Ops Center',
+  scale:   'Helios AIOS',
   free:    'Free',
 }
 
@@ -132,11 +132,11 @@ export const PRICING_TIERS = [
   },
   {
     id: 'command',
-    name: 'Ops Center',
+    name: 'Helios AIOS',
     internalPlan: 'scale',
-    tagline: 'A full lead management and automation system for inquiries, bookings, and follow-ups.',
-    outcome: 'Full control over inquiries, bookings, and follow-ups — one system for the whole team.',
-    bestFor: 'Larger service businesses, multi-service teams, and businesses that need stronger lead management',
+    tagline: 'A complete AI operating system for inquiries, bookings, follow-ups, and lead management.',
+    outcome: 'Give your business one AI-powered command center for inquiries, bookings, follow-ups, and customer lead visibility.',
+    bestFor: 'Larger service businesses, med spas, clinics, multi-service teams, and businesses that need stronger lead management',
     // Public flat pricing
     setupRange: '$5,000 setup',
     monthlyRange: '$999/mo',
@@ -145,14 +145,19 @@ export const PRICING_TIERS = [
     internalMonthlyRange: '$750 to $2,000+/mo',
     features: [
       'Full AI booking system',
-      'Website chat and WhatsApp automation',
-      'Lead dashboard',
+      'Website chat assistant',
+      'WhatsApp assistant',
+      'Lead capture dashboard',
+      'Inquiry routing',
       'Client intake flow',
-      'Admin notifications',
       'Follow-up automation',
+      'Owner/team notifications',
+      'Lead status tracking',
+      'Reporting dashboard',
     ],
     monthlyIncludes: [
       'Monthly optimization',
+      'Lead-flow review',
       'Analytics and reporting',
       'Priority support',
       'Monthly strategy review',
