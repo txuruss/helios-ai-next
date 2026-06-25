@@ -104,8 +104,8 @@ Navigate to /dashboard/setup.
 > "Setup takes 2–3 days. We handle everything."
 
 Show the setup checklist. Return to the landing page pricing section:
-- Starter: $997 + $149/mo
-- Booking OS: $2,500 + $399/mo (highlighted)
+- Starter: $999 + $249/mo
+- Booking OS: $2,500 + $499/mo (highlighted)
 - Ops Center: $5,000 + $999/mo
 
 ---
@@ -159,7 +159,7 @@ Show the audit score card.
 - "We set it all up for you. You don't need to touch any code. Our setup takes 2–3 days."
 
 **Objection: 'Is it expensive?'**
-- "The Booking OS package is $2,500 setup and $399/month. For a barbershop doing 6+ bookings a day, that's covered by 2–3 bookings you currently lose every week."
+- "The Booking OS package is $2,500 setup and $499/month. For a barbershop doing 6+ bookings a day, that's covered by 2–3 bookings you currently lose every week."
 
 ---
 

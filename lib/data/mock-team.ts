@@ -39,7 +39,7 @@ export interface MockPipelineDeal {
 
 export const MOCK_PIPELINE: MockPipelineDeal[] = [
   { id: 'd1', business: 'Atlas Auto Repairs',  contact: 'Jermaine D.',  stage: 'audit_sent', plan_target: 'pro',     value_usd: 2500, next_action: 'Follow up 2026-05-19', updated_at: '2026-05-15T10:00:00Z' },
-  { id: 'd2', business: 'Crown Hair Studio',   contact: 'Imani P.',     stage: 'qualified',  plan_target: 'starter', value_usd: 997,  next_action: 'Send audit',           updated_at: '2026-05-16T10:00:00Z' },
+  { id: 'd2', business: 'Crown Hair Studio',   contact: 'Imani P.',     stage: 'qualified',  plan_target: 'starter', value_usd: 999,  next_action: 'Send audit',           updated_at: '2026-05-16T10:00:00Z' },
   { id: 'd3', business: 'Reef Dental Care',    contact: 'Dr. Wallace',  stage: 'proposal',   plan_target: 'scale',   value_usd: 5000, next_action: 'Schedule strategy call', updated_at: '2026-05-13T10:00:00Z' },
   { id: 'd4', business: 'Sunrise Beauty Spa',  contact: 'Anneka M.',    stage: 'won',        plan_target: 'scale',   value_usd: 5000, next_action: 'Begin onboarding',     updated_at: '2026-05-10T10:00:00Z' },
 ]

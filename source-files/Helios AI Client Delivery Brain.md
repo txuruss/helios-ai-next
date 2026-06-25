@@ -51,8 +51,8 @@ All share the same core pain: inquiries arrive across multiple channels and go u
 
 | Package | Setup | Monthly | Core promise |
 |---------|-------|---------|--------------|
-| **Starter** | $997 | $149/mo | Stop missed inquiries. Reply to every lead 24/7. |
-| **Booking OS** | $2,500 | $399/mo | Turn conversations into booked appointments. |
+| **Starter** | $999 | $249/mo | Stop missed inquiries. Reply to every lead 24/7. |
+| **Booking OS** | $2,500 | $499/mo | Turn conversations into booked appointments. |
 | **Ops Center** | $5,000 | $999/mo | Manage all conversations, bookings, and operations from one system. |
 
 A discounted **first-client offer ($1,000–$1,500)** is used to land an early validation client — sell a simple Starter or light Booking OS, never Ops Center.

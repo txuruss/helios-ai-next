@@ -20,7 +20,7 @@ Canonical package data in code: `lib/billing/packages.ts`. Proposal generator: `
 
 ## Current offer ladder
 
-### Package 1 — Starter Lead Response System ($997 setup + $149/mo)
+### Package 1 — Starter Lead Response System ($999 setup + $249/mo)
 
 **Positioning:** A simple system to help local businesses stop missing customer inquiries.
 
@@ -41,7 +41,7 @@ Canonical package data in code: `lib/billing/packages.ts`. Proposal generator: `
 
 ---
 
-### Package 2 — Booking OS ($2,500 setup + $399/mo)
+### Package 2 — Booking OS ($2,500 setup + $499/mo)
 
 **Positioning:** A booking and lead-response system that helps turn customer messages into appointments.
 
@@ -99,12 +99,12 @@ Canonical package data in code: `lib/billing/packages.ts`. Proposal generator: `
 - Monthly retainer is the business model — not one-time builds
 - Do not discount without a strategic reason
 
-**Confirmed pricing (founder-set, 2026-05-29):**
+**Confirmed pricing (founder-set, 2026-06-24):**
 
 | Package | Setup | Monthly |
 |---------|-------|---------|
-| Starter | $997 | $149/mo |
-| Booking OS | $2,500 | $399/mo |
+| Starter | $999 | $249/mo |
+| Booking OS | $2,500 | $499/mo |
 | Ops Center | $5,000 | $999/mo |
 
 A discounted **first-client offer** of **$1,000–$1,500** (simple AI lead-capture / booking-assistant setup, manual delivery if needed) is used to land the first validation client. Full price points, inclusions, and CTAs: [[Pricing]].

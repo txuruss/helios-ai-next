@@ -21,11 +21,11 @@ export interface PlanFees {
 }
 
 // Defaults match the published setup + monthly retainer model
-// (lib/billing/packages.ts): $997 / $2,500 / $5,000 setup,
-// $149 / $399 / $999 monthly.
+// (lib/billing/packages.ts): $999 / $2,500 / $5,000 setup,
+// $249 / $499 / $999 monthly.
 export const PLAN_FEES: Record<AdminPlan, PlanFees> = {
-  starter: { label: 'Starter',    setup_fee:  997, monthly_fee: 149, est_value: 1000 },
-  pro:     { label: 'Booking OS', setup_fee: 2500, monthly_fee: 399, est_value: 2500 },
+  starter: { label: 'Starter',    setup_fee:  999, monthly_fee: 249, est_value: 1000 },
+  pro:     { label: 'Booking OS', setup_fee: 2500, monthly_fee: 499, est_value: 2500 },
   scale:   { label: 'Helios AIOS', setup_fee: 5000, monthly_fee: 999, est_value: 5000 },
 }
 

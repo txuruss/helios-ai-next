@@ -35,8 +35,8 @@ export interface Plan {
   displayName:          string   // public-facing label: Starter / Booking OS / Helios AIOS
   price_monthly:        number   // legacy — kept for backward compat, not shown publicly
   // Public flat pricing shown on landing and billing pages
-  setupFeeRange:        string   // e.g. "$997 setup"
-  monthlyRange:         string   // e.g. "$149/mo"
+  setupFeeRange:        string   // e.g. "$999 setup"
+  monthlyRange:         string   // e.g. "$249/mo"
   // Internal ranges — for quoting flexibility only, never shown publicly
   internalSetupRange:   string   // e.g. "$497 to $1,500"
   internalMonthlyRange: string   // e.g. "$99 to $299/mo"
@@ -57,8 +57,8 @@ export const PLANS: Record<PlanId, Plan> = {
     name:                 'Starter',
     displayName:          'Starter',
     price_monthly:        29,                       // legacy — not shown publicly
-    setupFeeRange:        '$997 setup',             // flat public price
-    monthlyRange:         '$149/mo',                // flat public price
+    setupFeeRange:        '$999 setup',             // flat public price
+    monthlyRange:         '$249/mo',                // flat public price
     internalSetupRange:   '$497 to $1,500',         // internal quoting reference only
     internalMonthlyRange: '$99 to $299/mo',         // internal quoting reference only
     bestFor:              'Small salons, barbershops, and solo service providers',
@@ -92,7 +92,7 @@ export const PLANS: Record<PlanId, Plan> = {
     displayName:          'Booking OS',
     price_monthly:        79,                       // legacy — not shown publicly
     setupFeeRange:        '$2,500 setup',           // flat public price
-    monthlyRange:         '$399/mo',                // flat public price
+    monthlyRange:         '$499/mo',                // flat public price
     internalSetupRange:   '$1,500 to $3,500',       // internal quoting reference only
     internalMonthlyRange: '$299 to $750/mo',        // internal quoting reference only
     bestFor:              'Spas, clinics, gyms, and appointment-based businesses',

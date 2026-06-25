@@ -131,7 +131,7 @@ export const REPLY_TEMPLATES: ReplyTemplate[] = [
   {
     trigger: 'If they say “How much?”',
     text:
-`It depends how much you want it to handle. Most local businesses start on Starter — $997 setup, then $149/month — which covers website chat, FAQs, and lead capture. If you want WhatsApp + a full booking flow, that’s Booking OS ($2,500 setup, $399/month). Happy to point you to the right one after a quick demo — want me to send it?`,
+`It depends how much you want it to handle. Most local businesses start on Starter — $999 setup, then $249/month — which covers website chat, FAQs, and lead capture. If you want WhatsApp + a full booking flow, that’s Booking OS ($2,500 setup, $499/month). Happy to point you to the right one after a quick demo — want me to send it?`,
   },
   {
     trigger: 'If they say “I’m interested”',
@@ -152,7 +152,7 @@ export const REPLY_TEMPLATES: ReplyTemplate[] = [
 
 // First-client guidance shown in the reply panel.
 export const PRICING_GUIDANCE =
-  'Pricing — Starter: $997 setup, $149/mo · Booking OS: $2,500 setup, $399/mo · Helios AIOS: $5,000 setup, $999/mo. ' +
+  'Pricing — Starter: $999 setup, $249/mo · Booking OS: $2,500 setup, $499/mo · Helios AIOS: $5,000 setup, $999/mo. ' +
   'For your first client, prioritize Starter or a light Booking OS — not Helios AIOS.'
 
 // ── Daily plan + end-of-day checklists ─────────────────────────────

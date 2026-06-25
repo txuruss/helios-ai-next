@@ -39,8 +39,8 @@ export interface PackageDef {
   displayName:    string
   setupFee:       number     // whole USD, one-time
   monthlyFee:     number     // whole USD, recurring
-  setupFeeLabel:  string     // "$997"
-  monthlyFeeLabel: string    // "$149/mo"
+  setupFeeLabel:  string     // "$999"
+  monthlyFeeLabel: string    // "$249/mo"
   retainerTier:   RetainerTier
   bestFor:        string     // audience description
   positioning:    string     // one-line positioning statement
@@ -53,10 +53,10 @@ export const PACKAGES: Record<PlanId, PackageDef> = {
   starter: {
     id:              'starter',
     displayName:     'Starter Lead Response System',
-    setupFee:        997,
-    monthlyFee:      149,
-    setupFeeLabel:   '$997',
-    monthlyFeeLabel: '$149/mo',
+    setupFee:        999,
+    monthlyFee:      249,
+    setupFeeLabel:   '$999',
+    monthlyFeeLabel: '$249/mo',
     retainerTier:    'light',
     bestFor:         'Small salons, barbershops, solo service providers, and small local businesses',
     positioning:     'A simple system to help local businesses stop missing customer inquiries.',
@@ -79,9 +79,9 @@ export const PACKAGES: Record<PlanId, PackageDef> = {
     id:              'pro',
     displayName:     'Booking OS',
     setupFee:        2500,
-    monthlyFee:      399,
+    monthlyFee:      499,
     setupFeeLabel:   '$2,500',
-    monthlyFeeLabel: '$399/mo',
+    monthlyFeeLabel: '$499/mo',
     retainerTier:    'standard',
     bestFor:         'Spas, med spas, clinics, gyms, busy salons, and appointment-based businesses',
     positioning:     'A booking and lead-response system that helps turn customer messages into appointments.',

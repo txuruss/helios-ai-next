@@ -10,8 +10,8 @@ interface Props {
 }
 
 const PLAN_RATES: Record<string, number> = {
-  starter: 149,
-  pro:     399,
+  starter: 249,
+  pro:     499,
   scale:   999,
   free:    0,
 }

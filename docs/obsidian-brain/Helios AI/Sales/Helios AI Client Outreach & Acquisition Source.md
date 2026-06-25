@@ -263,7 +263,7 @@ A clear 10-day cadence per lead. Stop the moment they reply and switch to the re
 ### When they reply
 
 - **"Send info"** → Send the demo link + ask **one** qualifying question ("Quick one — who handles your DMs/messages right now?").
-- **"How much?"** → Give a simple starting point, then move to a call: "Setup starts at $997 with a small monthly after that, depends what you need — easiest if I show you on a quick 15-min call. You free [day]?"
+- **"How much?"** → Give a simple starting point, then move to a call: "Setup starts at $999 with a small monthly after that, depends what you need — easiest if I show you on a quick 15-min call. You free [day]?"
 - **"I'm interested"** → Book a **15-minute discovery call** immediately. Send the booking link or propose two times.
 - **"Not now"** → Ask permission to follow up later, mark **Nurture**, set a follow-up date.
 - **"No"** → Respect it, thank them, move on. Mark **Lost**.
@@ -345,7 +345,7 @@ Goal: find the bottleneck, show the fix, recommend a package, ask for the close.
 
 Rules: keep it short · validate without over-agreeing · redirect to the business outcome · push toward demo or call · **never argue**.
 
-- **"How much does it cost?"** → "Setup starts at $997 with a small monthly, scales up if you want WhatsApp and full booking. Easiest if I show you what fits on a quick call — you free [day]?"
+- **"How much does it cost?"** → "Setup starts at $999 with a small monthly, scales up if you want WhatsApp and full booking. Easiest if I show you what fits on a quick call — you free [day]?"
 - **"I already have a website."** → "Perfect — this lives on it and catches the visitors who message and don't get an instant reply. Want to see how it'd sit on yours?"
 - **"I already have a booking link."** → "Great, we feed straight into it. The gap is the people who ask a question first and never reach the link. That's what this catches."
 - **"I already use WhatsApp."** → "Ideal — this answers WhatsApp instantly when you can't, so messages don't sit while you're working. Want a quick demo?"
@@ -369,8 +369,8 @@ Rules: keep it short · validate without over-agreeing · redirect to the busine
 
 | Package | Best for | Setup | Monthly |
 |---|---|---|---|
-| **Starter** | Small business · simple website chat · FAQs · lead capture · owner notifications · first-time automation client | **$997** | **$149/mo** |
-| **Booking OS** | Appointment-based business · needs website chat + WhatsApp · wants a booking flow · needs follow-up + owner notifications | **$2,500** | **$399/mo** |
+| **Starter** | Small business · simple website chat · FAQs · lead capture · owner notifications · first-time automation client | **$999** | **$249/mo** |
+| **Booking OS** | Appointment-based business · needs website chat + WhatsApp · wants a booking flow · needs follow-up + owner notifications | **$2,500** | **$499/mo** |
 | **Ops Center** | Multi-location or higher-volume · needs dashboard, reporting, workflows, follow-up, analytics, priority support | **$5,000** | **$999/mo** |
 
 > **Rule for first clients:** Prioritize **Starter** or **Booking OS**. Do **not** push **Ops Center** unless the business clearly has the volume and budget. The first-client goal is a $1,000–$1,500 paid setup — Starter (or a lightly-scoped Booking OS) is the target.
@@ -522,7 +522,7 @@ TODO — notes to create when needed (currently placeholders):
 
 ## Source notes
 
-- **Pricing verified** against [[Pricing]] (2026-05-29): Starter $997/$149 · Booking OS $2,500/$399 · Ops Center $5,000/$999.
+- **Pricing verified** against [[Pricing]] (2026-06-24): Starter $999/$249 · Booking OS $2,500/$499 · Ops Center $5,000/$999.
 - **First-client offer** ($1,000–$1,500 manual setup) is the validation goal — sell Starter or a lightly-scoped Booking OS.
 - This source supersedes nothing in the product brain; it is the **sales-execution layer** that sits on top of [[Outreach Strategy]].
 

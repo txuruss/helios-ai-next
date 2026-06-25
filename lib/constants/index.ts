@@ -77,8 +77,8 @@ export const PRICING_TIERS = [
     outcome: 'Stop missing customer inquiries — every lead is captured and you’re notified instantly.',
     bestFor: 'Small salons, barbershops, solo service providers, and small local businesses',
     // Public flat pricing
-    setupRange: '$997 setup',
-    monthlyRange: '$149/mo',
+    setupRange: '$999 setup',
+    monthlyRange: '$249/mo',
     // Internal ranges — for quoting reference only, not shown publicly
     internalSetupRange: '$497 to $1,500',
     internalMonthlyRange: '$99 to $299/mo',
@@ -107,7 +107,7 @@ export const PRICING_TIERS = [
     bestFor: 'Spas, med spas, clinics, gyms, busy salons, and appointment-based businesses',
     // Public flat pricing
     setupRange: '$2,500 setup',
-    monthlyRange: '$399/mo',
+    monthlyRange: '$499/mo',
     // Internal ranges — for quoting reference only, not shown publicly
     internalSetupRange: '$1,500 to $3,500',
     internalMonthlyRange: '$299 to $750/mo',

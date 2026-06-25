@@ -441,7 +441,7 @@ export async function generateAuditReport(
       nextSteps:         recommendation.next_steps ?? [],
     } : {
       plan: 'starter' as const, displayName: 'Starter',
-      setupFee: '$997 setup', monthlyFee: '$149/mo',
+      setupFee: '$999 setup', monthlyFee: '$249/mo',
       reason: '', includedFeatures: [], nextSteps: [],
     }
 

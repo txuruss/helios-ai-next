@@ -148,7 +148,7 @@ export const DEMO_AUDIT_FINDINGS = [
 export const DEMO_AUDIT_RECOMMENDATION = {
   recommended_plan:  'pro',
   setup_fee:         '$2,500 setup',
-  monthly_fee:       '$399/mo',
+  monthly_fee:       '$499/mo',
   reason:            'Elite Cuts needs a full website + WhatsApp AI assistant with booking flow and owner notifications. Booking OS covers everything.',
   included_features: ['Website AI chat assistant', 'WhatsApp assistant', 'Cal.com booking flow', 'Lead capture', 'Owner notifications', 'Monthly optimization'],
   next_steps:        ['Complete onboarding intake', 'Connect WhatsApp Business', 'Connect Cal.com', 'Add services and FAQs', 'Test booking flow end-to-end'],

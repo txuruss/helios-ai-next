@@ -12,8 +12,8 @@ Avoid hourly pricing as the main model. Use **simple project setup fees plus mon
 
 | Package | Setup | Monthly | Best for |
 |---------|-------|---------|----------|
-| **Starter** | $997 | $149/mo | Simple website chat, FAQs, lead capture, owner notifications |
-| **Booking OS** | $2,500 | $399/mo | Website chat, WhatsApp assistant, booking flow, lead capture, owner notifications |
+| **Starter** | $999 | $249/mo | Simple website chat, FAQs, lead capture, owner notifications |
+| **Booking OS** | $2,500 | $499/mo | Website chat, WhatsApp assistant, booking flow, lead capture, owner notifications |
 | **Ops Center** | $5,000 | $999/mo | Multi-location, dashboards, automation workflows, analytics, reporting |
 
 ## Pricing rule

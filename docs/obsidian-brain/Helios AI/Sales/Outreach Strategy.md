@@ -66,7 +66,7 @@ Per lead, over ~10 days. Stop the moment they reply.
 ## What to do when they reply
 
 - **"Send info"** → Send the demo link + ask **one** qualifying question ("Who handles your messages right now?").
-- **"How much?"** → "Setup starts at **$997** with a small monthly after, scales up if you want WhatsApp + full booking. Easiest if I show you what fits on a quick call — free [day]?"
+- **"How much?"** → "Setup starts at **$999** with a small monthly after, scales up if you want WhatsApp + full booking. Easiest if I show you what fits on a quick call — free [day]?"
 - **"I'm interested"** → Book a **15-min discovery call** now. Send the link or offer two times.
 - **"Not now"** → Ask to follow up later, mark **Nurture**, set a date.
 - **"No"** → Respect it, thank them, move on. Mark **Lost**.
@@ -85,8 +85,8 @@ Per lead, over ~10 days. Stop the moment they reply.
 
 Use these when asked — **do not quote any old/low monthly pricing.** Source of truth: [[Pricing]].
 
-- **Starter:** `$997` setup · `$149/mo` — website chat, FAQs, lead capture, owner notifications.
-- **Booking OS:** `$2,500` setup · `$399/mo` — adds WhatsApp, booking flow, follow-up.
+- **Starter:** `$999` setup · `$249/mo` — website chat, FAQs, lead capture, owner notifications.
+- **Booking OS:** `$2,500` setup · `$499/mo` — adds WhatsApp, booking flow, follow-up.
 - **Ops Center:** `$5,000` setup · `$999/mo` — multi-location, dashboard, reporting, priority support.
 
 > For first clients, lead with **Starter** (or a lightly-scoped Booking OS) to hit the $1,000–$1,500 first-client goal. Don't push Ops Center without clear volume + budget.

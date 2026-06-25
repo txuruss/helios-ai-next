@@ -14,8 +14,8 @@ Helios AI sells three packages — **Starter**, **Booking OS**, and **Ops Center
 
 ## Starter
 
-- **Setup:** `$997`
-- **Monthly:** `$149/mo`
+- **Setup:** `$999`
+- **Monthly:** `$249/mo`
 
 **Best for:** Simple website chat · FAQs · Lead capture
 
@@ -36,7 +36,7 @@ Helios AI sells three packages — **Starter**, **Booking OS**, and **Ops Center
 ## Booking OS
 
 - **Setup:** `$2,500`
-- **Monthly:** `$399/mo`
+- **Monthly:** `$499/mo`
 
 **Best for:** Website chat · WhatsApp · Booking flow · Notifications
 
@@ -95,4 +95,4 @@ Helios AI sells three packages — **Starter**, **Booking OS**, and **Ops Center
 [[02-offers-and-pricing]] · [[HQ]] · [[Outreach Strategy]] · [[PayPal]] · [[Next Steps]]
 
 ---
-*Last updated: 2026-05-29*
+*Last updated: 2026-06-24*

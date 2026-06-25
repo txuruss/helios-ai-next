@@ -9,7 +9,7 @@
 - [ ] Choose the niche (barbershop, salon, spa, clinic, cleaning, auto repair, tutor)
 - [ ] Load the matching niche template in /dashboard/templates
 - [ ] Run a Deployment Score audit in /dashboard/audits
-- [ ] Prepare the pricing slide: Starter ($997+$149/mo), Booking OS ($2,500+$399/mo), Ops Center ($5,000+$999/mo)
+- [ ] Prepare the pricing slide: Starter ($999+$249/mo), Booking OS ($2,500+$499/mo), Ops Center ($5,000+$999/mo)
 - [ ] Research the business: Google reviews, Instagram, website, current booking method
 - [ ] Prepare 2–3 pain point questions specific to their niche
 
