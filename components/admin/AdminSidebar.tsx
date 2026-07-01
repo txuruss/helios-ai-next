@@ -8,11 +8,11 @@ import type { TeamRole } from '@/lib/auth/types'
 import { adminRoleLabel } from '@/lib/auth/permissions'
 import { cn } from '@/components/ui/cn'
 import {
-  Compass, BarChart2, Users, Building2, Settings, LogOut, X, ClipboardList, Rocket, Megaphone, Telescope, UserCog,
+  Compass, BarChart2, Users, Building2, Settings, LogOut, X, ClipboardList, Rocket, Megaphone, Telescope, UserCog, Crosshair,
 } from 'lucide-react'
 
 const ICONS: Record<string, React.ComponentType<{ size?: number; className?: string }>> = {
-  Compass, BarChart2, Users, Building2, Settings, ClipboardList, Rocket, Megaphone, Telescope, UserCog,
+  Compass, BarChart2, Users, Building2, Settings, ClipboardList, Rocket, Megaphone, Telescope, UserCog, Crosshair,
 }
 
 interface Props {

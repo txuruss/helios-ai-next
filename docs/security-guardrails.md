@@ -8,7 +8,7 @@ Related: [`docs/supabase-schema-management.md`](./supabase-schema-management.md)
 
 ## 1. Lead reads must go through the scoped data-access layer
 
-Any query against **`research_leads`, `research_runs`, `admin_outreach_leads`, `admin_clients`, saved leads, or outreach leads** must go through the canonical scoped layer in [`lib/data/scoped-leads.ts`](../lib/data/scoped-leads.ts):
+Any query against **`research_leads`, `research_runs`, `admin_outreach_leads`, `admin_clients`, `atc_leads` (+ `atc_audits` / `atc_pain_points` / `atc_agent_runs`), saved leads, or outreach leads** must go through the canonical scoped layer in [`lib/data/scoped-leads.ts`](../lib/data/scoped-leads.ts) (or its Audit-to-Close extension [`lib/data/atc-leads.ts`](../lib/data/atc-leads.ts)):
 
 - `getScopedResearchLeads(session, filters?)`
 - `getScopedResearchLeadById(session, leadId)`
@@ -16,6 +16,7 @@ Any query against **`research_leads`, `research_runs`, `admin_outreach_leads`, `
 - `getScopedOutreachLeadById(session, leadId)`
 - `getScopedLeadStats(session)`
 - `assertCanAccessLead(session, lead)` / `canAccessLead(session, lead)`
+- Audit-to-Close: `listAuthorizedLeads(session, filters?)`, `getAuthorizedLeadById(session, leadId)`, `getAtcLeadDetail(session, leadId)`, `canMutateLead(session, lead)` — an agent owns an ATC lead when they **created it or are assigned to it**. Children (`atc_audits`, `atc_pain_points`, `atc_agent_runs`) may only be fetched AFTER a scoped lead read succeeds.
 
 **Why:** per-agent isolation is enforced in application code, not the database. RLS on these tables is founder-only; agents read via the service-role client, which bypasses RLS. The scoped layer is the only place that applies `leadScopeFor()` correctly. Do not hand-write `supabase.from('research_leads')...` in a page, API route, or new data file.
 

@@ -22,6 +22,7 @@ export const ADMIN_NAV: AdminNavItem[] = [
   { id: 'leads',           label: 'Leads',           href: '/admin/leads',           icon: 'Users',     group: 'Sales' },
   { id: 'clients',         label: 'Clients',         href: '/admin/clients',         icon: 'Building2', group: 'Sales' },
   { id: 'outreach',        label: 'Outreach',        href: '/admin/outreach',        icon: 'Megaphone', group: 'Sales' },
+  { id: 'audit-to-close',  label: 'Audit-to-Close',  href: '/admin/audit-to-close',  icon: 'Crosshair', group: 'Sales' },
 
   // Operations
   { id: 'delivery',        label: 'Delivery',        href: '/admin/delivery',        icon: 'ClipboardList', group: 'Operations' },
@@ -39,7 +40,7 @@ export const ADMIN_NAV_GROUPS: ReadonlyArray<AdminNavItem['group']> =
 // outreach_agent sees only their two scoped tools (Research Agent +
 // Outreach). This is UI hiding only — the real gate is canAccessAdminRoute
 // in lib/auth/permissions.ts, enforced server-side on every route.
-const OUTREACH_AGENT_NAV_IDS = new Set(['research-agent', 'outreach'])
+const OUTREACH_AGENT_NAV_IDS = new Set(['research-agent', 'outreach', 'audit-to-close'])
 
 export function adminNavForRole(role: TeamRole): AdminNavItem[] {
   if (role === 'founder_admin') return ADMIN_NAV

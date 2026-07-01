@@ -140,6 +140,7 @@ export function founderCanAccessAdminRoute(role: TeamRole, _path?: string): Auth
 export const OUTREACH_AGENT_ADMIN_ROUTES = [
   '/admin/outreach',
   '/admin/mission-control/research-agent',
+  '/admin/audit-to-close',
 ] as const
 
 // True when `path` is one of the outreach_agent-allowed admin routes
